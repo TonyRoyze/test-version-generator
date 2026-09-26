@@ -41,6 +41,9 @@ import {
 } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
 import { bankQuestionById, type ExamWorkingCopy, type QuestionBank } from './question-bank'
+import { isExamFurniture, sameExamFurniture } from './page-furniture'
+import { DEFAULT_EXAM_COVER, isExamCover, sameExamCover } from './page-cover'
+import { isExamLabelStyles, sameExamLabelStyles } from './number-style'
 
 function sameWorkSpace(
   left: Record<string, WorkSpace> | undefined,
@@ -171,6 +174,9 @@ export function selectedExam(
     isTextSize(draft.textSize) && draft.textSize !== DEFAULT_TEXT_SIZE ? draft.textSize : undefined
   const header =
     isExamHeader(draft.header) && Object.keys(draft.header).length > 0 ? draft.header : undefined
+  const furniture = draft.furniture && isExamFurniture(draft.furniture) ? draft.furniture : undefined
+  const labelStyles = draft.labelStyles && isExamLabelStyles(draft.labelStyles) ? draft.labelStyles : undefined
+  const coverPage = draft.coverPage && isExamCover(draft.coverPage) ? draft.coverPage : DEFAULT_EXAM_COVER
   const exam: Exam =
     previous
     && previous.exam.title === draft.title
@@ -183,6 +189,9 @@ export function selectedExam(
     && sameSectionHeadings(previous.exam.sectionHeadings, sectionHeadings)
     && previous.exam.headingSize === headingSize
     && sameExamHeader(previous.exam.header, header)
+    && sameExamFurniture(previous.exam.furniture, furniture)
+    && sameExamLabelStyles(previous.exam.labelStyles, labelStyles)
+    && sameExamCover(previous.exam.coverPage, coverPage)
     && previous.exam.textSize === textSize
       ? previous.exam
       : {
@@ -195,6 +204,9 @@ export function selectedExam(
           ...(headingSize ? { headingSize } : {}),
           ...(textSize ? { textSize } : {}),
           ...(header ? { header } : {}),
+          ...(furniture ? { furniture } : {}),
+          ...(labelStyles ? { labelStyles } : {}),
+          coverPage,
         }
 
   // Only ids the bank can resolve: an ordering may tolerate a stranger, but an

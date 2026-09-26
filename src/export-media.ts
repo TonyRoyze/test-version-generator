@@ -145,6 +145,10 @@ export type ExportPicture = { key: string; src: string; crop?: CropBox }
  *  first-appearance order. */
 export function picturesOf(plans: readonly LayoutPlan[]): ExportPicture[] {
   const pictures = new Map<string, ExportPicture>()
+  const add = (src: string) => {
+    const key = pictureKey({ src })
+    if (src && !pictures.has(key)) pictures.set(key, { key, src })
+  }
   const visit = (node: ProseMirrorJSON) => {
     if (node.type === 'image' || node.type === 'image-block') {
       const attrs = attrsOf(node)
@@ -157,6 +161,9 @@ export function picturesOf(plans: readonly LayoutPlan[]): ExportPicture[] {
   }
   for (const plan of plans) {
     for (const page of plan.pages) {
+      add(page.furniture.headerLayout?.logo ?? '')
+      add(page.furniture.footerLayout?.logo ?? '')
+      add(page.furniture.coverPage?.logo ?? '')
       for (const item of page.items) {
         if (item.kind !== 'question') continue
         for (const block of item.stem) visit(block)

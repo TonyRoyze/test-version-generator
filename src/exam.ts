@@ -34,6 +34,9 @@ import {
   type TextSize,
 } from './section-headings'
 import type { ExamHeader } from './page-header'
+import type { ExamFurniture } from './page-furniture'
+import type { ExamLabelStyles } from './number-style'
+import type { ExamCover } from './page-cover'
 import { newMatchingNode } from './matching'
 import { newMultipartPartsNode } from './multipart'
 
@@ -144,6 +147,9 @@ export type Exam = {
   /** This Exam's own test-page header lines, where they depart from the
    *  default blanks. See `page-header.ts`. */
   header?: ExamHeader
+  furniture?: ExamFurniture
+  labelStyles?: ExamLabelStyles
+  coverPage?: ExamCover
 }
 
 /** What a work space prints as: an empty area, or ruled writing lines. */

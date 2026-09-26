@@ -76,6 +76,8 @@ import { DifficultyBadge, TopicBadge } from './badges'
 import { bankQuestionById } from './question-bank'
 import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import { ExamPage } from './exam-page'
+import { CoverDesignPage } from './cover-page-view'
+import { DEFAULT_EXAM_COVER } from './page-cover'
 import { QuestionBankPane } from './question-bank-pane'
 import { NO_FILTER, topicOptions, type QuestionBankFilter } from './question-bank-view'
 import { useSelection } from './use-selection'
@@ -2432,6 +2434,32 @@ function ExamEditor({
               },
             })),
           },
+          {
+            kind: 'submenu',
+            label: 'Add section',
+            icon: <Heading />,
+            items: [
+              {
+                kind: 'action',
+                label: 'Structured',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.addSection('Structured'),
+              },
+              {
+                kind: 'action',
+                label: 'Essay',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.addSection('Essay'),
+              },
+            ],
+          },
+          { kind: 'separator' },
+          {
+            kind: 'action',
+            label: 'Open cover designer',
+            icon: <Pencil />,
+            onSelect: () => navigate('/cover-design'),
+          },
         ] : documentMenu.kind === 'file' ? [
           {
             kind: 'action',
@@ -2646,6 +2674,8 @@ function ExamEditor({
             onMoveSection={(sectionId, direction) => store.moveSection(sectionId, direction)}
             onDeleteSection={(sectionId) => store.deleteSection(sectionId)}
             onHeaderLineChange={(line, text) => store.setHeaderLine(line, text)}
+            onLabelStyleChange={(kind, style) => store.setLabelStyle(kind, style)}
+            onCoverPageChange={(cover) => store.setCoverPage(cover)}
             titleDisabled={isHistoricalBrowsing}
             onEdit={(questionId) => {
               const question = bankQuestionById(state.questionBank, questionId)
@@ -3015,6 +3045,20 @@ export default function App({
     <BankFileDropTarget onFile={openImport} />
     {importDialog}
   </>
+  if (route === '/cover-design') {
+    if (!editorStore) return <>
+      <main className="cover-design-empty">
+        <h1>Open an exam to design its cover</h1>
+        <button type="button" onClick={() => navigate('/exams')}>Choose an exam</button>
+      </main>
+    </>
+    const exam = editorStore.selectedExam().exam
+    return <CoverDesignPage
+      cover={exam.coverPage ?? DEFAULT_EXAM_COVER}
+      onChange={(cover) => editorStore.setCoverPage(cover)}
+      onBack={() => navigate('/editor')}
+    />
+  }
   if (route === '/imports') return <>{globalChrome}<ImportsPage
     persistentStorage={storageStatus}
     revision={importRevision}

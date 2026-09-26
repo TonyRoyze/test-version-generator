@@ -48,6 +48,9 @@ export type ExamWorkingCopy = {
   textSize?: import('./section-headings').TextSize
   /** This Exam's own test-page header lines; absent means the default. */
   header?: import('./page-header').ExamHeader
+  furniture?: import('./page-furniture').ExamFurniture
+  labelStyles?: import('./number-style').ExamLabelStyles
+  coverPage?: import('./page-cover').ExamCover
 }
 
 export function createQuestionBank(): QuestionBank {
@@ -212,4 +215,3 @@ export function withChoiceOrder(
   ) return draft
   return { ...draft, choiceOrder }
 }
-
