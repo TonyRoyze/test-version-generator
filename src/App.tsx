@@ -78,6 +78,8 @@ import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import { ExamPage } from './exam-page'
 import { CoverDesignPage } from './cover-page-view'
 import { DEFAULT_EXAM_COVER } from './page-cover'
+import { CoverTemplatesPage } from './cover-templates-page'
+import type { CoverPageTemplate } from './cover-templates/templates'
 import { QuestionBankPane } from './question-bank-pane'
 import { NO_FILTER, topicOptions, type QuestionBankFilter } from './question-bank-view'
 import { useSelection } from './use-selection'
@@ -1002,6 +1004,23 @@ function BankDeletionConfirmation({ bank, impact, onCancel, onConfirm }: {
       {impact.length > 0 && <ul>{impact.map((item) => <li key={item.examId}>{item.title} — {item.questionCount} {item.questionCount === 1 ? 'Question' : 'Questions'} removed</li>)}</ul>}
       <p><strong>Export History remains unchanged.</strong> Historical exports stay viewable and can be exported again.</p>
     </>}
+  </DestructiveConfirmation>
+}
+
+function ExamDeletionConfirmation({ exam, onCancel, onConfirm }: {
+  exam: RecentExam
+  onCancel: () => void
+  onConfirm: () => Promise<void>
+}) {
+  return <DestructiveConfirmation
+    label="Permanently delete paper"
+    title={`Permanently delete “${exam.title}”?`}
+    confirmLabel="Delete paper"
+    onCancel={onCancel}
+    onConfirm={onConfirm}
+  >
+    <p>This removes the paper, including its saved and unsaved questions and export history. This cannot be undone.</p>
+    <p>Question Banks used by this paper will remain available.</p>
   </DestructiveConfirmation>
 }
 
@@ -2684,6 +2703,9 @@ function ExamEditor({
             onSetColumns={(questionIds, columns) =>
               store.setQuestionColumns(questionIds, columns)
             }
+            onSetNumberingRestart={(questionId, enabled) =>
+              store.setNumberingRestart(questionId, enabled)
+            }
             onSetWorkSpace={(questionIds, patch) =>
               store.setQuestionWorkSpace(questionIds, patch)
             }
@@ -2817,6 +2839,7 @@ export default function App({
   const [editorStore, setEditorStore] = useState(store)
   const [editorId, setEditorId] = useState(initialEditorId)
   const [deletingBank, setDeletingBank] = useState<{ bank: QuestionBankCollectionItem; impact: QuestionDeletionImpact[] } | null>(null)
+  const [deletingExam, setDeletingExam] = useState<RecentExam | null>(null)
   const [inspectingBankFile, setInspectingBankFile] = useState(false)
   const [droppedBankFile, setDroppedBankFile] = useState<File | null>(null)
   const [convertDrop, setConvertDrop] = useState<{ file: File; id: number } | null>(null)
@@ -2918,6 +2941,21 @@ export default function App({
       setDeletingBank(null)
     }}
   />
+  const examDeletionConfirmation = deletingExam && <ExamDeletionConfirmation
+    exam={deletingExam}
+    onCancel={() => setDeletingExam(null)}
+    onConfirm={async () => {
+      if (editorId === deletingExam.id) await editorStore?.whenSettled()
+      await workspaces.delete(deletingExam.id)
+      if (editorId === deletingExam.id) {
+        setEditorStore(null)
+        setEditorId(null)
+      }
+      setExams(await workspaces.recent())
+      setDeletingExam(null)
+    }}
+  />
+  const requestExamDeletion = useCallback((exam: RecentExam) => setDeletingExam(exam), [])
   const saveAs = useCallback(async () => {
     if (!editorStore) return
     const sourceId = await workspaces.activeId()
@@ -2976,6 +3014,19 @@ export default function App({
   const openExam = (id: string) => window.location.assign(`/editor?exam=${id}`)
   const openBank = useCallback((id: string) => navigate(`/question-bank?id=${id}`), [])
   const newExam = () => { void workspaces.create().then((exam) => openExam(exam.id)) }
+  const applyCoverTemplate = async (examId: string | null, template: CoverPageTemplate) => {
+    try {
+      const exam = examId ? null : await workspaces.create()
+      const targetId = examId ?? exam?.id
+      if (!targetId) throw new Error('Could not create an Exam.')
+      const store = await loadExamStore(workspaces.backendFor(targetId))
+      store.setCoverPage({ ...structuredClone(template.cover), templateId: template.id })
+      await store.whenSettled()
+      openExam(targetId)
+    } catch (error) {
+      setHomeError(error instanceof Error ? error.message : 'Could not apply this cover template.')
+    }
+  }
   const newBank = () => { void bankWorkspaces.create().then((bank) => openBank(bank.id)) }
   const onBankPage = route === '/question-bank'
   const pageBankReady = onBankPage && pageBank?.search === search
@@ -3024,6 +3075,7 @@ export default function App({
     return <CoverDesignPage
       cover={exam.coverPage ?? DEFAULT_EXAM_COVER}
       onChange={(cover) => editorStore.setCoverPage(cover)}
+      examTitle={editorStore.getState().workingCopy.title}
       onBack={() => navigate('/editor')}
     />
   }
@@ -3059,7 +3111,7 @@ export default function App({
   }
   if (route === '/about') return <>{globalChrome}<AboutPage persistentStorage={storageStatus} /></>
   if (route === '/privacy') return <>{globalChrome}<PrivacyPage persistentStorage={storageStatus} /></>
-  if (route === '/settings') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
+  if (route === '/settings' || route === '/login') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
   if (route === '/exams') return <>{globalChrome}<ResourceCollectionPage
     kind="exams"
     exams={exams}
@@ -3068,7 +3120,8 @@ export default function App({
     onOpenExam={openExam}
     onOpenBank={openBank}
     onNewExam={newExam}
-  />{bankDeletionConfirmation}</>
+    onDeleteExam={requestExamDeletion}
+  />{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-banks') return <>{globalChrome}<ResourceCollectionPage
     kind="question-banks"
     exams={exams}
@@ -3094,6 +3147,12 @@ export default function App({
     {importDialog}
     <ConvertPage dropped={convertDrop} onOpenImport={(file, waitingImportId) => openImport(file, null, waitingImportId)} />
   </>
+  if (route === '/cover-templates') return <>{globalChrome}<CoverTemplatesPage
+    exams={exams}
+    error={homeError}
+    persistentStorage={storageStatus}
+    onApply={(examId, template) => { void applyCoverTemplate(examId, template) }}
+  />{bankDeletionConfirmation}</>
   if (route === '/') return <>{globalChrome}<HomePage
     exams={exams}
     banks={bankCollection}
@@ -3104,7 +3163,8 @@ export default function App({
     onNewBank={newBank}
     onOpenBank={openBank}
     onDeleteBank={requestBankDeletion}
-  />{bankDeletionConfirmation}</>
+    onDeleteExam={requestExamDeletion}
+  />{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-bank') return pageBank && pageBankReady ? <>{globalChrome}<QuestionBankPage
     key={pageBank.bank.id}
     bank={pageBank.bank}

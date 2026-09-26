@@ -1,3 +1,4 @@
+import { coverLogoSource } from './page-cover'
 // The DOCX Export Adapter.
 //
 // The second translator from a Layout Plan into a real output format, beside
@@ -1239,7 +1240,7 @@ function coverPageContent(furniture: PageFurniture, build: BuildContext): (Parag
   const cover = furniture.coverPage as ExamCover
   const border = { style: BorderStyle.DOUBLE, size: 8, color: '111111' }
   const frameWidth = PAGE_CONTENT_WIDTH
-  const logo = cover.logo ? build.images.get(cover.logo) : undefined
+  const logo = build.images.get(coverLogoSource(cover))
   const centeredTitle = (text: string, size?: number) => new Paragraph({
     children: [new TextRun({ text, bold: true, size, font: size ? 'Cooper*' : undefined })],
     alignment: AlignmentType.CENTER,

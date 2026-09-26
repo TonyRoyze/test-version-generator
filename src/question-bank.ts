@@ -50,6 +50,7 @@ export type ExamWorkingCopy = {
   header?: import('./page-header').ExamHeader
   furniture?: import('./page-furniture').ExamFurniture
   labelStyles?: import('./number-style').ExamLabelStyles
+  numberingRestarts?: string[]
   coverPage?: import('./page-cover').ExamCover
 }
 
@@ -142,6 +143,7 @@ export function withReferencesRemoved(
   const workSpace = draft.workSpace
     ? { ...draft.workSpace }
     : undefined
+  const numberingRestarts = draft.numberingRestarts?.filter((id) => !removing.has(id))
   const sectionOf = draft.sectionOf
     ? { ...draft.sectionOf }
     : undefined
@@ -157,6 +159,7 @@ export function withReferencesRemoved(
     ...(choiceOrder ? { choiceOrder } : {}),
     ...(columns ? { columns } : {}),
     ...(workSpace ? { workSpace } : {}),
+    ...(numberingRestarts && numberingRestarts.length > 0 ? { numberingRestarts } : {}),
     ...(sectionOf ? { sectionOf } : {}),
   }
 }

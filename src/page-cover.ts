@@ -10,16 +10,17 @@ export type ExamCover = {
   duration: string
   totalMarks: string
   logo?: string
+  templateId?: string
   instructions: string[]
   marks: CoverMarkRow[]
 }
 
 export const DEFAULT_EXAM_COVER: ExamCover = {
-  schoolName: 'School Name',
-  schoolSubtitle: '',
-  assessment: 'Assessment',
-  grade: 'Grade',
-  subject: 'Subject',
+  schoolName: 'Royal Institute',
+  schoolSubtitle: 'International School',
+  assessment: 'Third term',
+  grade: 'Grade 9 National',
+  subject: 'Science',
   duration: '2 hours',
   totalMarks: '100',
   instructions: [
@@ -45,6 +46,7 @@ export function isExamCover(value: unknown): value is ExamCover {
     && typeof cover.duration === 'string'
     && typeof cover.totalMarks === 'string'
     && (cover.logo === undefined || typeof cover.logo === 'string')
+    && (cover.templateId === undefined || typeof cover.templateId === 'string')
     && Array.isArray(cover.instructions) && cover.instructions.every((line) => typeof line === 'string')
     && Array.isArray(cover.marks) && cover.marks.every((row) =>
       typeof row === 'object' && row !== null
@@ -64,8 +66,12 @@ export function sameExamCover(left: ExamCover | undefined, right: ExamCover | un
     && left.duration === right.duration
     && left.totalMarks === right.totalMarks
     && left.logo === right.logo
+    && left.templateId === right.templateId
     && left.instructions.length === right.instructions.length
     && left.instructions.every((line, index) => line === right.instructions[index])
     && left.marks.length === right.marks.length
     && left.marks.every((row, index) => row.label === right.marks[index]?.label && row.allotted === right.marks[index]?.allotted)
 }
+
+/** The preview and export adapters resolve the same bundled fallback. */
+export const coverLogoSource = (cover: ExamCover) => cover.logo || '/school-logo.png'

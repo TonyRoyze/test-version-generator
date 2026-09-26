@@ -1,3 +1,7 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
 @font-face {
   font-family: "CooperBold";
   src: url("/fonts/CooperBold.ttf") format("truetype");
@@ -1854,244 +1858,6 @@ button {
   font-size: 17px;
   font-weight: 700;
 }
-.cover-sheet {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-  padding-top: 30px;
-  color: #171411;
-  font:
-    16px/1.5 Arial,
-    sans-serif;
-}
-.cover-frame {
-  flex: 0 0 320px;
-  min-height: 300px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 20px 26px;
-  border: 5px double #171411;
-  text-align: center;
-}
-.cover-logo {
-  width: auto;
-  max-width: 110px;
-  max-height: 62px;
-  object-fit: contain;
-}
-.cover-logo-upload {
-  position: absolute;
-  top: 4px;
-  right: 5px;
-  color: #786b5e;
-  font:
-    11px system-ui,
-    sans-serif;
-  cursor: pointer;
-}
-.cover-logo-upload input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-}
-.cover-editable-field {
-  max-width: 100%;
-}
-.cover-school-name-field,
-.cover-school-subtitle-field {
-  width: 100%;
-}
-.cover-meta-row > span {
-  white-space: nowrap;
-}
-.cover-instructions .cover-editable-field,
-.cover-marks-table .cover-editable-field {
-  width: 100%;
-}
-.cover-school-name,
-.cover-school-subtitle,
-.cover-title-fields textarea,
-.cover-meta-row textarea,
-.cover-instructions textarea {
-  color: inherit;
-  background: transparent;
-  font: inherit;
-}
-.cover-frame .section-heading-input.cover-school-name {
-  width: 100%;
-  margin-top: 6px;
-  color: #742b24;
-  -webkit-text-fill-color: #742b24;
-  font:
-    700 34px/1.05 "CooperBold",
-    Georgia,
-    serif !important;
-  text-align: center;
-}
-.cover-frame .section-heading-input.cover-school-subtitle {
-  width: 100%;
-  color: #742b24;
-  -webkit-text-fill-color: #742b24;
-  font:
-    700 23px/1.1 "CooperBold",
-    Georgia,
-    serif !important;
-  text-align: center;
-}
-.cover-title-fields {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-top: 20px;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.cover-title-fields input {
-  width: 100%;
-  min-width: 210px;
-  text-align: center;
-  font-weight: 700;
-  text-transform: uppercase;
-}
-.cover-meta-row {
-  width: 100%;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  justify-items: start;
-  gap: 145px;
-  margin-top: auto;
-  text-align: left;
-  font-weight: 700;
-}
-.cover-meta-row + .cover-meta-row {
-  margin-top: 18px;
-}
-.cover-blank {
-  display: inline-block;
-  width: 350px;
-  border-bottom: 2px dotted currentColor;
-}
-.cover-blank--short {
-  width: 190px;
-}
-.cover-total-marks {
-  width: 100%;
-  text-align: left;
-  font-weight: 700;
-}
-.cover-lower {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 28px;
-  align-items: start;
-  padding: 20px;
-}
-.cover-instructions {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-top: 20px;
-}
-.cover-instructions strong {
-  margin-bottom: 4px;
-}
-.cover-instructions input {
-  width: 100%;
-}
-.cover-marks-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.cover-marks-table th,
-.cover-marks-table td {
-  height: 31px;
-  border: 1px solid #777;
-  padding: 2px 7px;
-}
-.cover-marks-table th {
-  text-align: center;
-}
-.cover-marks-table td textarea {
-  width: 100%;
-  font: inherit;
-}
-.cover-marks-table thead tr:first-child th:first-child {
-  border: 0;
-}
-.cover-marks-total th {
-  font-size: 18px;
-}
-.cover-page-count {
-  margin: auto -10px -10px;
-  border-top: 1px solid #333;
-  text-align: center;
-  font-size: 14px;
-}
-.cover-design-route {
-  min-height: 100vh;
-  background: #e9e1d6;
-}
-.cover-design-toolbar {
-  min-height: 70px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 10px 24px;
-  background: #fbf8f2;
-  border-bottom: 1px solid #d6cabb;
-  color: #44382e;
-}
-.cover-design-toolbar button {
-  padding: 8px 12px;
-  border: 1px solid #b9a994;
-  border-radius: 3px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-}
-.cover-design-toolbar h1 {
-  margin: 0;
-  font:
-    700 20px/1.2 Georgia,
-    serif;
-}
-.cover-design-toolbar p {
-  margin: 3px 0 0;
-  font:
-    13px/1.35 system-ui,
-    sans-serif;
-}
-.cover-design-toolbar > span {
-  margin-left: auto;
-  color: #786b5e;
-  font:
-    12px system-ui,
-    sans-serif;
-}
-.exam-page--cover-designer {
-  margin-bottom: 36px;
-}
-.cover-design-empty {
-  display: grid;
-  place-content: center;
-  min-height: 70vh;
-  gap: 16px;
-  text-align: center;
-}
-.cover-design-empty button {
-  justify-self: center;
-}
 .page-header--first {
   height: var(--page-header-first);
 }
@@ -2251,19 +2017,6 @@ button {
   line-height: 17px;
 }
 @media print {
-  .cover-logo-upload {
-    display: none !important;
-  }
-  .cover-design-toolbar {
-    display: none !important;
-  }
-  .cover-sheet input {
-    outline: none !important;
-  }
-  .cover-school-name,
-  .cover-school-subtitle {
-    font-family: "CooperBold", Georgia, serif !important;
-  }
 }
 
 /* Where `dom-measure.ts` lays a page item out to find its height: off-screen,
@@ -5141,9 +4894,16 @@ button {
    uses — there is no second, approximate way of drawing a page to keep in step
    with the first. */
 .exam-card {
+  position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   width: var(--sheet-width);
+}
+.exam-card-main {
+  display: grid;
+  gap: 8px;
+  width: 100%;
   padding: 0;
   border: 0;
   background: transparent;
@@ -5168,10 +4928,14 @@ button {
 .exam-sheet .exam-question {
   cursor: inherit;
 }
-.exam-card:hover .exam-sheet,
-.exam-card:focus-visible .exam-sheet {
+.exam-card-main:hover .exam-sheet,
+.exam-card-main:focus-visible .exam-sheet {
   border-color: #b65f43;
   box-shadow: 0 4px 14px rgb(91 68 47 / 22%);
+}
+.exam-card-menu {
+  top: 6px;
+  right: 6px;
 }
 .exam-card-caption {
   display: grid;

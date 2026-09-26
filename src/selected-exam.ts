@@ -61,6 +61,11 @@ function sameWorkSpace(
     })
 }
 
+function sameIds(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  return (left ?? []).length === (right ?? []).length
+    && (left ?? []).every((id, index) => id === right?.[index])
+}
+
 /** A Multipart question with this Exam's answer columns written onto its Multiple
  *  Choice Parts, as a question's own `columns` is overridden: the Part nodes
  *  carry the layout each Part starts with, and the Working Copy the layout this
@@ -166,6 +171,8 @@ export function selectedExam(
     if (referenced.has(id) && typeof section === 'string') sectionOf[id] = section
   }
   const hasAnySectionOf = Object.keys(sectionOf).length > 0
+  const numberingRestarts = (draft.numberingRestarts ?? []).filter((id) => referenced.has(id))
+  const hasNumberingRestarts = numberingRestarts.length > 0
   const headingSize =
     isHeadingSize(draft.headingSize) && draft.headingSize !== DEFAULT_HEADING_SIZE
       ? draft.headingSize
@@ -191,6 +198,7 @@ export function selectedExam(
     && sameExamHeader(previous.exam.header, header)
     && sameExamFurniture(previous.exam.furniture, furniture)
     && sameExamLabelStyles(previous.exam.labelStyles, labelStyles)
+    && sameIds(previous.exam.numberingRestarts, hasNumberingRestarts ? numberingRestarts : undefined)
     && sameExamCover(previous.exam.coverPage, coverPage)
     && previous.exam.textSize === textSize
       ? previous.exam
@@ -206,6 +214,7 @@ export function selectedExam(
           ...(header ? { header } : {}),
           ...(furniture ? { furniture } : {}),
           ...(labelStyles ? { labelStyles } : {}),
+          ...(hasNumberingRestarts ? { numberingRestarts } : {}),
           coverPage,
         }
 

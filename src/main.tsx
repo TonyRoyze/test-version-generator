@@ -1,3 +1,8 @@
+import { SignedOutApp } from './signed-out-app'
+import { supabase, initialAuthAction } from './supabase'
+import { LoginPage } from './account-settings'
+import { selectAccountStorage, STORAGE_NAME } from './storage-schema'
+import { prepareCloudAccount } from './cloud-account'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MilkdownProvider } from '@milkdown/react'
@@ -15,11 +20,49 @@ import { expireWaitingImports } from './import-history'
 import { PopOverProvider } from './question-bank-pop-over'
 import './styles.css'
 
+const root = createRoot(document.getElementById('root')!)
+
 async function start() {
+  let userId: string | null = null
+  if (supabase) {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) throw error
+    userId = data.session?.user.id ?? null
+    if (!userId || initialAuthAction === 'recovery' || initialAuthAction === 'invite') {
+      root.render(initialAuthAction === 'recovery' || initialAuthAction === 'invite' ? <LoginPage /> : <SignedOutApp />)
+      return
+    }
+    selectAccountStorage(userId)
+    supabase.auth.onAuthStateChange((_event, session) => {
+      if ((session?.user.id ?? null) !== userId) window.location.reload()
+    })
+  }
+  // The worker asks the requesting tab which account owns its image references.
+  navigator.serviceWorker?.addEventListener('message', event => {
+    if (event.data?.type === 'account-storage') event.ports[0]?.postMessage(STORAGE_NAME)
+  })
   if ('serviceWorker' in navigator) {
     await navigator.serviceWorker.register('/image-worker.js')
     await navigator.serviceWorker.ready
     if (!navigator.serviceWorker.controller) { window.location.reload(); return }
+  }
+  if (supabase && userId) {
+    // One editable tab per account prevents cross-tab restores and partial snapshots.
+    let release!: () => void
+    const held = new Promise<void>(resolve => { release = resolve })
+    const acquired = await new Promise<boolean>((resolve, reject) => {
+      navigator.locks.request(`test-parrot-account:${userId}`, { ifAvailable: true }, async lock => {
+        resolve(Boolean(lock))
+        if (lock) await held
+      }).catch(reject)
+    })
+    if (!acquired) {
+      root.render(<main className="site-prose login-page"><h1>Account open in another tab</h1><p>Close the other tab, then reload to edit this account here.</p><button onClick={() => window.location.reload()}>Reload</button></main>)
+      return
+    }
+    window.addEventListener('pagehide', () => release(), { once: true })
+    window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload() })
+    await prepareCloudAccount(supabase, userId)
   }
   // A restore replaces the account before anything below opens it.
   const restored = await applyStagedRestore()
@@ -89,6 +132,8 @@ async function start() {
     persistentStorageStatus(),
   ])
   const collection = await questionBankCollection(banks, bankWorkspaces, workspaces)
-  createRoot(document.getElementById('root')!).render(<StrictMode><MilkdownProvider><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></MilkdownProvider></StrictMode>)
+  root.render(<StrictMode><MilkdownProvider><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></MilkdownProvider></StrictMode>)
 }
-void start()
+void start().catch(error => {
+  root.render(<main className="site-prose login-page"><h1>Could not open your workspace</h1><p role="alert">{error instanceof Error ? error.message : 'Please try again.'}</p><button onClick={() => window.location.reload()}>Retry</button><button onClick={() => void supabase?.auth.signOut({ scope: 'local' }).then(() => window.location.reload())}>Sign out</button></main>)
+})
