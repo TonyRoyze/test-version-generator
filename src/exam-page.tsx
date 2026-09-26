@@ -231,6 +231,8 @@ function questionMenuItems({
   onShuffleSelectedAnswers,
   onRemove,
   onSetColumns,
+  onSetNumberingRestart,
+  numberingRestarted,
   workSpace,
   workSpaceOfPart,
   onSetWorkSpace,
@@ -250,6 +252,8 @@ function questionMenuItems({
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
+  onSetNumberingRestart: (questionId: string, enabled: boolean) => void
+  numberingRestarted: boolean
   selectedQuestionIds: readonly string[]
 }): MenuItem[] {
   // Every action that can sensibly apply to more than one question applies to
@@ -297,6 +301,16 @@ function questionMenuItems({
       )
     }
   }
+  items.push(
+    { kind: 'separator' },
+    {
+      kind: 'checkbox',
+      label: 'Restart numbering here',
+      checked: numberingRestarted,
+      icon: <ListRestart />,
+      onSelect: () => onSetNumberingRestart(question.id, !numberingRestarted),
+    },
+  )
   // Columns are a multiple-choice question's business. An open question has no
   // answers to lay out, so the group is absent rather than present and inert.
   if (question.type === 'multiple-choice') {
@@ -1358,7 +1372,7 @@ export function ExportPreview({ plan }: { plan: LayoutPlan }) {
           }}>
             {page.furniture.footerLayout?.logo && <img className="page-furniture-logo" src={page.furniture.footerLayout.logo} alt="" />}
             {page.furniture.schoolName !== undefined
-              ? <span className="school-footer">Royal Institute International School</span>
+              ? <span className="school-footer">{page.furniture.schoolName}</span>
               : <span>{page.furniture.pageNumber}</span>}
           </footer>
           </>}
@@ -1381,6 +1395,7 @@ export function ExamPage({
   onShuffleSelectedAnswers,
   onRemove,
   onSetColumns,
+  onSetNumberingRestart,
   onSetWorkSpace,
   onTitleChange,
   onSectionHeadingChange,
@@ -1409,6 +1424,7 @@ export function ExamPage({
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
+  onSetNumberingRestart: (questionId: string, enabled: boolean) => void
   /** Changes the room left for work below Short Answer questions. */
   onSetWorkSpace: SetWorkSpace
   /** Renames the Exam from its own title line. See `PageHeaderContent`. */
@@ -1890,7 +1906,7 @@ export function ExamPage({
           }}>
             {page.furniture.footerLayout?.logo && <img className="page-furniture-logo" src={page.furniture.footerLayout.logo} alt="" />}
             {page.furniture.schoolName !== undefined
-              ? <span className="school-footer">Royal Institute International School</span>
+              ? <span className="school-footer">{page.furniture.schoolName}</span>
               : <span>{page.furniture.pageNumber}</span>}
           </footer>
           </>}
@@ -1927,6 +1943,8 @@ export function ExamPage({
             onShuffleSelectedAnswers,
             onRemove,
             onSetColumns,
+            onSetNumberingRestart,
+            numberingRestarted: exam.numberingRestarts?.includes(menuQuestion.id) ?? false,
             workSpace: workSpaceOf(exam, menuQuestion.id),
             workSpaceOfPart: (partId) => workSpaceOf(exam, partId),
             onSetWorkSpace,

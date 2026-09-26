@@ -1,3 +1,4 @@
+import { coverLogoSource } from './page-cover'
 // The PDF Export Adapter.
 //
 // It consumes retained Layout Plans exactly like the DOCX adapter: one PDF page
@@ -9,6 +10,7 @@
 import fontkit from '@pdf-lib/fontkit'
 import {
   AFRelationship,
+  StandardFonts,
   PDFArray,
   PDFDocument,
   PDFName,
@@ -131,6 +133,8 @@ type EmbeddedFonts = {
   regular: PDFFont
   bold: PDFFont
   cooperBold: PDFFont
+  sans: PDFFont
+  sansBold: PDFFont
   italic: PDFFont
   boldItalic: PDFFont
   mono: PDFFont
@@ -812,6 +816,7 @@ function drawItem(context: DrawContext, item: PageItem): void {
       }
       if (item.instructions) {
         drawTextLine(context, item.instructions, {
+          font: 'italic',
           size: size.instructions,
           line: 17 * (size.instructions / SHEET_BODY_SIZE),
         })
@@ -1016,109 +1021,117 @@ function drawFurniture(
 function drawCoverPage(context: DrawContext, furniture: PageFurniture, top: number, margin: number): void {
   const cover = furniture.coverPage
   if (!cover) return
-  const frameHeight = pt(320)
-  const frameTop = top - pt(30)
-  const frameBottom = frameTop - frameHeight
-  context.page.drawRectangle({
-    x: context.x,
-    y: frameBottom,
-    width: context.width,
-    height: frameHeight,
-    borderColor: INK,
-    borderWidth: 3,
-  })
-  context.page.drawRectangle({
-    x: context.x + 4,
-    y: frameBottom + 4,
-    width: context.width - 8,
-    height: frameHeight - 8,
-    borderColor: INK,
-    borderWidth: 0.8,
-  })
-  let y = frameTop - pt(28)
-  const logo = cover.logo ? context.images.get(cover.logo) : undefined
+  // Match RoyalInstituteCover's 320px frame, 20px lower padding, and 28px gutter.
+  // All coordinates remain in the Layout Plan's page, with selectable PDF text.
+  const frameBottom = top - pt(320)
+  context.page.drawRectangle({ x: context.x, y: frameBottom, width: context.width, height: pt(320), borderColor: rgb(.45, .45, .43), borderWidth: pt(1.25) })
+  let y = top - pt(12)
+  const logo = context.images.get(coverLogoSource(cover))
   if (logo) {
-    const scale = Math.min(pt(60) / logo.source.height, pt(90) / logo.source.width)
+    const scale = Math.min(pt(72) / logo.source.height, pt(120) / logo.source.width)
     const width = logo.source.width * scale
     const height = logo.source.height * scale
     context.page.drawImage(logo.image, { x: context.x + (context.width - width) / 2, y: y - height, width, height })
-    y -= height + pt(4)
+    y -= height
   }
-  const centered = (text: string, size: number, font: keyof EmbeddedFonts = 'bold', color = INK) => {
+  const centered = (text: string, size: number, font: keyof EmbeddedFonts = 'sansBold', color = INK) => {
     if (!text) return
     assertSupported(text, context.fonts[font])
+    y -= size
     const width = context.fonts[font].widthOfTextAtSize(text, size)
+    if (width > context.width - pt(52)) throw new PdfLayoutError(context.pageNumber)
     context.page.drawText(text, { x: context.x + (context.width - width) / 2, y, size, font: context.fonts[font], color })
-    y -= size * 1.2
+    y -= size * .1
   }
-  centered(cover.schoolName, 24, 'cooperBold', rgb(0.45, 0.16, 0.13))
-  centered(cover.schoolSubtitle, 17, 'cooperBold', rgb(0.45, 0.16, 0.13))
-  y -= pt(18)
-  centered(cover.assessment, 15)
-  centered(`${cover.grade} — ${cover.subject}`, 14)
-  y = frameBottom + pt(48)
-  const regular = context.fonts.bold
-  const details = [`Name, ........................................................`, `Class, ............................`, `Duration: ${cover.duration}                         Total Marks: ${cover.totalMarks}`]
-  details.forEach((text) => {
-    assertSupported(text, regular)
-    context.page.drawText(text, { x: context.x + pt(24), y, size: BODY_SIZE, font: regular, color: INK })
-    y += pt(28)
-  })
+  y -= pt(4)
+  centered(cover.schoolName, pt(28), 'cooperBold', rgb(.45, .16, .13))
+  centered(cover.schoolSubtitle, pt(18), 'cooperBold', rgb(.45, .16, .13))
+  y -= pt(12)
+  centered(cover.assessment.toUpperCase(), pt(14))
+  centered(cover.grade.toUpperCase(), pt(14))
+  centered(cover.subject.toUpperCase(), pt(14))
 
-  const lowerTop = frameBottom - pt(44)
-  const tableX = context.x + context.width * 0.56
-  const tableWidth = context.width * 0.44
-  const rowHeight = Math.min(pt(32), pt(320) / (cover.marks.length + 2))
-  const tableHeight = rowHeight * (cover.marks.length + 2)
-  for (let row = 0; row <= cover.marks.length + 2; row += 1) {
+  const left = context.x + pt(26)
+  const right = context.x + context.width / 2 + pt(10)
+  const edge = context.x + context.width - pt(26)
+  const detail = (label: string, value: string | null, x: number, end: number, baseline: number) => {
+    const size = pt(14)
+    const font = context.fonts.sansBold
+    assertSupported(label, font)
+    context.page.drawText(label, { x, y: baseline, size, font, color: INK })
+    const start = x + font.widthOfTextAtSize(label, size) + pt(8)
+    if (value === null) context.page.drawLine({ start: { x: start, y: baseline - 2 }, end: { x: end, y: baseline - 2 }, thickness: .6, color: INK })
+    else {
+      assertSupported(value, font)
+      if (font.widthOfTextAtSize(value, size) > end - start) throw new PdfLayoutError(context.pageNumber)
+      context.page.drawText(value, { x: start, y: baseline, size, font, color: INK })
+    }
+  }
+  detail('Name:', null, left, right - pt(20), frameBottom + pt(63))
+  detail('Class:', null, right, edge, frameBottom + pt(63))
+  detail('Duration:', cover.duration, left, right - pt(20), frameBottom + pt(27))
+  detail('Total Marks:', cover.totalMarks, right, edge, frameBottom + pt(27))
+
+  const lowerTop = frameBottom - pt(20)
+  const columnWidth = (context.width - pt(40 + 28)) / 2
+  const tableX = context.x + pt(20 + 28) + columnWidth
+  const tableWidth = columnWidth
+  const rowHeight = pt(31)
+  const colWidth = tableWidth / 3
+  const totalRows = cover.marks.length + 3
+  if (lowerTop - totalRows * rowHeight < margin + pt(24)) throw new PdfLayoutError(context.pageNumber)
+  for (let row = 0; row <= totalRows; row++) {
     const lineY = lowerTop - row * rowHeight
-    context.page.drawLine({ start: { x: tableX, y: lineY }, end: { x: tableX + tableWidth, y: lineY }, thickness: 0.6, color: RULE })
+    context.page.drawLine({ start: { x: row === 0 ? tableX + colWidth : tableX, y: lineY }, end: { x: tableX + tableWidth, y: lineY }, thickness: .6, color: RULE })
   }
-  const col1 = tableX + tableWidth * 0.34
-  const col2 = tableX + tableWidth * 0.67
-  for (const x of [tableX, col1, col2, tableX + tableWidth]) {
-    context.page.drawLine({ start: { x, y: lowerTop }, end: { x, y: lowerTop - tableHeight }, thickness: 0.6, color: RULE })
+  for (let col = 0; col <= 3; col++) {
+    const x = tableX + colWidth * col
+    context.page.drawLine({ start: { x, y: lowerTop - (col === 0 || col === 2 ? rowHeight : 0) }, end: { x, y: lowerTop - totalRows * rowHeight }, thickness: .6, color: RULE })
   }
-  const writeCell = (text: string, x: number, y: number, width: number, bold = false) => {
-    if (!text) return
-    const font = bold ? context.fonts.bold : context.fonts.regular
+  const cell = (text: string, col: number, row: number, bold = false, centered = false, span = 1) => {
+    const font = bold ? context.fonts.sansBold : context.fonts.sans
+    const size = pt(16)
     assertSupported(text, font)
-    const size = SMALL_SIZE
-    context.page.drawText(text, { x: x + 3, y: y - rowHeight + (rowHeight - size) / 2, size, font, color: INK, maxWidth: width - 6 })
+    const width = font.widthOfTextAtSize(text, size)
+    if (width > colWidth * span - pt(14)) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(text, { x: tableX + col * colWidth + (centered ? (colWidth * span - width) / 2 : pt(7)), y: lowerTop - (row + 1) * rowHeight + (rowHeight - size) / 2 + 2, font, size, color: INK })
   }
-  writeCell('Marks', col1, lowerTop, tableX + tableWidth - col1, true)
-  writeCell('Question', tableX, lowerTop - rowHeight, col1 - tableX, true)
-  writeCell('Allotted', col1, lowerTop - rowHeight, col2 - col1, true)
-  writeCell('Obtained', col2, lowerTop - rowHeight, tableX + tableWidth - col2, true)
-  cover.marks.forEach((row, index) => {
-    const rowTop = lowerTop - (index + 2) * rowHeight
-    writeCell(row.label, tableX, rowTop, col1 - tableX)
-    writeCell(row.allotted, col1, rowTop, col2 - col1)
-  })
-  const instructionsX = context.x + pt(16)
-  const instructionsWidth = tableX - instructionsX - pt(16)
+  cell('Marks', 1, 0, true, true, 2)
+  cell('Question', 0, 1, true, true)
+  cell('Allotted', 1, 1, true, true)
+  cell('Obtained', 2, 1, true, true)
+  cover.marks.forEach((row, index) => { cell(row.label, 0, index + 2); cell(row.allotted, 1, index + 2) })
+  cell('Total', 0, totalRows - 1, true, true)
+  cell(cover.totalMarks, 1, totalRows - 1)
+
   let instructionY = lowerTop - pt(20)
-  const drawWrap = (text: string, size: number, font: keyof EmbeddedFonts, x: number, width: number) => {
-    if (!text) return
-    const words = text.split(/\s+/)
+  const instructionsX = context.x + pt(20)
+  const drawWrap = (text: string, bold = false) => {
+    const font = bold ? context.fonts.sansBold : context.fonts.sans
+    const size = pt(16)
     let line = ''
-    for (const word of words) {
+    for (const word of text.split(/\s+/)) {
       const next = line ? `${line} ${word}` : word
-      if (line && context.fonts[font].widthOfTextAtSize(next, size) > width) {
-        assertSupported(line, context.fonts[font])
-        context.page.drawText(line, { x, y: instructionY, size, font: context.fonts[font], color: INK })
-        instructionY -= size * 1.5
+      if (line && font.widthOfTextAtSize(next, size) > columnWidth) {
+        instructionY -= pt(24)
+        assertSupported(line, font)
+        context.page.drawText(line, { x: instructionsX, y: instructionY, size, font, color: INK })
         line = word
       } else line = next
     }
-    if (line) { assertSupported(line, context.fonts[font]); context.page.drawText(line, { x, y: instructionY, size, font: context.fonts[font], color: INK }); instructionY -= size * 1.7 }
+    instructionY -= pt(24)
+    if (instructionY < margin + pt(24)) throw new PdfLayoutError(context.pageNumber)
+    assertSupported(line, font)
+    context.page.drawText(line, { x: instructionsX, y: instructionY, size, font, color: INK })
+    instructionY -= pt(16)
   }
-  drawWrap('Instructions to the candidates,', BODY_SIZE, 'bold', instructionsX, instructionsWidth)
-  cover.instructions.forEach((line) => drawWrap(line, BODY_SIZE, 'regular', instructionsX, instructionsWidth))
+  drawWrap('Instructions to the candidates,', true)
+  cover.instructions.forEach(line => drawWrap(line))
   const pageCount = `This document consists of ${String(furniture.printedPageCount ?? 1).padStart(2, '0')} printed pages`
-  const countWidth = context.fonts.regular.widthOfTextAtSize(pageCount, SMALL_SIZE)
-  context.page.drawLine({ start: { x: margin, y: margin - pt(10) }, end: { x: context.x + context.width, y: margin - pt(10) }, thickness: 0.5, color: INK })
-  context.page.drawText(pageCount, { x: context.x + (context.width - countWidth) / 2, y: margin - pt(26), size: SMALL_SIZE, font: context.fonts.regular, color: INK })
+  const size = pt(14)
+  const countWidth = context.fonts.sans.widthOfTextAtSize(pageCount, size)
+  context.page.drawLine({ start: { x: margin - pt(10), y: margin - pt(10) }, end: { x: context.x + context.width + pt(10), y: margin - pt(10) }, thickness: .5, color: INK })
+  context.page.drawText(pageCount, { x: context.x + (context.width - countWidth) / 2, y: margin - pt(26), size, font: context.fonts.sans, color: INK })
 }
 
 async function embedImages(
@@ -1164,6 +1177,8 @@ async function createPdf(
     regular: await document.embedFont(regularBytes, { subset: true }),
     bold: await document.embedFont(boldBytes, { subset: true }),
     cooperBold: await document.embedFont(cooperBoldBytes, { subset: true }),
+    sans: await document.embedFont(StandardFonts.Helvetica),
+    sansBold: await document.embedFont(StandardFonts.HelveticaBold),
     italic: await document.embedFont(italicBytes, { subset: true }),
     boldItalic: await document.embedFont(boldItalicBytes, { subset: true }),
     mono: await document.embedFont(monoBytes, { subset: true }),

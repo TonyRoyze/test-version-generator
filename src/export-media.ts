@@ -1,3 +1,4 @@
+import { coverLogoSource } from './page-cover'
 import type { LayoutPlan } from './export-plan'
 import { keptPixels, pictureCropOf, pictureKey, type CropBox } from './picture-geometry'
 import type { ProseMirrorJSON } from './question-doc'
@@ -163,7 +164,7 @@ export function picturesOf(plans: readonly LayoutPlan[]): ExportPicture[] {
     for (const page of plan.pages) {
       add(page.furniture.headerLayout?.logo ?? '')
       add(page.furniture.footerLayout?.logo ?? '')
-      add(page.furniture.coverPage?.logo ?? '')
+      if (page.furniture.coverPage) add(coverLogoSource(page.furniture.coverPage))
       for (const item of page.items) {
         if (item.kind !== 'question') continue
         for (const block of item.stem) visit(block)

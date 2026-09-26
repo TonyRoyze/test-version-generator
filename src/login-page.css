@@ -1,0 +1,230 @@
+/* The sign-in page. It is the one page between a visitor and their workspace,
+   so it is the front door's own page: `.landing` for the ground, `LandingHeader`
+   for the furniture and `.landing-hero` for the grid, which is why almost
+   nothing here is a size or a place — the hero already has them.
+
+   What this page does add is the form. It is a card of paper, the same one the
+   how-it-works steps are, and its fields are the Exam section heading's own
+   field: no box, an underline that is transparent until hover and the accent
+   once focused. Signing in is writing on the same kind of page the product
+   makes, and a shadow rather than a border so the underline costs no height and
+   the form does not jump when a field takes focus.
+
+   Every rule is scoped under `.auth-page`, which both keeps the look off the
+   signed-in Settings page and lifts these above the shared `.primary-button` and
+   `.account-login` rules in styles.css and account-menu.css. */
+/* The page divides vertically into two fixed zones — the header and the footer,
+   which hold still — and one flexible band between them holding the hero,
+   centred in whatever is left. The centring is `margin-block: auto` on the hero
+   rather than `justify-content: center` on the band, because auto margins
+   collapse to nothing when the band is too short: a short window therefore
+   scrolls from the top of the form instead of pushing it up out of reach.
+
+   The hero's own padding is small for the same reason it used to be large. It
+   was 52 above and 80 below, which pushed the picture and the card up against
+   the header and left the pair sitting high in the window. That space is better
+   spent inside the composition — between the fields, around the card — so the
+   band is the same height it was and the page no longer overflows by a few
+   pixels, but the space is somewhere a reader can see it. */
+.auth-main {
+  display: flex;
+  flex-direction: column;
+}
+.auth-main .landing-hero {
+  align-items: center;
+  margin-block: auto;
+  padding: 28px;
+}
+/* The card is the tallest thing in the column, so the headline, the card and
+   the line under it are set off each other by a step that grows downwards: the
+   headline introduces, the card is the thing, the fineprint is a footnote. */
+.auth-main .landing-hero-copy h1 {
+  margin-bottom: 26px;
+}
+.landing-hero-copy .landing-fineprint {
+  margin: 26px 0 0;
+}
+
+/* The sheet the form is written on. */
+.auth-form-wrap {
+  width: min(100%, 420px);
+  padding: 30px 32px 26px;
+  border: 1px solid var(--paper-outline);
+  border-radius: 14px;
+  background: #fffdf8;
+  box-shadow: 0 10px 30px rgb(91 68 47 / 10%);
+}
+.auth-invite {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 26px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--paper-outline);
+  border-radius: 10px;
+  background: var(--paper-surface-low);
+  color: #5f4d40;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+.auth-invite svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--paper-accent);
+}
+
+.auth-page .account-login {
+  display: grid;
+  gap: 22px;
+  max-width: none;
+}
+.auth-page .account-login > p {
+  margin: 0;
+  color: #5f4d40;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.auth-page .account-login label {
+  gap: 7px;
+  color: #4e3b2f;
+  font-size: 13.5px;
+}
+
+/* The section heading's field, verbatim in behaviour: an underline rather than
+   a border, transparent at rest, warm on hover, the accent once focused. The
+   padding is constant so the line does not move between states. */
+.auth-page .account-login input {
+  width: 100%;
+  min-height: 0;
+  padding: 7px 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #332a24;
+  font-size: 17px;
+  box-shadow: 0 1px 0 transparent;
+  outline: none;
+}
+.auth-page .account-login input::placeholder {
+  color: #b8a493;
+}
+.auth-page .account-login input:hover:not(:disabled) {
+  box-shadow: 0 1px 0 #d8cbbb;
+}
+.auth-page .account-login input:focus {
+  box-shadow: 0 1px 0 var(--paper-accent);
+}
+.auth-page :is(a, button):focus-visible {
+  outline: 2px solid var(--paper-accent);
+  outline-offset: 2px;
+}
+.auth-page .account-note {
+  margin: 0;
+  color: #5f4d40;
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+.auth-page .account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 16px;
+}
+
+/* The one button that gets you in is the front door's button at full size:
+   there is nothing else on the page to press, so it does not have to share the
+   row with anything. "Forgot password?" is the quiet way past it. */
+.auth-page .primary-button {
+  min-height: 48px;
+  padding: 13px 22px;
+  border-color: var(--paper-accent);
+  border-radius: 10px;
+  background: var(--paper-accent);
+  color: #fffaf3;
+  font-size: 16px;
+  font-weight: 700;
+  box-shadow: 0 6px 18px rgb(159 80 55 / 22%);
+}
+.auth-page .primary-button:hover {
+  border-color: #87422e;
+  background: #87422e;
+}
+.auth-page .primary-button:disabled {
+  border-color: #d8c8b8;
+  background: #f7eee3;
+  color: #a8988c;
+  box-shadow: none;
+}
+.auth-page .secondary-button {
+  align-self: center;
+  padding: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--paper-accent);
+  font-size: 13.5px;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.auth-page .secondary-button:hover {
+  background: var(--paper-accent-wash);
+  color: #87422e;
+}
+.auth-page button:disabled {
+  cursor: wait;
+}
+
+/* A notice about the sign-in itself, so it borrows the two washes the rest of
+   the app says danger and success with rather than inventing a third. */
+.auth-page .account-warning,
+.auth-page .account-ok {
+  margin: 18px 0 0;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.auth-page .account-warning {
+  border-color: var(--paper-danger-line);
+  background: var(--paper-danger-wash);
+  color: var(--paper-danger);
+}
+.auth-page .account-ok {
+  border-color: var(--easy-line);
+  background: var(--easy-wash);
+  color: var(--easy-ink);
+}
+
+/* The heading the form is labelled by, for the reader rather than the eye. */
+.login-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The art goes below the hero's own breakpoint, so on a phone the form is the
+   whole page. The band still centres, and the padding shrinks to a phone's
+   margins, but the internal rhythm above is left alone — it is the same page
+   at a smaller size, not a denser one. */
+@media (max-width: 900px) {
+  .auth-main .hero-art {
+    display: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .auth-main .landing-hero {
+    padding: 24px 20px;
+  }
+  .auth-form-wrap {
+    padding: 26px 22px 22px;
+    border-radius: 12px;
+  }
+}

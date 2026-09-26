@@ -149,6 +149,8 @@ export type Exam = {
   header?: ExamHeader
   furniture?: ExamFurniture
   labelStyles?: ExamLabelStyles
+  /** Question ids at which printed question numbering starts over. */
+  numberingRestarts?: string[]
   coverPage?: ExamCover
 }
 

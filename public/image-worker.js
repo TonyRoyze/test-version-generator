@@ -1,4 +1,3 @@
-const registryDatabaseName = 'test-parrot-exams-v1'
 const databaseVersion = 8
 const mediaStore = 'media-assets'
 const shellCache = 'test-parrot-shell-v1'
@@ -38,8 +37,21 @@ async function recordFrom(databaseName, storeName, key) {
   }
 }
 
-async function assetFor(hash) {
-  return recordFrom(registryDatabaseName, mediaStore, hash)
+async function assetFor(hash, clientId) {
+  const client = await self.clients.get(clientId)
+  if (!client) return null
+  const scope = await new Promise((resolve) => {
+    const channel = new MessageChannel()
+    const timeout = setTimeout(() => { channel.port1.close(); resolve(null) }, 3000)
+    channel.port1.onmessage = event => {
+      clearTimeout(timeout)
+      channel.port1.close()
+      resolve(event.data)
+    }
+    client.postMessage({ type: 'account-storage' }, [channel.port2])
+  })
+  if (typeof scope !== 'string' || !/^test-parrot-exams-v1(?:-user-[a-f0-9-]{36})?$/i.test(scope)) return null
+  return recordFrom(scope, mediaStore, hash)
 }
 
 self.addEventListener('fetch', (event) => {
@@ -51,7 +63,7 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(new Response('Image not found', { status: 404 }))
       return
     }
-    event.respondWith(assetFor(hash).then(
+    event.respondWith(assetFor(hash, event.clientId).then(
       (asset) => asset
         ? new Response(asset.bytes, { headers: { 'Content-Type': asset.mimeType } })
         : new Response('Image not found', { status: 404 }),

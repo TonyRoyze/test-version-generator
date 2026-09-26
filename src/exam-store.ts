@@ -166,6 +166,10 @@ function isChoiceOrder(value: unknown): value is Record<string, string[]> {
   )
 }
 
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((id) => typeof id === 'string')
+}
+
 function isColumnSettings(value: unknown): value is Record<string, ColumnSetting> {
   return (
     typeof value === 'object'
@@ -208,6 +212,7 @@ function isWorkingCopy(value: unknown): value is ExamWorkingCopy {
     (draft.columns === undefined || isColumnSettings(draft.columns)) &&
     (draft.workSpace === undefined || isWorkSpaceSettings(draft.workSpace)) &&
     (draft.choiceOrder === undefined || isChoiceOrder(draft.choiceOrder)) &&
+    (draft.numberingRestarts === undefined || isStringList(draft.numberingRestarts)) &&
     (draft.sections === undefined || isSectionList(draft.sections)) &&
     (draft.sectionOf === undefined || isSectionPlacement(draft.sectionOf)) &&
     (draft.sectionHeadings === undefined || isSectionHeadings(draft.sectionHeadings)) &&
@@ -240,6 +245,7 @@ const WORKING_COPY_SETTINGS: Readonly<Record<string, (value: unknown) => boolean
   columns: isColumnSettings,
   workSpace: isWorkSpaceSettings,
   choiceOrder: isChoiceOrder,
+  numberingRestarts: isStringList,
   sections: isSectionList,
   sectionOf: isSectionPlacement,
   sectionHeadings: isSectionHeadings,
@@ -324,6 +330,7 @@ export type ExamStore = {
   setHeaderLine(line: HeaderLine, text: string | null): void
   setFurnitureLayout(region: 'header' | 'footer', layout: FurnitureLayout): void
   setLabelStyle(kind: LabelKind, style: LabelStyle): void
+  setNumberingRestart(questionId: string, enabled: boolean): void
   setCoverPage(cover: ExamCover): void
   /** Refreshes the canonical Questions projected from open Question Banks.
    * Workspace browsing is not an Exam command and creates no Undo step. */
@@ -452,6 +459,8 @@ function sameExamWorkingCopy(left: ExamWorkingCopy, right: ExamWorkingCopy): boo
     && sameEntries(left.choiceOrder, right.choiceOrder, (first, second) =>
       first.length === second.length && first.every((id, index) => id === second[index]),
     )
+    && (left.numberingRestarts ?? []).length === (right.numberingRestarts ?? []).length
+    && (left.numberingRestarts ?? []).every((id, index) => id === right.numberingRestarts?.[index])
     && sameSections(left.sections, right.sections)
     && sameSectionOf(left.sectionOf, right.sectionOf)
     && sameSectionHeadings(left.sectionHeadings, right.sectionHeadings)
@@ -812,6 +821,21 @@ export function createExamStore(options: {
         if (sameExamLabelStyles(labelStyles, current.workingCopy.labelStyles)) return current
         const workingCopy: ExamWorkingCopy = { ...current.workingCopy, labelStyles }
         if (!labelStyles) delete workingCopy.labelStyles
+        return { ...current, workingCopy }
+      }),
+
+    setNumberingRestart: (questionId, enabled) =>
+      change((current) => {
+        if (!current.workingCopy.questionIds.includes(questionId)) return current
+        const restarts = current.workingCopy.numberingRestarts ?? []
+        const alreadyEnabled = restarts.includes(questionId)
+        if (alreadyEnabled === enabled) return current
+        const numberingRestarts = enabled
+          ? [...restarts, questionId]
+          : restarts.filter((id) => id !== questionId)
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy }
+        if (numberingRestarts.length > 0) workingCopy.numberingRestarts = numberingRestarts
+        else delete workingCopy.numberingRestarts
         return { ...current, workingCopy }
       }),
 

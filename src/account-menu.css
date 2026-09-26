@@ -32,3 +32,15 @@
 .account-spin { animation: account-spin 1s linear infinite; }
 @keyframes account-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .account-spin { animation: none; } }
+
+.login-page { width: min(640px, calc(100% - 32px)); margin: 64px auto; }
+.account-login { display: grid; gap: 16px; max-width: 420px; }
+.account-login label { display: grid; gap: 6px; font-weight: 600; }
+.account-login input { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #bba992; border-radius: 6px; background: #fffdf8; font: inherit; }
+.cloud-conflict { margin-top: 20px; padding: 16px; border: 1px solid #bba992; border-radius: 8px; }
+
+.account-badge .storage-badge-button[data-sync-status="synced"] { color: #3f6b46; }
+.account-badge .storage-badge-button[data-sync-status="pending"],
+.account-badge .storage-badge-button[data-sync-status="remote"] { color: #966017; }
+.account-badge .storage-badge-button[data-sync-status="error"],
+.account-badge .storage-badge-button[data-sync-status="conflict"] { color: var(--paper-danger); }

@@ -457,7 +457,7 @@ function furnitureOf(
     arrangementLabel: '',
     pageNumber: page.number,
     ...(coverPage && page.stream === 'test' && !isCover
-      ? { pageNumberInHeader: true, schoolName: coverPage.schoolName }
+      ? { pageNumberInHeader: true, schoolName: [coverPage.schoolName, coverPage.schoolSubtitle].filter(Boolean).join(' ') }
       : {}),
     ...(isCover ? { coverPage } : {}),
     ...(furniture?.footer ? { footerLayout: furniture.footer } : {}),
@@ -829,6 +829,7 @@ function deriveItems(exam: Exam, arrangement: Arrangement): PageItem[] {
         : {}),
     })
     for (const question of questions) {
+      if (exam.numberingRestarts?.includes(question.id)) number = 1
       const planned = deriveQuestion(exam, question, arrangement, number)
       items.push(wholeQuestion(planned))
       number += numbersTakenBy(planned)

@@ -181,10 +181,20 @@ function relativeTime(prefix: string, iso: string) {
 export function ExamCard({
   exam,
   onOpen,
+  onDelete,
 }: {
   exam: RecentExam
   onOpen: (id: string) => void
+  onDelete?: (exam: RecentExam) => void
 }) {
+  const [menu, setMenu] = useState<MenuPoint | null>(null)
+  const menuItems: MenuItem[] = [
+    { kind: 'action', label: 'Open', icon: <FolderOpen />, onSelect: () => onOpen(exam.id) },
+    ...(onDelete ? [
+      { kind: 'separator' } as const,
+      { kind: 'action' as const, label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => onDelete(exam) },
+    ] : []),
+  ]
   // The same furniture the first sheet actually prints. The thumbnail is a
   // real page at real geometry, shrunk — not an approximation of one — so an
   // Exam is recognised on the shelf by the shape of its own first page.
@@ -195,11 +205,8 @@ export function ExamCard({
     pageNumber: 1,
   }
   return (
-    <button
-      type="button"
-      className="exam-card"
-      onClick={() => onOpen(exam.id)}
-    >
+    <article className="exam-card">
+      <button type="button" className="exam-card-main" onClick={() => onOpen(exam.id)}>
       <span className="sr-only">Open {exam.title}. </span>
       {/* Decorative: everything it says, the caption and the label above say in
           a form a screen reader can use, and six miniature pages would
@@ -238,7 +245,19 @@ export function ExamCard({
           )}
         </span>
       </div>
-    </button>
+      </button>
+      {onDelete && <button
+        type="button"
+        className="bank-card-menu exam-card-menu"
+        aria-label={`Actions for ${exam.title}`}
+        aria-haspopup="menu"
+        onClick={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect()
+          setMenu({ x: rect.right, y: rect.bottom + 4 })
+        }}
+      ><EllipsisVertical aria-hidden="true" /></button>}
+      {menu && <ContextMenu point={menu} side="left" items={menuItems} ariaLabel={`${exam.title} actions`} onClose={() => setMenu(null)} />}
+    </article>
   )
 }
 

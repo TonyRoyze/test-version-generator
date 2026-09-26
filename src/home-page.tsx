@@ -26,6 +26,7 @@ export function HomePage({
   onNewBank,
   onOpenBank,
   onDeleteBank,
+  onDeleteExam,
 }: {
   exams: readonly RecentExam[]
   banks: readonly QuestionBankCollectionItem[]
@@ -36,6 +37,7 @@ export function HomePage({
   onNewBank: () => void
   onOpenBank: (id: string) => void
   onDeleteBank: (bank: QuestionBankCollectionItem) => void
+  onDeleteExam: (exam: RecentExam) => void
 }) {
   const recentExams = homePreview(exams)
   const importLink = <Link href="/imports/new" className="primary-button">Import</Link>
@@ -70,7 +72,7 @@ export function HomePage({
           >
             {recentExams.map((exam) => (
               <div role="listitem" key={exam.id}>
-                <ExamCard exam={exam} onOpen={onOpen} />
+                <ExamCard exam={exam} onOpen={onOpen} onDelete={onDeleteExam} />
               </div>
             ))}
             <div role="listitem">

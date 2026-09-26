@@ -1,3 +1,15 @@
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@font-face {
+  font-family: "CooperBold";
+  src: url("/fonts/CooperBold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   font-family: Arial, Helvetica, sans-serif; color: #332a24; background: var(--app-ground);
   /* The one palette. These are the values the Crepe editor theme is configured
@@ -757,11 +769,56 @@ button { cursor: pointer; }
 
 /* Page furniture. Fixed heights, because the packer subtracted exactly these
    from the sheet before deciding what fits. */
-.page-header { flex: none; display: flex; flex-direction: column; }
-.page-header--first { height: var(--page-header-first); }
-.page-header--later { height: var(--page-header-later); }
-.page-header--answer-key { height: var(--page-header-answer-key); }
-.page-header--answer-key-later { height: var(--page-header-answer-key-later); }
+.page-header {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+}
+.page-header-grid {
+  display: grid;
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: center;
+  gap: 8px;
+}
+.page-furniture-logo {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 42px;
+  object-fit: contain;
+}
+.page-footer .page-furniture-logo {
+  max-height: 16px;
+}
+.page-number-header {
+  position: absolute;
+  top: calc(var(--page-margin) - 34px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-weight: 700;
+}
+.school-footer {
+  font-family: "CooperBold", Georgia, serif;
+  font-size: 17px;
+  font-weight: 700;
+}
+.page-header--first {
+  height: var(--page-header-first);
+}
+.page-header--later {
+  height: var(--page-header-later);
+}
+.page-header--answer-key {
+  height: var(--page-header-answer-key);
+}
+.page-header--answer-key-later {
+  height: var(--page-header-answer-key-later);
+}
+.exam-page--headerless .page-header {
+  height: 0;
+}
 .page-identity {
   flex: none; height: var(--page-header-later);
   display: flex; align-items: baseline; gap: 20px;
@@ -815,6 +872,19 @@ button { cursor: pointer; }
   flex: none; height: var(--page-footer);
   display: flex; align-items: flex-end; justify-content: center;
   font-size: 13px;
+}
+.exam-page--headerless .page-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  border-top: 1px solid currentColor;
+}
+.school-footer {
+  line-height: 17px;
+}
+@media print {
 }
 
 /* Where `dom-measure.ts` lays a page item out to find its height: off-screen,
@@ -2110,7 +2180,23 @@ button { cursor: pointer; }
    margins, the header furniture and the number gutter are the ones the printer
    uses — there is no second, approximate way of drawing a page to keep in step
    with the first. */
-.exam-card { display: grid; gap: 8px; width: var(--sheet-width); padding: 0; border: 0; background: transparent; text-align: left; color: inherit; }
+.exam-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  width: var(--sheet-width);
+}
+.exam-card-main {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
 .exam-sheet {
   width: var(--sheet-width); height: calc(var(--sheet-width) * 11 / 8.5); overflow: hidden;
   border: 1px solid #e0d3c2; border-radius: 2px; background: #fffdf8;
@@ -2119,9 +2205,22 @@ button { cursor: pointer; }
 .exam-sheet .exam-page {
   zoom: var(--sheet-zoom); margin: 0; box-shadow: none; cursor: inherit;
 }
-.exam-sheet .exam-question { cursor: inherit; }
-.exam-card:hover .exam-sheet, .exam-card:focus-visible .exam-sheet {
-  border-color: #b65f43; box-shadow: 0 4px 14px rgb(91 68 47 / 22%);
+.exam-sheet .exam-question {
+  cursor: inherit;
+}
+.exam-card-main:hover .exam-sheet,
+.exam-card-main:focus-visible .exam-sheet {
+  border-color: #b65f43;
+  box-shadow: 0 4px 14px rgb(91 68 47 / 22%);
+}
+.exam-card-menu {
+  top: 6px;
+  right: 6px;
+}
+.exam-card-caption {
+  display: grid;
+  gap: 2px;
+  padding: 0 1px;
 }
 .exam-card-caption { display: grid; gap: 2px; padding: 0 1px; }
 .exam-card-title {
