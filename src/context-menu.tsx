@@ -111,8 +111,10 @@ export function ContextMenu({
   const itemElements = useRef<(HTMLButtonElement | null)[]>([])
   const submenuElements = useRef<(HTMLButtonElement | null)[]>([])
   const [position, setPosition] = useState<MenuPoint>(point)
+  const basePosition = useRef<MenuPoint>(point)
   const [active, setActive] = useState(() => items.findIndex(isFocusable))
   const [openSubmenu, setOpenSubmenu] = useState<number | null>(null)
+  const [submenuSide, setSubmenuSide] = useState<MenuSide>('right')
   const [submenuActive, setSubmenuActive] = useState(0)
   const closeTimer = useRef<number | undefined>(undefined)
   const cancelSubmenuClose = () => window.clearTimeout(closeTimer.current)
@@ -144,7 +146,40 @@ export function ContextMenu({
       x: Math.max(VIEWPORT_MARGIN, Math.min(x, maxX)),
       y: Math.max(VIEWPORT_MARGIN, Math.min(y, maxY)),
     })
+    basePosition.current = {
+      x: Math.max(VIEWPORT_MARGIN, Math.min(x, maxX)),
+      y: Math.max(VIEWPORT_MARGIN, Math.min(y, maxY)),
+    }
   }, [point, side])
+
+  // A flyout normally opens to the right. Near the viewport edge, first move
+  // the parent menu left enough to make room; only open left when the parent
+  // itself cannot move far enough. This keeps nested menus attached to the
+  // right edge of their parent instead of following the parent's anchor side.
+  useLayoutEffect(() => {
+    const element = menu.current
+    if (!element) return
+    if (openSubmenu === null) {
+      setPosition(basePosition.current)
+      setSubmenuSide('right')
+      return
+    }
+    const row = element.querySelectorAll<HTMLElement>('.context-menu-submenu')[openSubmenu]
+    const flyout = row?.querySelector<HTMLElement>('.context-submenu')
+    if (!row || !flyout) return
+    const rowRect = row.getBoundingClientRect()
+    const menuRect = element.getBoundingClientRect()
+    const overflow = rowRect.right + 5 + flyout.offsetWidth - (window.innerWidth - VIEWPORT_MARGIN)
+    const movable = menuRect.left
+    if (overflow > 0 && movable + VIEWPORT_MARGIN >= overflow) {
+      setPosition((current) => ({ ...current, x: current.x - Math.min(movable, overflow) }))
+      setSubmenuSide('right')
+    } else if (overflow > 0) {
+      setSubmenuSide('left')
+    } else {
+      setSubmenuSide('right')
+    }
+  }, [openSubmenu])
 
   // Roving tabindex: exactly one row is tabbable and it is the one that holds
   // focus, so arrow keys move a real focus ring rather than a painted-on one.
@@ -341,6 +376,7 @@ export function ContextMenu({
                   className="context-submenu"
                   role="menu"
                   aria-label={item.label}
+                  data-side={submenuSide}
                   onKeyDown={(event) => onSubmenuKeyDown(event, item.items)}
                 >
                   {item.items.map((child, childIndex) => (

@@ -19,6 +19,7 @@ import { DocView } from './doc-view'
 import {
   hasLegacyAnswerBlank,
   hasMarks,
+  numberLabelOf,
   printsNumberLine,
   type AnswerKeyEntryItem,
   type AnswerKeySectionItem,
@@ -80,7 +81,7 @@ export function ChoiceGridView({
                           <Check aria-hidden="true" />
                         </span>
                       )}
-                      {choice.letter}.
+                      {choice.displayLabel ?? `${choice.letter}.`}
                     </span>
                     <DocView className="choice-body" content={blocksOf(choice.node)} />
                   </>
@@ -104,7 +105,7 @@ export function ChoiceGridView({
 function BankAnswer({ answer }: { answer: PlannedBankAnswer }) {
   return (
     <div className="matching-answer">
-      <span className="matching-letter">{answer.letter}.</span>
+      <span className="matching-letter">{answer.displayLabel ?? `${answer.letter}.`}</span>
       <DocView className="matching-body" content={blocksOf(answer.node)} />
     </div>
   )
@@ -130,7 +131,7 @@ export function MatchingSetView({
           aria-label="Answer blank"
           data-answer={showCorrectness && prompt.letter ? prompt.letter : undefined}
         />
-        <span className="matching-count">{prompt.number}.</span>
+        <span className="matching-count">{prompt.displayNumber ?? `${prompt.number}.`}</span>
       </span>
       <DocView className="matching-body" content={blocksOf(prompt.node)} />
     </div>
@@ -210,7 +211,7 @@ export function PartContent({
   return (
     <div className="multipart-part-print" data-part-id={part.id} data-part-type={part.type}>
       <div className="part-letter">
-        <span className="part-count">{part.letter}.</span>
+        <span className="part-count">{part.displayLabel ?? `${part.letter}.`}</span>
       </div>
       <div className="part-body">
         <DocView className="question-stem" content={part.stem} />
@@ -262,7 +263,7 @@ export function QuestionContent({
             ))}
           </span>
         )}
-        {numbered && <span className="question-count">{item.question.number}.</span>}
+        {numbered && <span className="question-count">{numberLabelOf(item.question)}</span>}
       </div>
       <div className="question-body">
         <DocView className="question-stem" content={item.stem} />
@@ -318,9 +319,9 @@ export function AnswerKeySection({ item }: { item: AnswerKeySectionItem }) {
 export function AnswerKeyEntry({ item }: { item: AnswerKeyEntryItem }) {
   return (
     <div className="answer-key-entry">
-      <span>{item.number}.</span>
-      <span className="answer-key-answer" aria-label={item.letter ?? 'Blank answer'}>
-        {item.letter}
+      <span>{item.displayNumber ?? `${item.number}.`}</span>
+      <span className="answer-key-answer" aria-label={item.displayAnswer ?? item.letter ?? 'Blank answer'}>
+        {item.displayAnswer ?? item.letter}
       </span>
       {(item.difficulty || (item.topics?.length ?? 0) > 0) && (
         <span className="answer-key-metadata" aria-label="Question Metadata">
@@ -335,12 +336,12 @@ export function AnswerKeyEntry({ item }: { item: AnswerKeyEntryItem }) {
         <div className="answer-key-parts">
           {item.parts.map((part) => (
             <div className="answer-key-part" key={part.letter}>
-              <span className="answer-key-part-letter">{part.letter}.</span>
+              <span className="answer-key-part-letter">{part.displayLabel ?? `${part.letter}.`}</span>
               <span
                 className="answer-key-answer"
-                aria-label={part.answer ?? 'Blank answer'}
+                aria-label={part.displayAnswer ?? part.answer ?? 'Blank answer'}
               >
-                {part.answer}
+                {part.displayAnswer ?? part.answer}
               </span>
               {part.suggestedAnswer && (
                 <DocView className="answer-key-suggested" content={part.suggestedAnswer} />
@@ -441,6 +442,7 @@ export function PageHeaderContent({
   identityEditor,
   onTitleChange,
   titleDisabled = false,
+  layout,
 }: {
   header: PageHeader
   furniture: PageFurniture
@@ -453,17 +455,23 @@ export function PageHeaderContent({
    *  adapter prints too. */
   onTitleChange?: (title: string) => void
   titleDisabled?: boolean
+  layout?: import('./page-furniture').FurnitureLayout
 }) {
   return (
-    <header className={`page-header page-header--${header}`}>
-      <div className="page-identity">
+    <header className={`page-header page-header--${header}`} style={{ textAlign: layout?.alignment ?? 'left' }}>
+      <div className="page-header-grid" style={{
+        gridTemplateColumns: `repeat(${layout?.columns ?? 1}, minmax(0, 1fr))`,
+        justifyItems: layout?.alignment === 'center' ? 'center' : layout?.alignment === 'right' ? 'end' : 'start',
+      }}>
+        <div className="page-identity">
+        {layout?.logo && <img className="page-furniture-logo" src={layout.logo} alt="" />}
         {identityEditor ? (
           <EditableIdentityText editor={identityEditor} />
         ) : (
           <IdentityText furniture={furniture} />
         )}
         <span className="page-id">{furniture.arrangementLabel}</span>
-      </div>
+        </div>
       {furniture.title !== null && (
         <h1
           className="exam-title"
@@ -489,6 +497,7 @@ export function PageHeaderContent({
           )}
         </h1>
       )}
+      </div>
     </header>
   )
 }

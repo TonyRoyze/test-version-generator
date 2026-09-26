@@ -30,7 +30,8 @@ async function start() {
   void expireWaitingImports().catch(() => undefined)
   const workspaces = createExamWorkspaceService()
   const bankWorkspaces = createQuestionBankWorkspaceService()
-  const startingOnEditor = window.location.pathname === '/editor'
+  const startingPath = window.location.pathname
+  const startingOnEditor = startingPath === '/editor' || startingPath === '/cover-design'
   // Home has no workspace to restore, so it also clears an active placeholder
   // that was abandoned by closing or leaving the editor. A bare editor reload
   // deliberately retains that active workspace long enough to restore it.
@@ -57,8 +58,8 @@ async function start() {
     }
   } else if (startingOnEditor) {
     const launchId = parameters.get('exam')
-    // The editor edits an Exam. A bare `/editor` restores the one it was last
-    // on, and goes Home when there is none.
+    // The editor and its cover designer both reopen the active Exam. A bare
+    // route restores the one it was last on, and returns Home when there is none.
     const restore = async () => {
       const activeEditor = await bankWorkspaces.activeEditor()
       if (!activeEditor || !await workspaces.exists(activeEditor.resourceId)) return false
@@ -70,13 +71,15 @@ async function start() {
       if (await workspaces.open(launchId)) {
         editorId = launchId
         store = await loadExamStore(workspaces.backendFor(launchId))
-        window.history.replaceState(null, '', '/editor')
+        window.history.replaceState(null, '', startingPath)
       } else {
         error = 'That Exam is unavailable on this device.'
-        window.history.replaceState(null, '', await restore() ? '/editor' : '/')
+        const restored = await restore()
+        window.history.replaceState(null, '', restored || startingPath === '/cover-design' ? startingPath : '/')
       }
     } else {
-      window.history.replaceState(null, '', await restore() ? '/editor' : '/')
+      const restored = await restore()
+      window.history.replaceState(null, '', restored || startingPath === '/cover-design' ? startingPath : '/')
     }
   }
 
