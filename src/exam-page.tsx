@@ -29,11 +29,25 @@ import {
   type IdentityLineEditor,
 } from './page-item-view'
 import { headerLineOf, type HeaderLine } from './page-header'
+import type { ExamCover } from './page-cover'
+import { CoverPageView } from './cover-page-view'
+import { PaperBookFurniture } from './cover-templates/paper-book'
+import { paperBookAnswersOf } from './cover-templates/paper-book-answers'
+import {
+  LABEL_KINDS,
+  LABEL_BRACKET_LABELS,
+  LABEL_KIND_LABELS,
+  LABEL_SEQUENCE_LABELS,
+  labelStyleOf,
+  offeredBrackets,
+  offeredStyles,
+  type LabelKind,
+  type LabelStyle,
+} from './number-style'
 import { pageContentStyle } from './export-typography'
 import {
   FOOTER_HEIGHT,
   MAX_WORK_SPACE_HEIGHT,
-  HEADER_HEIGHT,
   PAGE_HEIGHT,
   PAGE_MARGIN,
   PAGE_WIDTH,
@@ -211,12 +225,18 @@ function workSpaceMenu(
 function questionMenuItems({
   question,
   columns,
+  labelStyles,
+  onLabelStyleChange,
   onEdit,
   onDuplicate,
   onShuffleSelected,
   onShuffleSelectedAnswers,
   onRemove,
   onSetColumns,
+  onSetNumberingRestart,
+  onSetPageBreak,
+  numberingRestarted,
+  pageBreakBefore,
   workSpace,
   workSpaceOfPart,
   onSetWorkSpace,
@@ -224,6 +244,8 @@ function questionMenuItems({
 }: {
   question: PlannedQuestion
   columns: ColumnSetting
+  labelStyles: Exam['labelStyles']
+  onLabelStyleChange?: (kind: LabelKind, style: LabelStyle) => void
   workSpace: WorkSpace
   /** A Part's work space on this Exam, as its menu reports it. */
   workSpaceOfPart: (partId: string) => WorkSpace
@@ -234,6 +256,10 @@ function questionMenuItems({
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
+  onSetNumberingRestart: (questionId: string, enabled: boolean) => void
+  onSetPageBreak: (questionIds: readonly string[], enabled: boolean) => void
+  numberingRestarted: boolean
+  pageBreakBefore: boolean
   selectedQuestionIds: readonly string[]
 }): MenuItem[] {
   // Every action that can sensibly apply to more than one question applies to
@@ -256,6 +282,47 @@ function questionMenuItems({
       onSelect: () => onDuplicate(question.id),
     },
   ]
+  if (onLabelStyleChange) {
+    items.push({ kind: 'separator' }, { kind: 'label', label: 'Numbering and labels' })
+    for (const kind of LABEL_KINDS) {
+      const style = labelStyleOf(labelStyles, kind)
+      const sequenceOptions = offeredStyles(kind).map(({ sequence, brackets }) => ({
+        kind: 'radio' as const,
+        label: LABEL_SEQUENCE_LABELS[sequence],
+        checked: style.sequence === sequence,
+        onSelect: () => onLabelStyleChange(kind, {
+          sequence,
+          brackets: brackets.includes(style.brackets) ? style.brackets : brackets[0] ?? 'dot',
+        }),
+      }))
+      const bracketOptions = offeredBrackets(kind, style.sequence).map((brackets) => ({
+        kind: 'radio' as const,
+        label: LABEL_BRACKET_LABELS[brackets],
+        checked: style.brackets === brackets,
+        onSelect: () => onLabelStyleChange(kind, { ...style, brackets }),
+      }))
+      items.push(
+        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · sequence`, items: sequenceOptions },
+        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · punctuation`, items: bracketOptions },
+      )
+    }
+  }
+  items.push(
+    { kind: 'separator' },
+    {
+      kind: 'checkbox',
+      label: 'Restart numbering here',
+      checked: numberingRestarted,
+      icon: <ListRestart />,
+      onSelect: () => onSetNumberingRestart(question.id, !numberingRestarted),
+    },
+    {
+      kind: 'checkbox',
+      label: 'Start on next page',
+      checked: pageBreakBefore,
+      onSelect: () => onSetPageBreak(actedOnIds, !pageBreakBefore),
+    },
+  )
   // Columns are a multiple-choice question's business. An open question has no
   // answers to lay out, so the group is absent rather than present and inert.
   if (question.type === 'multiple-choice') {
@@ -1133,10 +1200,10 @@ export const PAGE_GEOMETRY = {
   '--page-width': `${PAGE_WIDTH}px`,
   '--page-height': `${PAGE_HEIGHT}px`,
   '--page-margin': `${PAGE_MARGIN}px`,
-  '--page-header-first': `${HEADER_HEIGHT.first}px`,
-  '--page-header-later': `${HEADER_HEIGHT.later}px`,
-  '--page-header-answer-key': `${HEADER_HEIGHT['answer-key']}px`,
-  '--page-header-answer-key-later': `${HEADER_HEIGHT['answer-key-later']}px`,
+  '--page-header-first': '84px',
+  '--page-header-later': '42px',
+  '--page-header-answer-key': '84px',
+  '--page-header-answer-key-later': '42px',
   '--page-footer': `${FOOTER_HEIGHT}px`,
 } as CSSProperties
 
@@ -1270,14 +1337,31 @@ export function ExportPreview({ plan }: { plan: LayoutPlan }) {
   return (
     <main className="exam-workspace" style={PAGE_GEOMETRY}>
       {plan.pages.map((page) => (
-        <article className="exam-page" key={`${page.stream}-${page.header}-${page.number}`}>
-          <PageHeaderContent header={page.header} furniture={page.furniture} />
+        <article className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`} key={`${page.stream}-${page.header}-${page.number}`}>
+          {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} />}
+          {page.furniture.coverPage ? <CoverPageView
+            cover={page.furniture.coverPage}
+            printedPageCount={page.furniture.printedPageCount ?? 1}
+            disabled
+          /> : <>
+          {!page.furniture.headerHidden && <PageHeaderContent header={page.header} furniture={page.furniture} layout={page.furniture.headerLayout} />}
+          {page.furniture.pageNumberInHeader && <span className="page-number-header">{page.furniture.pageNumber}</span>}
           <div className="page-content" style={pageContentStyle(plan.textSize)}>
             {page.items.map((item) => (
               <PageItemMeasureView key={keyOf(item)} item={item} />
             ))}
           </div>
-          <footer className="page-footer">{page.furniture.pageNumber}</footer>
+          <footer className="page-footer" style={{
+            textAlign: page.furniture.footerLayout?.alignment ?? 'center',
+            gridTemplateColumns: `repeat(${page.furniture.footerLayout?.columns ?? 1}, minmax(0, 1fr))`,
+            justifyItems: page.furniture.footerLayout?.alignment === 'left' ? 'start' : page.furniture.footerLayout?.alignment === 'right' ? 'end' : 'center',
+          }}>
+            {page.furniture.footerLayout?.logo && <img className="page-furniture-logo" src={page.furniture.footerLayout.logo} alt="" />}
+            {page.furniture.schoolName !== undefined
+              ? <span className="school-footer">{page.furniture.schoolName}</span>
+              : <span>{page.furniture.pageNumber}</span>}
+          </footer>
+          </>}
         </article>
       ))}
     </main>
@@ -1297,12 +1381,16 @@ export function ExamPage({
   onShuffleSelectedAnswers,
   onRemove,
   onSetColumns,
+  onSetNumberingRestart,
+  onSetPageBreak,
   onSetWorkSpace,
   onTitleChange,
   onSectionHeadingChange,
   onMoveSection,
   onDeleteSection,
   onHeaderLineChange,
+  onLabelStyleChange,
+  onCoverPageChange,
   titleDisabled = false,
   unsavedDraft = false,
   contentSelection = { test: true, answerKey: true },
@@ -1323,6 +1411,8 @@ export function ExamPage({
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
+  onSetNumberingRestart: (questionId: string, enabled: boolean) => void
+  onSetPageBreak: (questionIds: readonly string[], enabled: boolean) => void
   /** Changes the room left for work below Short Answer questions. */
   onSetWorkSpace: SetWorkSpace
   /** Renames the Exam from its own title line. See `PageHeaderContent`. */
@@ -1335,6 +1425,8 @@ export function ExamPage({
   onDeleteSection?: (sectionId: string) => void
   /** Rewords a test page's header line; `null` restores its default. */
   onHeaderLineChange?: (line: HeaderLine, text: string | null) => void
+  onLabelStyleChange?: (kind: LabelKind, style: LabelStyle) => void
+  onCoverPageChange?: (cover: ExamCover) => void
   titleDisabled?: boolean
   unsavedDraft?: boolean
   contentSelection?: ExportContentSelection
@@ -1698,7 +1790,7 @@ export function ExamPage({
     >
       {pages.map((page, index) => (
         <article
-          className="exam-page"
+          className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`}
           key={`${page.header}-${page.number}`}
           onClick={clearOnBackground}
         >
@@ -1735,13 +1827,22 @@ export function ExamPage({
                     />,
                   ]),
             ])}
-          <PageHeaderContent
-            header={page.header}
-            furniture={page.furniture}
-            identityEditor={identityEditorFor(page.header)}
-            onTitleChange={index === titleLine ? onTitleChange : undefined}
-            titleDisabled={titleDisabled}
-          />
+          {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} disabled={titleDisabled} onChange={onCoverPageChange} />}
+          {page.furniture.coverPage ? <CoverPageView
+            cover={page.furniture.coverPage}
+            printedPageCount={page.furniture.printedPageCount ?? 1}
+            disabled={titleDisabled}
+            onChange={onCoverPageChange}
+          /> : <>
+            {!page.furniture.headerHidden && <PageHeaderContent
+              header={page.header}
+              furniture={page.furniture}
+              identityEditor={identityEditorFor(page.header)}
+              onTitleChange={index === titleLine ? onTitleChange : undefined}
+              titleDisabled={titleDisabled}
+              layout={page.furniture.headerLayout}
+            />}
+          {page.furniture.pageNumberInHeader && <span className="page-number-header">{page.furniture.pageNumber}</span>}
           <div
             className="page-content"
             style={pageContentStyle(plan.textSize)}
@@ -1753,7 +1854,7 @@ export function ExamPage({
                 chrome: it appears only while the exam is empty, and it is
                 never part of the printed document. It lights up with the
                 pane, which is the drop target; it is not one of its own. */}
-            {blank && index === 0 && (
+            {blank && page.stream === 'test' && !page.furniture.coverPage && (
               <div
                 className="secondary-button empty-exam-button"
                 data-active={startsFirstSection ? 'true' : undefined}
@@ -1787,7 +1888,17 @@ export function ExamPage({
               />
             ))}
           </div>
-          <footer className="page-footer">{page.furniture.pageNumber}</footer>
+          <footer className="page-footer" style={{
+            textAlign: page.furniture.footerLayout?.alignment ?? 'center',
+            gridTemplateColumns: `repeat(${page.furniture.footerLayout?.columns ?? 1}, minmax(0, 1fr))`,
+            justifyItems: page.furniture.footerLayout?.alignment === 'left' ? 'start' : page.furniture.footerLayout?.alignment === 'right' ? 'end' : 'center',
+          }}>
+            {page.furniture.footerLayout?.logo && <img className="page-furniture-logo" src={page.furniture.footerLayout.logo} alt="" />}
+            {page.furniture.schoolName !== undefined
+              ? <span className="school-footer">{page.furniture.schoolName}</span>
+              : <span>{page.furniture.pageNumber}</span>}
+          </footer>
+          </>}
         </article>
       ))}
 
@@ -1813,12 +1924,18 @@ export function ExamPage({
           items={questionMenuItems({
             question: menuQuestion,
             columns: columnSettings[menuQuestion.id] ?? DEFAULT_COLUMNS,
+            labelStyles: exam.labelStyles,
+            onLabelStyleChange: titleDisabled ? undefined : onLabelStyleChange,
             onEdit,
             onDuplicate,
             onShuffleSelected,
             onShuffleSelectedAnswers,
             onRemove,
             onSetColumns,
+            onSetNumberingRestart,
+            onSetPageBreak,
+            numberingRestarted: exam.numberingRestarts?.includes(menuQuestion.id) ?? false,
+            pageBreakBefore: exam.pageBreaks?.includes(menuQuestion.id) ?? false,
             workSpace: workSpaceOf(exam, menuQuestion.id),
             workSpaceOfPart: (partId) => workSpaceOf(exam, partId),
             onSetWorkSpace,

@@ -1,3 +1,5 @@
+import { coverLogoSource } from './page-cover'
+import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The PDF Export Adapter.
 //
 // It consumes retained Layout Plans exactly like the DOCX adapter: one PDF page
@@ -9,6 +11,7 @@
 import fontkit from '@pdf-lib/fontkit'
 import {
   AFRelationship,
+  StandardFonts,
   PDFArray,
   PDFDocument,
   PDFName,
@@ -34,6 +37,7 @@ import {
   PART_INDENT,
   printsNumberLine,
   questionIndentOf,
+  numberLabelOf,
   MATCHING_INDENT,
   type AnswerKeyEntryItem,
   type ChoiceGrid,
@@ -45,6 +49,10 @@ import {
   type PlannedPart,
   type PlannedWorkSpace,
   type QuestionItem,
+  FOOTER_HEIGHT,
+  PAPER_BOOK_CONTENT_WIDTH,
+  PAPER_BOOK_GAP,
+  PAPER_BOOK_SIDEBAR_WIDTH,
 } from './export-plan'
 import { DIFFICULTY_LABELS, WORK_SPACE_LINE_PITCH } from './exam'
 import { bodyScale, pointsOf, sectionHeadingPoints, titlePoints } from './export-typography'
@@ -129,6 +137,9 @@ export function isPdfLayoutError(error: unknown): error is PdfLayoutError {
 type EmbeddedFonts = {
   regular: PDFFont
   bold: PDFFont
+  cooperBold: PDFFont
+  sans: PDFFont
+  sansBold: PDFFont
   italic: PDFFont
   boldItalic: PDFFont
   mono: PDFFont
@@ -637,9 +648,11 @@ function drawChoiceGrid(context: DrawContext, grid: ChoiceGrid, x: number, width
     for (const [column, choice] of row.entries()) {
       if (!choice) continue
       const copy = { ...context, x: x + column * cellWidth, y: top, width: cellWidth - 8 }
-      drawTextLine(copy, `${choice.letter}.`, { width: 16 })
+      const label = choice.displayLabel ?? `${choice.letter}.`
+      const labelWidth = copy.fonts.bold.widthOfTextAtSize(label, BODY_SIZE) + 4
+      drawTextLine(copy, label, { width: labelWidth })
       copy.y = top
-      drawBlocks(copy, childrenOf(choice.node), { x: copy.x + 18, width: copy.width - 18 })
+      drawBlocks(copy, childrenOf(choice.node), { x: copy.x + labelWidth, width: copy.width - labelWidth })
       rowBottom = Math.min(rowBottom, copy.y)
     }
     context.y = rowBottom - 2
@@ -684,16 +697,18 @@ const MATCHING_GAP = 10
 
 function drawMatchingAnswer(context: DrawContext, answer: PlannedBankAnswer): void {
   const top = context.y
-  drawTextLine(context, `${answer.letter}.`, { width: 16 })
+  const label = answer.displayLabel ?? `${answer.letter}.`
+  const labelWidth = context.fonts.bold.widthOfTextAtSize(label, BODY_SIZE) + 4
+  drawTextLine(context, label, { width: labelWidth })
   context.y = top
-  drawBlocks(context, childrenOf(answer.node), { x: context.x + 18, width: context.width - 18 })
+  drawBlocks(context, childrenOf(answer.node), { x: context.x + labelWidth, width: context.width - labelWidth })
 }
 
 function drawMatchingPrompts(context: DrawContext, set: MatchingSet): void {
   const column = pt(MATCHING_NUMBER_COLUMN)
   for (const prompt of set.prompts) {
     const top = context.y
-    drawTextLine(context, `_______  ${prompt.number}.`, { font: 'bold', width: column - 5 })
+    drawTextLine(context, `_______  ${prompt.displayNumber ?? `${prompt.number}.`}`, { font: 'bold', width: column - 5 })
     context.y = top
     drawBlocks(context, childrenOf(prompt.node), {
       x: context.x + column,
@@ -752,7 +767,7 @@ function drawPart(context: DrawContext, part: PlannedPart, x: number, width: num
   const bodyWidth = width - indent
   drawTextLine(
     context,
-    `${part.letter}.`,
+    part.displayLabel ?? `${part.letter}.`,
     { font: 'bold', x, width: indent - 5 },
   )
   context.y += BODY_LINE
@@ -767,7 +782,7 @@ function drawQuestion(context: DrawContext, item: QuestionItem): void {
   const bodyX = context.x + indent
   const bodyWidth = context.width - indent
   if (printsNumberLine(item)) {
-    const prefix = [...item.question.marks, `${item.question.number}.`].join('  ')
+    const prefix = [...item.question.marks, numberLabelOf(item.question)].join('  ')
     drawTextLine(context, prefix, { font: 'bold', width: indent - 5 })
     context.y += BODY_LINE
   }
@@ -806,6 +821,7 @@ function drawItem(context: DrawContext, item: PageItem): void {
       }
       if (item.instructions) {
         drawTextLine(context, item.instructions, {
+          font: 'italic',
           size: size.instructions,
           line: 17 * (size.instructions / SHEET_BODY_SIZE),
         })
@@ -859,9 +875,9 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
   ensureRoom(context, lines * BODY_LINE + 2)
   const rowY = context.y
 
-  drawTextLine(context, `${item.number}.`, { width: 32 })
+  drawTextLine(context, item.displayNumber ?? `${item.number}.`, { width: 48 })
   context.y = rowY
-  if (item.letter) drawTextLine(context, item.letter, { font: 'bold', x: context.x + ANSWER_KEY_ANSWER_X, width: 42 })
+  if (item.displayAnswer ?? item.letter) drawTextLine(context, item.displayAnswer ?? item.letter!, { font: 'bold', x: context.x + ANSWER_KEY_ANSWER_X, width: 48 })
   else context.y -= BODY_LINE
   context.page.drawLine({
     start: { x: context.x + 36, y: rowY - BODY_LINE + 3 },
@@ -904,9 +920,9 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
     ensureRoom(context, BODY_LINE + 2)
     const partY = context.y
     const partX = context.x + ANSWER_KEY_ANSWER_X
-    drawTextLine(context, `${part.letter}.`, { x: partX, width: 18 })
+    drawTextLine(context, part.displayLabel ?? `${part.letter}.`, { x: partX, width: 48 })
     context.y = partY
-    if (part.answer) drawTextLine(context, part.answer, { font: 'bold', x: partX + 24, width: 42 })
+    if (part.displayAnswer ?? part.answer) drawTextLine(context, part.displayAnswer ?? part.answer!, { font: 'bold', x: partX + 54, width: 48 })
     else context.y -= BODY_LINE
     context.page.drawLine({
       start: { x: partX + 22, y: partY - BODY_LINE + 3 },
@@ -928,7 +944,7 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
 // An Exam's own header line: its text from the left margin, the ID in bold
 // against the right, as print sets them. It is one line on every output, so
 // text too long for the room the ID leaves is cut short, as print cuts it.
-function drawIdentityLine(context: DrawContext, text: string, label: string): void {
+function drawIdentityLine(context: DrawContext, text: string, label: string, alignment: 'left' | 'center' | 'right' = 'left'): void {
   const bold = context.fonts.bold
   const regular = context.fonts.regular
   const labelWidth = bold.widthOfTextAtSize(label, SHEET_BODY_SIZE)
@@ -946,7 +962,13 @@ function drawIdentityLine(context: DrawContext, text: string, label: string): vo
     shown = shown.slice(0, -1)
   }
   if (shown) {
-    context.page.drawText(shown, { x: context.x, y, size: SHEET_BODY_SIZE, font: regular, color: INK })
+    const textWidth = regular.widthOfTextAtSize(shown, SHEET_BODY_SIZE)
+    const x = alignment === 'center'
+      ? context.x + Math.max(0, (room - textWidth) / 2)
+      : alignment === 'right'
+        ? context.x + Math.max(0, room - textWidth)
+        : context.x
+    context.page.drawText(shown, { x, y, size: SHEET_BODY_SIZE, font: regular, color: INK })
   }
 }
 
@@ -956,8 +978,22 @@ function drawFurniture(
   pageTop: number,
   headerBottom: number,
 ): void {
+  if (furniture.pageNumberInHeader && furniture.coverPage === undefined) {
+    const number = String(furniture.pageNumber)
+    assertSupported(number, context.fonts.bold)
+    const numberWidth = context.fonts.bold.widthOfTextAtSize(number, SMALL_SIZE)
+    context.page.drawText(number, {
+      x: furniture.headerHidden
+        ? context.x + (context.width - numberWidth) / 2
+        : context.x + context.width - numberWidth,
+      y: furniture.headerHidden ? pageTop + pt(20) : pageTop - pt(40),
+      size: SMALL_SIZE,
+      font: context.fonts.bold,
+      color: INK,
+    })
+  }
   if (furniture.identityLine !== undefined) {
-    drawIdentityLine(context, furniture.identityLine, furniture.arrangementLabel)
+    drawIdentityLine(context, furniture.identityLine, furniture.arrangementLabel, furniture.headerLayout?.alignment)
   } else {
     const pieces: InlinePiece[] = []
     for (const field of furniture.identityFields) {
@@ -965,6 +1001,17 @@ function drawFurniture(
     }
     pieces.push({ text: furniture.arrangementLabel, font: 'bold', size: SMALL_SIZE })
     drawInline(context, pieces, { x: context.x, width: context.width, line: 13 })
+  }
+  const logoSource = furniture.headerLayout?.logo
+  const logo = logoSource ? context.images.get(logoSource) : undefined
+  if (logo) {
+    const maxHeight = 30
+    const scale = Math.min(maxHeight / logo.source.height, context.width * 0.22 / logo.source.width)
+    const width = logo.source.width * scale
+    const alignment = furniture.headerLayout?.alignment ?? 'left'
+    const x = alignment === 'center' ? context.x + (context.width - width) / 2
+      : alignment === 'right' ? context.x + context.width - width : context.x
+    context.page.drawImage(logo.image, { x, y: pageTop - maxHeight, width, height: logo.source.height * scale })
   }
   if (furniture.title !== null) {
     const titleContext = { ...context, y: pageTop - 36, bottom: headerBottom }
@@ -974,6 +1021,191 @@ function drawFurniture(
       { x: context.x, width: context.width, line: titlePoints(furniture.titleSize) * 1.15 },
     )
   }
+}
+
+function drawPaperBookFurniture(context: DrawContext, furniture: PageFurniture, top: number, margin: number, items: readonly PageItem[]): void {
+  const cover = furniture.paperBook
+  if (!cover) return
+  const pageNumber = furniture.pageNumber
+  const header = cover.subject
+  const pageLabel = `${cover.schoolName} ➭ page ${pageNumber}`
+  const small = pt(11)
+  assertSupported(header, context.fonts.italic)
+  assertSupported(pageLabel, context.fonts.italic)
+  context.page.drawText(header, { x: context.x, y: top - small, size: small, font: context.fonts.italic, color: INK })
+  const labelWidth = context.fonts.italic.widthOfTextAtSize(pageLabel, small)
+  context.page.drawText(pageLabel, { x: context.x + pt(672) - labelWidth, y: top - small, size: small, font: context.fonts.italic, color: INK })
+  if (pageNumber === 1) {
+    const title = `${cover.schoolName} - ${cover.subject}`
+    assertSupported(title, context.fonts.italic)
+    const titleSize = pt(18)
+    const titleWidth = context.fonts.italic.widthOfTextAtSize(title, titleSize)
+    if (titleWidth > pt(672)) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(title, { x: context.x + (pt(672) - titleWidth) / 2, y: top - pt(45), size: titleSize, font: context.fonts.italic, color: INK })
+    context.page.drawLine({ start: { x: context.x + pt(234), y: top - pt(54) }, end: { x: context.x + pt(438), y: top - pt(54) }, thickness: .6, color: INK })
+  }
+  const sideX = context.x + pt(PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP)
+  const sideTop = top - pt(pageNumber === 1 ? 76 : 28)
+  context.page.drawText('Answers', { x: sideX, y: sideTop - pt(13), size: pt(13), font: context.fonts.italic, color: INK })
+  context.page.drawLine({ start: { x: sideX, y: sideTop - pt(18) }, end: { x: sideX + pt(PAPER_BOOK_SIDEBAR_WIDTH), y: sideTop - pt(18) }, thickness: .5, color: RULE })
+  context.page.drawRectangle({ x: sideX, y: margin + pt(20), width: pt(PAPER_BOOK_SIDEBAR_WIDTH), height: sideTop - pt(40) - margin - pt(20), color: rgb(.84, .84, .84) })
+  const answerSize = pt(12)
+  const answerFont = context.fonts.regular
+  const answerWidth = pt(PAPER_BOOK_SIDEBAR_WIDTH - 16)
+  let y = sideTop - pt(55)
+  const drawAnswerLine = (value: string, size: number) => {
+    assertSupported(value, answerFont)
+    if (y < margin + pt(28) || answerFont.widthOfTextAtSize(value, size) > answerWidth) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(value, { x: sideX + pt(8), y, size, font: answerFont, color: INK })
+  }
+  paperBookAnswersOf(items).forEach((entry) => {
+    const answer = paperBookAnswerText(entry)
+    drawAnswerLine(answer, answerSize)
+    y -= pt(16)
+    if (entry.reason) {
+      const reasonSize = pt(11)
+      const pieces = paperBookReasonParts(entry.reason).flatMap((part): InlinePiece[] =>
+        part.type === 'math'
+          ? mathPieces(part.value).map((piece) => ({ ...piece, size: reasonSize * piece.size / BODY_SIZE }))
+          : [{
+              text: part.value,
+              font: part.marks?.includes('inlineCode') ? 'mono'
+                : part.marks?.includes('strong') && part.marks.includes('emphasis') ? 'boldItalic'
+                : part.marks?.includes('strong') ? 'bold'
+                  : part.marks?.includes('emphasis') ? 'italic' : 'regular',
+              size: part.marks?.includes('inlineCode') ? reasonSize * .9 : reasonSize,
+              ...(part.marks?.includes('subscript') ? { size: reasonSize * .75, rise: -reasonSize * .2 } : {}),
+              ...(part.marks?.includes('superscript') ? { size: reasonSize * .75, rise: reasonSize * .35 } : {}),
+              ...(part.marks?.includes('strike_through') ? { strike: true } : {}),
+              ...(part.marks?.find((mark) => mark.startsWith('link:')) ? { href: part.marks.find((mark) => mark.startsWith('link:'))!.slice(5) } : {}),
+            }],
+      )
+      context.y = y
+      drawInline(context, pieces, {
+        x: sideX + pt(8), width: answerWidth, line: pt(14),
+      })
+      y = context.y
+      y -= pt(6)
+    } else {
+      y -= pt(2)
+    }
+  })
+}
+
+function drawCoverPage(context: DrawContext, furniture: PageFurniture, top: number, margin: number): void {
+  const cover = furniture.coverPage
+  if (!cover) return
+  // Match RoyalInstituteCover's 320px frame, 20px lower padding, and 28px gutter.
+  // All coordinates remain in the Layout Plan's page, with selectable PDF text.
+  const frameBottom = top - pt(320)
+  context.page.drawRectangle({ x: context.x, y: frameBottom, width: context.width, height: pt(320), borderColor: rgb(.45, .45, .43), borderWidth: pt(1.25) })
+  let y = top - pt(12)
+  const logo = context.images.get(coverLogoSource(cover))
+  if (logo) {
+    const scale = Math.min(pt(72) / logo.source.height, pt(120) / logo.source.width)
+    const width = logo.source.width * scale
+    const height = logo.source.height * scale
+    context.page.drawImage(logo.image, { x: context.x + (context.width - width) / 2, y: y - height, width, height })
+    y -= height
+  }
+  const centered = (text: string, size: number, font: keyof EmbeddedFonts = 'sansBold', color = INK) => {
+    if (!text) return
+    assertSupported(text, context.fonts[font])
+    y -= size
+    const width = context.fonts[font].widthOfTextAtSize(text, size)
+    if (width > context.width - pt(52)) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(text, { x: context.x + (context.width - width) / 2, y, size, font: context.fonts[font], color })
+    y -= size * .1
+  }
+  y -= pt(4)
+  centered(cover.schoolName, pt(28), 'cooperBold', rgb(.45, .16, .13))
+  centered(cover.schoolSubtitle, pt(18), 'cooperBold', rgb(.45, .16, .13))
+  y -= pt(12)
+  centered(cover.assessment.toUpperCase(), pt(14))
+  centered(cover.grade.toUpperCase(), pt(14))
+  centered(cover.subject.toUpperCase(), pt(14))
+
+  const left = context.x + pt(26)
+  const right = context.x + context.width / 2 + pt(10)
+  const edge = context.x + context.width - pt(26)
+  const detail = (label: string, value: string | null, x: number, end: number, baseline: number) => {
+    const size = pt(14)
+    const font = context.fonts.sansBold
+    assertSupported(label, font)
+    context.page.drawText(label, { x, y: baseline, size, font, color: INK })
+    const start = x + font.widthOfTextAtSize(label, size) + pt(8)
+    if (value === null) context.page.drawLine({ start: { x: start, y: baseline - 2 }, end: { x: end, y: baseline - 2 }, thickness: .6, color: INK })
+    else {
+      assertSupported(value, font)
+      if (font.widthOfTextAtSize(value, size) > end - start) throw new PdfLayoutError(context.pageNumber)
+      context.page.drawText(value, { x: start, y: baseline, size, font, color: INK })
+    }
+  }
+  detail('Name:', null, left, right - pt(20), frameBottom + pt(63))
+  detail('Class:', null, right, edge, frameBottom + pt(63))
+  detail('Duration:', cover.duration, left, right - pt(20), frameBottom + pt(27))
+  detail('Total Marks:', cover.totalMarks, right, edge, frameBottom + pt(27))
+
+  const lowerTop = frameBottom - pt(20)
+  const columnWidth = (context.width - pt(40 + 28)) / 2
+  const tableX = context.x + pt(20 + 28) + columnWidth
+  const tableWidth = columnWidth
+  const rowHeight = pt(31)
+  const colWidth = tableWidth / 3
+  const totalRows = cover.marks.length + 3
+  if (lowerTop - totalRows * rowHeight < margin + pt(24)) throw new PdfLayoutError(context.pageNumber)
+  for (let row = 0; row <= totalRows; row++) {
+    const lineY = lowerTop - row * rowHeight
+    context.page.drawLine({ start: { x: row === 0 ? tableX + colWidth : tableX, y: lineY }, end: { x: tableX + tableWidth, y: lineY }, thickness: .6, color: RULE })
+  }
+  for (let col = 0; col <= 3; col++) {
+    const x = tableX + colWidth * col
+    context.page.drawLine({ start: { x, y: lowerTop - (col === 0 || col === 2 ? rowHeight : 0) }, end: { x, y: lowerTop - totalRows * rowHeight }, thickness: .6, color: RULE })
+  }
+  const cell = (text: string, col: number, row: number, bold = false, centered = false, span = 1) => {
+    const font = bold ? context.fonts.sansBold : context.fonts.sans
+    const size = pt(16)
+    assertSupported(text, font)
+    const width = font.widthOfTextAtSize(text, size)
+    if (width > colWidth * span - pt(14)) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(text, { x: tableX + col * colWidth + (centered ? (colWidth * span - width) / 2 : pt(7)), y: lowerTop - (row + 1) * rowHeight + (rowHeight - size) / 2 + 2, font, size, color: INK })
+  }
+  cell('Marks', 1, 0, true, true, 2)
+  cell('Question', 0, 1, true, true)
+  cell('Allotted', 1, 1, true, true)
+  cell('Obtained', 2, 1, true, true)
+  cover.marks.forEach((row, index) => { cell(row.label, 0, index + 2); cell(row.allotted, 1, index + 2) })
+  cell('Total', 0, totalRows - 1, true, true)
+  cell(cover.totalMarks, 1, totalRows - 1)
+
+  let instructionY = lowerTop - pt(20)
+  const instructionsX = context.x + pt(20)
+  const drawWrap = (text: string, bold = false) => {
+    const font = bold ? context.fonts.sansBold : context.fonts.sans
+    const size = pt(16)
+    let line = ''
+    for (const word of text.split(/\s+/)) {
+      const next = line ? `${line} ${word}` : word
+      if (line && font.widthOfTextAtSize(next, size) > columnWidth) {
+        instructionY -= pt(24)
+        assertSupported(line, font)
+        context.page.drawText(line, { x: instructionsX, y: instructionY, size, font, color: INK })
+        line = word
+      } else line = next
+    }
+    instructionY -= pt(24)
+    if (instructionY < margin + pt(24)) throw new PdfLayoutError(context.pageNumber)
+    assertSupported(line, font)
+    context.page.drawText(line, { x: instructionsX, y: instructionY, size, font, color: INK })
+    instructionY -= pt(16)
+  }
+  drawWrap('Instructions to the candidates,', true)
+  cover.instructions.forEach(line => drawWrap(line))
+  const pageCount = `This document consists of ${String(furniture.printedPageCount ?? 1).padStart(2, '0')} printed pages`
+  const size = pt(14)
+  const countWidth = context.fonts.sans.widthOfTextAtSize(pageCount, size)
+  context.page.drawLine({ start: { x: margin - pt(10), y: margin - pt(10) }, end: { x: context.x + context.width + pt(10), y: margin - pt(10) }, thickness: .5, color: INK })
+  context.page.drawText(pageCount, { x: context.x + (context.width - countWidth) / 2, y: margin - pt(26), size, font: context.fonts.sans, color: INK })
 }
 
 async function embedImages(
@@ -1009,9 +1241,18 @@ async function createPdf(
     fontLoader('boldItalic'),
     fontLoader('mono'),
   ])
+  const cooperBoldBytes = fontLoader === browserPdfFonts
+    ? await fetch('/fonts/CooperBold.ttf').then((response) => {
+      if (!response.ok) throw new Error('The bundled Cooper Bold font could not be loaded. Try again.')
+      return response.arrayBuffer()
+    })
+    : boldBytes
   const fonts: EmbeddedFonts = {
     regular: await document.embedFont(regularBytes, { subset: true }),
     bold: await document.embedFont(boldBytes, { subset: true }),
+    cooperBold: await document.embedFont(cooperBoldBytes, { subset: true }),
+    sans: await document.embedFont(StandardFonts.Helvetica),
+    sansBold: await document.embedFont(StandardFonts.HelveticaBold),
     italic: await document.embedFont(italicBytes, { subset: true }),
     boldItalic: await document.embedFont(boldItalicBytes, { subset: true }),
     mono: await document.embedFont(monoBytes, { subset: true }),
@@ -1036,10 +1277,11 @@ async function createPdf(
         const margin = pt(plan.pageSize.margin)
         const page = document.addPage([width, height])
         const top = height - margin
-        const headerHeight = planned.header === 'first' || planned.header === 'answer-key'
-          ? pt(84)
-          : pt(42)
-        const footerHeight = pt(36)
+        const headerHeight = planned.furniture.headerHidden
+          ? 0
+          : planned.header === 'first' || planned.header === 'answer-key'
+            ? pt(84)
+            : pt(42)
         const context: DrawContext = {
           document,
           page,
@@ -1048,22 +1290,57 @@ async function createPdf(
           x: margin,
           y: top,
           width: pt(plan.pageSize.contentWidth),
-          bottom: margin + footerHeight,
+          bottom: margin + (planned.furniture.headerHidden ? pt(FOOTER_HEIGHT) : pt(36)),
           pageNumber: planned.number,
         }
-        drawFurniture(context, planned.furniture, top, top - headerHeight)
-        context.y = top - headerHeight
+        if (planned.furniture.coverPage) {
+          drawCoverPage(context, planned.furniture, top, margin)
+          continue
+        }
+        if (planned.furniture.paperBook) {
+          drawPaperBookFurniture(context, planned.furniture, top, margin, planned.items)
+          context.width = pt(PAPER_BOOK_CONTENT_WIDTH)
+          context.y = top - pt(planned.number === 1 ? 76 : 28)
+        } else {
+          drawFurniture(context, planned.furniture, top, top - headerHeight)
+          context.y = top - headerHeight
+        }
         for (const item of planned.items) drawItem(context, item)
-        const footer = String(planned.furniture.pageNumber)
-        assertSupported(footer, fonts.regular)
-        const footerWidth = fonts.regular.widthOfTextAtSize(footer, SMALL_SIZE)
+        if (planned.furniture.paperBook) continue
+        const footer = planned.furniture.schoolName ?? String(planned.furniture.pageNumber)
+        const footerFont = planned.furniture.schoolName ? fonts.cooperBold : fonts.regular
+        const footerSize = planned.furniture.schoolName ? pointsOf('body') : SMALL_SIZE
+        assertSupported(footer, footerFont)
+        const footerWidth = footerFont.widthOfTextAtSize(footer, footerSize)
+        const footerLayout = planned.furniture.footerLayout
+        const footerLogo = footerLayout?.logo ? images.get(footerLayout.logo) : undefined
+        const footerX = footerLayout?.alignment === 'left' ? margin
+          : footerLayout?.alignment === 'right' ? width - margin - footerWidth
+            : (width - footerWidth) / 2
         page.drawText(footer, {
-          x: (width - footerWidth) / 2,
+          x: footerX,
           y: margin,
-          size: SMALL_SIZE,
-          font: fonts.regular,
+          size: footerSize,
+          font: footerFont,
           color: INK,
         })
+        if (planned.furniture.headerHidden) {
+          page.drawLine({
+            start: { x: margin, y: margin + pt(FOOTER_HEIGHT) },
+            end: { x: width - margin, y: margin + pt(FOOTER_HEIGHT) },
+            thickness: 0.75,
+            color: INK,
+          })
+        }
+        if (footerLogo) {
+          const maxHeight = 20
+          const scale = Math.min(maxHeight / footerLogo.source.height, pt(plan.pageSize.contentWidth) * 0.2 / footerLogo.source.width)
+          const logoWidth = footerLogo.source.width * scale
+          const logoX = footerLayout?.alignment === 'left' ? margin
+            : footerLayout?.alignment === 'right' ? width - margin - logoWidth
+              : (width - logoWidth) / 2
+          page.drawImage(footerLogo.image, { x: logoX, y: margin, width: logoWidth, height: footerLogo.source.height * scale })
+        }
       }
     }
   } finally {

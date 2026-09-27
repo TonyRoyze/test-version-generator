@@ -74,7 +74,14 @@ function openDatabase(databaseName: string): Promise<IDBDatabase> {
         database.createObjectStore(EXAM_WORKSPACE_STORE, { keyPath: 'key' })
       }
     }
-    request.onsuccess = () => resolve(request.result)
+    request.onsuccess = () => {
+      const database = request.result
+      // A paper can be deleted while another part of the app has this
+      // connection cached. Let IndexedDB's version-change handshake release
+      // it so deleteDatabase can complete rather than staying blocked.
+      database.onversionchange = () => database.close()
+      resolve(database)
+    }
     request.onerror = () => reject(request.error)
     request.onblocked = () => reject(new Error(`Could not open ${databaseName}`))
   })

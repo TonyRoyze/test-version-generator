@@ -48,6 +48,11 @@ export type ExamWorkingCopy = {
   textSize?: import('./section-headings').TextSize
   /** This Exam's own test-page header lines; absent means the default. */
   header?: import('./page-header').ExamHeader
+  furniture?: import('./page-furniture').ExamFurniture
+  labelStyles?: import('./number-style').ExamLabelStyles
+  numberingRestarts?: string[]
+  pageBreaks?: string[]
+  coverPage?: import('./page-cover').ExamCover
 }
 
 export function createQuestionBank(): QuestionBank {
@@ -139,6 +144,8 @@ export function withReferencesRemoved(
   const workSpace = draft.workSpace
     ? { ...draft.workSpace }
     : undefined
+  const numberingRestarts = draft.numberingRestarts?.filter((id) => !removing.has(id))
+  const pageBreaks = draft.pageBreaks?.filter((id) => !removing.has(id))
   const sectionOf = draft.sectionOf
     ? { ...draft.sectionOf }
     : undefined
@@ -154,6 +161,8 @@ export function withReferencesRemoved(
     ...(choiceOrder ? { choiceOrder } : {}),
     ...(columns ? { columns } : {}),
     ...(workSpace ? { workSpace } : {}),
+    ...(numberingRestarts && numberingRestarts.length > 0 ? { numberingRestarts } : {}),
+    ...(pageBreaks && pageBreaks.length > 0 ? { pageBreaks } : {}),
     ...(sectionOf ? { sectionOf } : {}),
   }
 }
@@ -212,4 +221,3 @@ export function withChoiceOrder(
   ) return draft
   return { ...draft, choiceOrder }
 }
-

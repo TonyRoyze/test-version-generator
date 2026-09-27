@@ -1,3 +1,4 @@
+import { isSupabaseConfigured } from './supabase'
 import { useEffect } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
@@ -21,25 +22,42 @@ import { markWelcomed } from './welcomed'
  * The front door. A visitor who has never made anything here lands on this
  * page rather than on the resume shelves of Home, because there is nothing to
  * resume yet and everything to explain: a hero, how it works, and where the
- * work lives. Every "Get started" on it leads to the same short onboarding,
- * which is the one place the app says out loud that an Exam is built from a
- * Question Bank. Neither page wears the dashboard shell — there is no
- * breadcrumb to a place you have not been.
+ * work lives. Which door its calls to action open depends on whether a cloud
+ * account is configured: with one, they all lead to signing in; without one,
+ * they lead to the short onboarding, which is the one place the app says out
+ * loud that an Exam is built from a Question Bank. Neither page wears the
+ * dashboard shell — there is no breadcrumb to a place you have not been.
  */
 
 const GET_STARTED = '/get-started'
+const LOG_IN = '/login'
 
-function GetStartedButton({
-  children = 'Get started — it’s free',
+/**
+ * The one shape every call to action on the landing page takes: a filled
+ * pill that names where it goes and points forward. Which way it points is the
+ * page's one question. With a cloud account configured there is somewhere to
+ * sign in to, so the invitation to start *is* the invitation to sign in, and
+ * every button that has no destination of its own becomes one door to
+ * `/login` — the front door stops offering a way past the account. Without one
+ * there is nothing to sign in to, so the same buttons lead through the short
+ * onboarding instead, where the app says out loud that an Exam is built from a
+ * Question Bank.
+ */
+function LandingCta({
+  href,
+  children,
   className = 'landing-cta',
+  arrow = true,
 }: {
+  href?: string
   children?: ReactNode
   className?: string
+  arrow?: boolean
 }) {
   return (
-    <Link href={GET_STARTED} className={className}>
-      {children}
-      <ArrowRight aria-hidden="true" />
+    <Link href={href ?? (isSupabaseConfigured ? LOG_IN : GET_STARTED)} className={className}>
+      {children ?? (isSupabaseConfigured ? 'Log in' : 'Get started — it’s free')}
+      {arrow && <ArrowRight aria-hidden="true" />}
     </Link>
   )
 }
@@ -72,7 +90,7 @@ const SOURCES = [
   { key: 'image', label: 'a diagram', Icon: Image, x: 36, y: 86, tilt: 2 },
 ] as const
 
-function HeroArt() {
+export function HeroArt() {
   return (
     <div className="hero-art" aria-hidden="true">
       <svg className="hero-art-lines" viewBox="0 0 560 480" fill="none">
@@ -171,7 +189,8 @@ export function LandingPage({ returning }: {
             Home
           </Link>
         )}
-        <GetStartedButton className="landing-cta landing-cta--small">Get started</GetStartedButton>
+        <LandingCta href="/login" className="landing-cta landing-cta--small" arrow={false}>Log in</LandingCta>
+        {!isSupabaseConfigured && <LandingCta className="landing-cta landing-cta--small">Get started</LandingCta>}
       </LandingHeader>
 
       <main>
@@ -183,9 +202,9 @@ export function LandingPage({ returning }: {
               Parrot gathers them into Question Banks and lays them out as a clean, printable
               exam.
             </p>
-            <GetStartedButton />
+            <LandingCta />
             <p className="landing-fineprint">
-              Runs in your browser. Nothing to install, no account to make.
+              {isSupabaseConfigured ? 'Runs in your browser. Sign in to your teaching workspace.' : 'Runs in your browser. Nothing to install, no account to make.'}
             </p>
           </div>
           <HeroArt />
@@ -213,11 +232,11 @@ export function LandingPage({ returning }: {
           <div className="landing-local-card">
             <h2 id="local-heading">We’re completely local.</h2>
             <p>
-              Test Parrot runs entirely in your browser. Your exams, Question Banks and images are
-              saved on your own device and never uploaded anywhere — there is no account, no
-              server, and nothing to sign up for.
+              {isSupabaseConfigured
+                ? 'Test Parrot runs entirely in your browser. Your exams, Question Banks and images are saved on your own device as you edit — signing in adds a private cloud copy of that work, so you can pick it up on another machine. Nothing is uploaded until you ask.'
+                : 'Test Parrot runs entirely in your browser. Your exams, Question Banks and images are saved on your own device and never uploaded anywhere — there is no account, no server, and nothing to sign up for.'}
             </p>
-            <GetStartedButton />
+            <LandingCta />
           </div>
         </section>
       </main>

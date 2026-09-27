@@ -47,7 +47,20 @@ import {
   type WorkSpaceStyle,
 } from './exam'
 import { stemNodesOf, type ProseMirrorJSON } from './question-doc'
-import { headerLineOf, type ExamHeader, type HeaderLine } from './page-header'
+import type { ExamHeader } from './page-header'
+import type { ExamFurniture, FurnitureLayout } from './page-furniture'
+import type { ExamCover } from './page-cover'
+import {
+  DEFAULT_LABEL_STYLES,
+  labelAt,
+  labelForToken,
+  labelOfValue,
+  labelStyleOf,
+  sameLabelStyle,
+  sequenceTokenAt,
+  type ExamLabelStyles,
+  type LabelKind,
+} from './number-style'
 
 // The default section wording lives with the rest of what an Exam may say
 // about its sections; re-exported for the adapters and tests that print it.
@@ -69,7 +82,7 @@ export type ColumnCount = 1 | 2 | 4
 export type Measure = {
   /** Height in px of one page item, laid out at the content box's width and
    *  at the Exam's text size. */
-  itemHeight(item: PageItem, textSize?: TextSize): number
+  itemHeight(item: PageItem, textSize?: TextSize, width?: number): number
 }
 
 // A stub that reports nothing: every item is zero-height, so an exam packs onto
@@ -85,6 +98,7 @@ export const unmeasured: Measure = {
 export type PlannedChoice = {
   id: string
   letter: string
+  displayLabel?: string
   correct: boolean
   node: ProseMirrorJSON
 }
@@ -104,6 +118,7 @@ export type ChoiceGrid = {
 export type PlannedPrompt = {
   id: string
   number: number
+  displayNumber?: string
   letter: string | null
   node: ProseMirrorJSON
 }
@@ -114,6 +129,7 @@ export type PlannedPrompt = {
 export type PlannedBankAnswer = {
   id: string
   letter: string
+  displayLabel?: string
   node: ProseMirrorJSON
 }
 
@@ -179,6 +195,7 @@ export type PlannedPart = {
   id: string
   /** Its position under the Multipart question: `a`, `b`, …. */
   letter: string
+  displayLabel?: string
   type: PartType
   stem: ProseMirrorJSON[]
   /** The answers in this arrangement's order, lettered `A`, `B`, …; empty for
@@ -196,10 +213,13 @@ export type PlannedPart = {
 export type PlannedQuestion = {
   id: string
   type: QuestionType
+  /** Whether the Exam explicitly starts this question on a fresh page. */
+  pageBreakBefore?: boolean
   /** Position on the printed test, counted continuously across sections. A
    *  matching set's number is its first prompt's: its prompts take the run of
    *  numbers from there, one each, and the set's stem prints unnumbered. */
   number: number
+  displayNumber?: string
   /** What a student circles in the number column, before the number: T and F
    *  on a True/False question, and nothing on any other. A Multiple Choice
    *  question's letter is circled on its answer, so it prints no mark here. */
@@ -230,6 +250,8 @@ export type PlannedQuestion = {
   /** A Short Answer question's Suggested Answer, as top-level blocks. Never
    *  printed on the test; the Answer Key prints it under the question's line. */
   suggestedAnswer?: ProseMirrorJSON[]
+  /** Brief explanation shown beside the correct choice in Paper Book. */
+  answerReason?: string
   /** A Multipart question's Parts, lettered, in authored order; `null` for every other
    *  Question Type. A Multipart question's `stem` is the shared material its Parts are asked about. */
   parts: PlannedPart[] | null
@@ -244,6 +266,7 @@ export function numbersTakenBy(question: PlannedQuestion): number {
 /** The question's number as a teacher would say it — `22`, or `22–25` for a
  *  matching set whose prompts run over several. */
 export function numberLabelOf(question: PlannedQuestion): string {
+  if (question.displayNumber !== undefined) return question.displayNumber
   const span = numbersTakenBy(question)
   return span > 1
     ? `${question.number}–${question.number + span - 1}`
@@ -329,7 +352,9 @@ export type AnswerKeySectionItem = {
 export type AnswerKeyEntryItem = {
   kind: 'answer-key-entry'
   number: number
+  displayNumber?: string
   letter: string | null
+  displayAnswer?: string
   difficulty?: Difficulty
   topics?: string[]
   suggestedAnswer?: ProseMirrorJSON[]
@@ -342,7 +367,9 @@ export type AnswerKeyEntryItem = {
  *  for a Short Answer Part. */
 export type AnswerKeyPartLine = {
   letter: string
+  displayLabel?: string
   answer: string | null
+  displayAnswer?: string
   suggestedAnswer?: ProseMirrorJSON[]
 }
 
@@ -373,7 +400,7 @@ export type PageStream = 'test' | 'answer-key'
 // prints, the ordered items on it, and whether an explicit page break precedes
 // it in a serialized stream.
 export type PlannedPage = {
-  /** Printed in the footer, 1-based within its stream. */
+  /** Printed page number, 1-based within its stream unless a cover offsets it. */
   number: number
   header: PageHeader
   stream: PageStream
@@ -406,53 +433,42 @@ export type PageFurniture = {
    *  empty for the Working Copy's own arrangement. Plans recorded before
    *  Versions existed carry the `ID: A` they printed. */
   arrangementLabel: string
-  /** What the footer prints. The same number as the page, named separately
-   *  because a footer is furniture rather than an item that packs. */
+  /** New page layouts intentionally omit headers; older retained plans do not. */
+  headerHidden?: boolean
+  /** The page number, printed in the footer when no school name replaces it. */
   pageNumber: number
-}
-
-const IDENTITY_FIELDS: Record<PageHeader, readonly IdentityField[]> = {
-  first: ['Name', 'Class', 'Date'],
-  later: ['Name'],
-  // The key is the teacher's copy: it carries the arrangement it belongs to and
-  // nothing for a student to fill in.
-  'answer-key': [],
-  'answer-key-later': [],
-}
-
-// Which variants repeat the exam title. The key repeats it on its first page
-// the way the test does, and drops it on continuation pages.
-const REPEATS_TITLE: Record<PageHeader, boolean> = {
-  first: true,
-  later: false,
-  'answer-key': true,
-  'answer-key-later': false,
-}
-
-// Which of an Exam's header lines a test page prints. The key has none.
-const HEADER_LINE: Record<PageHeader, HeaderLine | null> = {
-  first: 'first',
-  later: 'later',
-  'answer-key': null,
-  'answer-key-later': null,
+  headerLayout?: FurnitureLayout
+  footerLayout?: FurnitureLayout
+  /** Present only on the dedicated first sheet. */
+  coverPage?: ExamCover
+  /** Unit-booklet furniture drawn around the actual question content. */
+  paperBook?: ExamCover
+  /** The cover option names the school in the footer of each question page. */
+  pageNumberInHeader?: boolean
+  schoolName?: string
+  printedPageCount?: number
 }
 
 function furnitureOf(
-  page: { header: PageHeader; number: number },
+  page: { header: PageHeader; number: number; stream: PageStream },
   title: string,
-  version: string | undefined,
-  header: ExamHeader | undefined,
-  titleSize: HeadingSize | undefined,
+  furniture: ExamFurniture | undefined,
+  coverPage: ExamCover | undefined,
 ): PageFurniture {
-  const line = HEADER_LINE[page.header]
-  const identityLine = line ? headerLineOf(header, line) : undefined
+  const paperBook = coverPage?.templateId === 'paper-book' && page.stream === 'test'
+  const isCover = page.header === 'first' && page.number === 1 && page.stream === 'test' && coverPage !== undefined && !paperBook
   return {
-    identityFields: IDENTITY_FIELDS[page.header],
-    ...(identityLine !== undefined ? { identityLine } : {}),
-    title: REPEATS_TITLE[page.header] ? title : null,
-    ...(REPEATS_TITLE[page.header] && titleSize ? { titleSize } : {}),
-    arrangementLabel: version ?? '',
+    identityFields: [],
+    headerHidden: true,
+    title: isCover ? title : null,
+    arrangementLabel: '',
     pageNumber: page.number,
+    ...(coverPage && page.stream === 'test' && !isCover && !paperBook
+      ? { pageNumberInHeader: true, schoolName: [coverPage.schoolName, coverPage.schoolSubtitle].filter(Boolean).join(' ') }
+      : {}),
+    ...(isCover ? { coverPage } : {}),
+    ...(paperBook ? { paperBook: coverPage } : {}),
+    ...(furniture?.footer ? { footerLayout: furniture.footer } : {}),
   }
 }
 
@@ -460,10 +476,8 @@ function furnitureOf(
 // Page geometry
 //
 // US Letter at 96dpi: an 816×1056px sheet with 1" (96px) margins on every side,
-// leaving a 624×864px box. The header and footer come out of that box's height,
-// so how much packing may fill depends on which header the page carries — the
-// first page's Name/Class/Date line plus the title is taller than a later
-// page's Name line alone.
+// leaving a 624×864px box. New pages have no header, so packing reserves only
+// the footer's space inside that box.
 //
 // These are the numbers the screen uses as well: `exam-page.tsx` publishes them
 // as CSS custom properties so the rendered page is laid out at exactly the size
@@ -475,21 +489,22 @@ export const PAGE_MARGIN = 72
 
 /** The width a page item is laid out at — what `Measure` measures against. */
 export const PAGE_CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN
+export const PAPER_BOOK_SIDEBAR_WIDTH = 170
+export const PAPER_BOOK_GAP = 18
+export const PAPER_BOOK_CONTENT_WIDTH = PAGE_CONTENT_WIDTH - PAPER_BOOK_SIDEBAR_WIDTH - PAPER_BOOK_GAP
 
 const PAGE_BOX_HEIGHT = PAGE_HEIGHT - 2 * PAGE_MARGIN
 
-// Exhaustive over `PageHeader` on purpose: a new variant cannot be added
-// without deciding how tall its furniture is. The answer key's header carries
-// The first answer-key page repeats the title; continuation pages carry only
-// the ID and therefore use the shorter header height.
+// Keep this exhaustive over `PageHeader` so new page variants explicitly
+// decide their reserved geometry. Page headers are intentionally absent.
 export const HEADER_HEIGHT: Record<PageHeader, number> = {
-  first: 84,
-  later: 42,
-  'answer-key': 84,
-  'answer-key-later': 42,
+  first: 0,
+  later: 0,
+  'answer-key': 0,
+  'answer-key-later': 0,
 }
 
-export const FOOTER_HEIGHT = 36
+export const FOOTER_HEIGHT = 20
 
 /** How much vertical space packing may fill on a page carrying `header`. */
 export function pageContentHeight(header: PageHeader): number {
@@ -610,6 +625,22 @@ function letterAt(index: number): string {
   return letter
 }
 
+function sequenceFor(kind: LabelKind, index: number, styles: ExamLabelStyles | undefined): string {
+  return sequenceTokenAt(labelStyleOf(styles, kind).sequence, index)
+}
+
+function displayLabelFor(kind: LabelKind, index: number, styles: ExamLabelStyles | undefined): string | undefined {
+  const style = labelStyleOf(styles, kind)
+  return sameLabelStyle(kind, styles?.[kind], DEFAULT_LABEL_STYLES[kind]) ? undefined : labelAt(style, index)
+}
+
+function displayQuestionNumber(number: number, span: number, styles: ExamLabelStyles | undefined): string | undefined {
+  const style = labelStyleOf(styles, 'questions')
+  if (sameLabelStyle('questions', styles?.questions, DEFAULT_LABEL_STYLES.questions)) return undefined
+  const first = labelOfValue(style, number)
+  return span > 1 ? `${first}–${labelOfValue(style, number + span - 1)}` : first
+}
+
 // Column-major: `rows = ceil(n / columns)`, and the items fill down the first
 // column before starting the second.
 export function layOutColumns<T>(
@@ -639,18 +670,29 @@ function layOutGrid(
 // given the letter its answer now carries. A prompt that names no answer, or
 // one the bank no longer holds, is unmatched and gets no letter.
 function deriveMatching(
+  exam: Exam,
   question: Question,
   arrangement: Arrangement,
   number: number,
 ): MatchingSet {
   const bank: PlannedBankAnswer[] = orderedChoices(question, arrangement).map(
-    (answer, index) => ({ id: answer.id, letter: letterAt(index), node: answer.node }),
+    (answer, index) => ({
+      id: answer.id,
+      letter: sequenceFor('answers', index, exam.labelStyles),
+      ...(displayLabelFor('answers', index, exam.labelStyles) !== undefined
+        ? { displayLabel: displayLabelFor('answers', index, exam.labelStyles)! }
+        : {}),
+      node: answer.node,
+    }),
   )
   const letters = new Map(bank.map((answer) => [answer.id, answer.letter]))
   return {
     prompts: promptsOf(question).map((prompt, index) => ({
       id: prompt.id,
       number: number + index,
+      ...(displayQuestionNumber(number + index, 1, exam.labelStyles) !== undefined
+        ? { displayNumber: displayQuestionNumber(number + index, 1, exam.labelStyles)! }
+        : {}),
       letter: letters.get(prompt.answerId) ?? null,
       node: prompt.node,
     })),
@@ -688,21 +730,29 @@ function deriveParts(
   question: Question,
   arrangement: Arrangement,
 ): PlannedPart[] {
+  const answerStyle = labelStyleOf(exam.labelStyles, 'answers')
   return partsOf(question).map((part, index) => {
     const choices: PlannedChoice[] = orderedPartChoices(part, arrangement).map(
-      (choice, choiceIndex) => ({
-        id: choice.id,
-        letter: letterAt(choiceIndex),
-        correct: choice.correct,
-        node: choice.node,
-      }),
+      (choice, choiceIndex) => {
+        const letter = sequenceFor('answers', choiceIndex, exam.labelStyles)
+        const displayLabel = displayLabelFor('answers', choiceIndex, exam.labelStyles)
+        return {
+          id: choice.id,
+          letter,
+          ...(displayLabel !== undefined ? { displayLabel } : {}),
+          correct: choice.correct,
+          node: choice.node,
+        }
+      },
     )
     const multipleChoice = part.type === 'multiple-choice'
     const suggested = part.suggestedAnswer?.content
     const suggestedBlocks = Array.isArray(suggested) ? (suggested as ProseMirrorJSON[]) : []
+    const partDisplayLabel = displayLabelFor('parts', index, exam.labelStyles)
     return {
       id: part.id,
-      letter: partLetterAt(index),
+      letter: sequenceFor('parts', index, exam.labelStyles),
+      ...(partDisplayLabel !== undefined ? { displayLabel: partDisplayLabel } : {}),
       type: part.type,
       stem: part.stem,
       choices,
@@ -725,31 +775,45 @@ function deriveQuestion(
   const matching = question.type === 'matching'
   const multipart = question.type === 'multipart'
   const ordered = matching || multipart ? [] : orderedChoices(question, arrangement)
-  const choices: PlannedChoice[] = ordered.map((choice, index) => ({
-    id: choice.id,
-    // A True/False answer is written the way the student circles it, so the
-    // Answer Key reads T or F rather than A or B.
-    letter: trueFalse ? TRUE_FALSE_LETTERS[index] ?? letterAt(index) : letterAt(index),
-    correct: choice.correct,
-    node: choice.node,
-  }))
+  const answerStyle = labelStyleOf(exam.labelStyles, 'answers')
+  const choices: PlannedChoice[] = ordered.map((choice, index) => {
+    // True/False keeps its semantic T/F token, while other answers follow the
+    // Exam's chosen sequence (letters or Roman numerals).
+    const letter = trueFalse ? TRUE_FALSE_LETTERS[index] ?? letterAt(index) : sequenceFor('answers', index, exam.labelStyles)
+    const displayLabel = trueFalse
+      ? (answerStyle.brackets === DEFAULT_LABEL_STYLES.answers.brackets ? undefined : labelForToken(answerStyle, letter))
+      : displayLabelFor('answers', index, exam.labelStyles)
+    return {
+      id: choice.id,
+      letter,
+      ...(displayLabel !== undefined ? { displayLabel } : {}),
+      correct: choice.correct,
+      node: choice.node,
+    }
+  })
+  const matchingSet = matching ? deriveMatching(exam, question, arrangement, number) : null
+  const questionSpan = matchingSet?.prompts.length ?? 1
+  const displayNumber = displayQuestionNumber(number, questionSpan, exam.labelStyles)
   return {
     id: question.id,
     type: question.type,
+    ...(exam.pageBreaks?.includes(question.id) ? { pageBreakBefore: true } : {}),
     number,
+    ...(displayNumber !== undefined ? { displayNumber } : {}),
     marks: trueFalse ? TRUE_FALSE_MARKS : [],
     stem: stemNodesOf(question.doc),
     choices,
     // A True/False question never prints its pair as lettered answers: its
     // marks are the T and F a student circles beside its number.
     grid: trueFalse || matching || multipart ? null : layOutGrid(choices, columnsOf(question)),
-    matching: matching ? deriveMatching(question, arrangement, number) : null,
+    matching: matchingSet,
     workSpace: takesWorkSpace(question.type) ? workSpaceOf(exam, question.id) : null,
     ...(question.difficulty ? { difficulty: question.difficulty } : {}),
     ...(topicsOf(question).length > 0 ? { topics: [...topicsOf(question)] } : {}),
     ...(question.type === 'open' && suggestedAnswerOf(question).length > 0
       ? { suggestedAnswer: suggestedAnswerOf(question) }
       : {}),
+    ...(question.answerReason ? { answerReason: question.answerReason } : {}),
     parts: multipart ? deriveParts(exam, question, arrangement) : null,
   }
 }
@@ -778,6 +842,7 @@ function deriveItems(exam: Exam, arrangement: Arrangement): PageItem[] {
         : {}),
     })
     for (const question of questions) {
+      if (exam.numberingRestarts?.includes(question.id)) number = 1
       const planned = deriveQuestion(exam, question, arrangement, number)
       items.push(wholeQuestion(planned))
       number += numbersTakenBy(planned)
@@ -992,10 +1057,12 @@ function paginate(
   stream: PageStream,
   initialHeader: PageHeader,
   continuedHeader: PageHeader,
+  numberOffset = 0,
+  roomFor: (header: PageHeader) => number = pageContentHeight,
 ): PackedPage[] {
   const pages: PackedPage[] = []
   let header: PageHeader = initialHeader
-  let box = pageContentHeight(header)
+  let box = roomFor(header)
   let current: PageItem[] = []
   let used = 0
   // Set once a work space has taken the rest of this page: nothing else may
@@ -1003,12 +1070,12 @@ function paginate(
   let full = false
 
   const flush = () => {
-    pages.push({ number: pages.length + 1, header, stream, items: current })
+    pages.push({ number: numberOffset + pages.length + 1, header, stream, items: current })
     current = []
     used = 0
     full = false
     header = continuedHeader
-    box = pageContentHeight(header)
+    box = roomFor(header)
   }
 
   // A work space that fills its page is measured at its least height, which is
@@ -1039,7 +1106,7 @@ function paginate(
   // A heading alone on its page has nothing to move away from: the piece goes
   // on ahead of it only when a fresh page would actually hold it, and an
   // oversized piece overflows under the heading instead.
-  const fullPage = pageContentHeight(continuedHeader)
+  const fullPage = roomFor(continuedHeader)
   // A Part that fills its page ends the piece it is in: nothing may follow it
   // on that page.
   const endsPiece = (segment: Segment) =>
@@ -1062,7 +1129,7 @@ function paginate(
           current.pop()
           flush()
           place(last, measure.itemHeight(last))
-        } else if (height <= pageContentHeight(continuedHeader)) {
+        } else if (height <= roomFor(continuedHeader)) {
           flush()
           continue
         }
@@ -1082,6 +1149,13 @@ function paginate(
 
   for (const [index, item] of items.entries()) {
     if (full) flush()
+    if (item.kind === 'question' && item.question.pageBreakBefore && current.length > 0) {
+      const last = current.at(-1)
+      const heading = last?.kind === 'section-heading' && current.length > 1 ? current.pop() : undefined
+      if (heading) used -= measure.itemHeight(heading)
+      if (current.length > 0) flush()
+      if (heading) place(heading, measure.itemHeight(heading))
+    }
     const height = measure.itemHeight(item)
     // A section heading must share a page with at least the first indivisible
     // piece of its first question — the whole question, when it is one piece.
@@ -1122,7 +1196,7 @@ function paginate(
     if (
       current.length > 0
       && !followsSectionHeading
-      && height <= pageContentHeight(continuedHeader)
+      && height <= roomFor(continuedHeader)
     ) {
       flush()
       place(item, height)
@@ -1173,14 +1247,19 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
       items.push({
         kind: 'answer-key-entry',
         number: item.question.number,
+        ...(item.question.displayNumber !== undefined ? { displayNumber: item.question.displayNumber } : {}),
         letter: null,
         ...metadata,
         parts: item.question.parts.map((part) => ({
           letter: part.letter,
+          ...(part.displayLabel !== undefined ? { displayLabel: part.displayLabel } : {}),
           answer:
             part.type === 'multiple-choice'
               ? part.choices.find((choice) => choice.correct)?.letter ?? null
               : null,
+          ...(part.type === 'multiple-choice' && part.choices.find((choice) => choice.correct)?.displayLabel !== undefined
+            ? { displayAnswer: part.choices.find((choice) => choice.correct)!.displayLabel }
+            : {}),
           ...(part.suggestedAnswer ? { suggestedAnswer: part.suggestedAnswer } : {}),
         })),
       })
@@ -1188,10 +1267,15 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
     }
     if (item.question.matching) {
       for (const prompt of item.question.matching.prompts) {
+        const answerLabel = prompt.letter
+          ? item.question.matching.bank.find((answer) => answer.letter === prompt.letter)?.displayLabel
+          : undefined
         items.push({
           kind: 'answer-key-entry',
           number: prompt.number,
+          ...(prompt.displayNumber !== undefined ? { displayNumber: prompt.displayNumber } : {}),
           letter: prompt.letter,
+          ...(answerLabel !== undefined ? { displayAnswer: answerLabel } : {}),
           ...metadata,
         })
       }
@@ -1200,7 +1284,11 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
     items.push({
       kind: 'answer-key-entry',
       number: item.question.number,
+      ...(item.question.displayNumber !== undefined ? { displayNumber: item.question.displayNumber } : {}),
       letter: item.question.choices.find((choice) => choice.correct)?.letter ?? null,
+      ...(item.question.choices.find((choice) => choice.correct)?.displayLabel !== undefined
+        ? { displayAnswer: item.question.choices.find((choice) => choice.correct)!.displayLabel }
+        : {}),
       ...metadata,
       ...(item.question.suggestedAnswer
         ? { suggestedAnswer: item.question.suggestedAnswer }
@@ -1241,6 +1329,8 @@ export type ExportDocument = {
   answerKey: PageItem[]
   /** The Exam's own header lines, where it has reworded them. */
   header?: ExamHeader
+  furniture?: ExamFurniture
+  coverPage?: ExamCover
   /** The Exam's heading size, where not normal: the title's size. */
   headingSize?: HeadingSize
   /** The Exam's text size, where not normal. */
@@ -1267,6 +1357,8 @@ export function buildExportDocument(
     test,
     answerKey: deriveAnswerKey(test),
     ...(exam.header ? { header: exam.header } : {}),
+    ...(exam.furniture ? { furniture: exam.furniture } : {}),
+    ...(exam.coverPage ? { coverPage: exam.coverPage } : {}),
     ...(exam.headingSize && exam.headingSize !== DEFAULT_HEADING_SIZE
       ? { headingSize: exam.headingSize }
       : {}),
@@ -1349,9 +1441,23 @@ function resolveLayout(
   const sized: Measure = textSize
     ? { itemHeight: (item) => measure.itemHeight(item, textSize) }
     : measure
+  const isPaperBook = document.coverPage?.templateId === 'paper-book'
+  const bookMeasure: Measure = {
+    itemHeight: (item) => measure.itemHeight(item, textSize, PAPER_BOOK_CONTENT_WIDTH),
+  }
+  const bookRoom = (header: PageHeader) => pageContentHeight(header) - (header === 'first' ? 76 : 28)
   const pages: PackedPage[] = []
   if (document.selection.test) {
-    pages.push(...paginate(document.test, sized, 'test', 'first', 'later'))
+    if (document.coverPage && !isPaperBook) pages.push({ number: 1, header: 'first', stream: 'test', items: [] })
+    pages.push(...paginate(
+      document.test,
+      isPaperBook ? bookMeasure : sized,
+      'test',
+      'first',
+      'later',
+      document.coverPage && !isPaperBook ? 1 : 0,
+      isPaperBook ? bookRoom : pageContentHeight,
+    ))
   }
   if (document.selection.answerKey) {
     pages.push(
@@ -1373,17 +1479,22 @@ function resolveLayout(
     // Every page but the first of the serialized document is preceded by an
     // explicit break. A linear format must reproduce the plan's pagination
     // rather than rediscover one of its own.
-    pages: pages.map((page, index) => ({
-      ...page,
-      furniture: furnitureOf(
-        page,
-        document.title,
-        document.arrangement.version,
-        document.header,
-        document.headingSize,
-      ),
-      breakBefore: index > 0,
-    })),
+    pages: pages.map((page, index) => {
+      const isCover = page.stream === 'test' && page.number === 1 && document.coverPage && !isPaperBook
+      return {
+        ...page,
+        furniture: {
+          ...furnitureOf(
+            page,
+            document.title,
+            document.furniture,
+            page.stream === 'test' ? document.coverPage : undefined,
+          ),
+          ...(isCover ? { printedPageCount: pages.filter(({ stream }) => stream === 'test').length } : {}),
+        },
+        breakBefore: index > 0,
+      }
+    }),
   }
 }
 

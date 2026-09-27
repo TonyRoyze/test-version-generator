@@ -277,6 +277,7 @@ export function importedQuestionIdentities(
       },
       ...(question.difficulty ? { difficulty: question.difficulty } : {}),
       ...(question.topics ? { topics: [...question.topics] } : {}),
+      ...(question.answerReason ? { answerReason: question.answerReason } : {}),
       ...(question.suggestedAnswer
         ? {
             suggestedAnswer: {
@@ -410,6 +411,7 @@ function copyQuestion(question: QuestionBankRecordQuestion): QuestionBankRecordQ
     ...(question.suggestedAnswer !== undefined
       ? { suggestedAnswer: copyDocument(question.suggestedAnswer) }
       : {}),
+    ...(question.answerReason !== undefined ? { answerReason: question.answerReason } : {}),
   }
 }
 

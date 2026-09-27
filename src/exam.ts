@@ -34,6 +34,9 @@ import {
   type TextSize,
 } from './section-headings'
 import type { ExamHeader } from './page-header'
+import type { ExamFurniture } from './page-furniture'
+import type { ExamLabelStyles } from './number-style'
+import type { ExamCover } from './page-cover'
 import { newMatchingNode } from './matching'
 import { newMultipartPartsNode } from './multipart'
 
@@ -109,6 +112,8 @@ export type Question = {
   /** Optional answer material for a Short Answer Question. It is canonical
    * Question Content, but is never shown on the student Exam stream. */
   suggestedAnswer?: ProseMirrorJSON
+  /** A short explanation of the correct choice on objective questions. */
+  answerReason?: string
   columns: ColumnSetting
   // Optional classification. Both are absent rather than empty on a question
   // nobody has classified, so an untagged question costs no storage and a
@@ -144,6 +149,13 @@ export type Exam = {
   /** This Exam's own test-page header lines, where they depart from the
    *  default blanks. See `page-header.ts`. */
   header?: ExamHeader
+  furniture?: ExamFurniture
+  labelStyles?: ExamLabelStyles
+  /** Question ids at which printed question numbering starts over. */
+  numberingRestarts?: string[]
+  /** Question ids that begin on a fresh printed page. */
+  pageBreaks?: string[]
+  coverPage?: ExamCover
 }
 
 /** What a work space prints as: an empty area, or ruled writing lines. */

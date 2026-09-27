@@ -441,7 +441,7 @@ export function QuestionBankPane({
           onChange={(topics) => onFilterChange({ ...filter, topics })}
         />}
         <label className="bank-sort">
-          <ArrowDownAZ aria-hidden="true" />
+          {/*<ArrowDownAZ aria-hidden="true" />*/}
           <span className="sr-only">Sort Questions</span>
           <select
             aria-label="Sort Questions"

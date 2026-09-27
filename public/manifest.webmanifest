@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "Test Parrot",
+  "short_name": "Test Parrot",
+  "description": "Write and organize test questions and question banks.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f7f4ed",
+  "theme_color": "#f7f4ed",
+  "icons": [
+    { "src": "/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}

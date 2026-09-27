@@ -8,7 +8,7 @@
 // (Media Asset bytes) is lifted out into its own entry so the JSON stays
 // readable and images are not inflated by base64.
 
-import { STORAGE_NAME, STORAGE_VERSION, EXAM_STORE } from './storage-schema'
+import { STORAGE_NAME, LOCAL_STORAGE_NAME, STORAGE_VERSION, EXAM_STORE } from './storage-schema'
 
 export const ACCOUNT_BACKUP_FORMAT = 'test-parrot-account'
 export const ACCOUNT_BACKUP_VERSION = 1
@@ -155,24 +155,24 @@ function openExisting(name: string): Promise<IDBDatabase> {
   })
 }
 
-export function isAccountDatabase(name: string) {
-  return name === STORAGE_NAME || name.startsWith(`${STORAGE_NAME}-exam-`)
+export function isAccountDatabase(name: string, scope = STORAGE_NAME) {
+  return name === scope || name.startsWith(`${scope}-exam-`)
 }
 
 /** Every database this account owns in this browser. */
-export async function accountDatabaseNames(): Promise<string[]> {
+export async function accountDatabaseNames(scope = STORAGE_NAME): Promise<string[]> {
   if (typeof indexedDB.databases === 'function') {
     const names = (await indexedDB.databases())
-      .flatMap(({ name }) => (name && isAccountDatabase(name) ? [name] : []))
-    return names.sort((a, b) => (a === STORAGE_NAME ? -1 : b === STORAGE_NAME ? 1 : a.localeCompare(b)))
+      .flatMap(({ name }) => (name && isAccountDatabase(name, scope) ? [name] : []))
+    return names.sort((a, b) => (a === scope ? -1 : b === scope ? 1 : a.localeCompare(b)))
   }
   // Without enumeration, the Exam registry names each Exam's database.
-  const registry = await openExisting(STORAGE_NAME)
+  const registry = await openExisting(scope)
   try {
-    if (!registry.objectStoreNames.contains(EXAM_STORE)) return [STORAGE_NAME]
+    if (!registry.objectStoreNames.contains(EXAM_STORE)) return [scope]
     const transaction = registry.transaction(EXAM_STORE, 'readonly')
     const ids = await requestOf(transaction.objectStore(EXAM_STORE).getAllKeys())
-    return [STORAGE_NAME, ...ids.map((id) => `${STORAGE_NAME}-exam-${String(id)}`)]
+    return [scope, ...ids.map((id) => `${scope}-exam-${String(id)}`)]
   } finally {
     registry.close()
   }
@@ -225,7 +225,7 @@ async function readDatabase(
 }
 
 /** Reads the whole account out of this browser. */
-export async function captureAccount(now = new Date()): Promise<AccountSnapshot> {
+export async function captureAccount(now = new Date(), scope = STORAGE_NAME): Promise<AccountSnapshot> {
   const binaries = new Map<string, Uint8Array>()
   const addBinary = (bytes: Uint8Array) => {
     const path = `binary/${String(binaries.size).padStart(5, '0')}.bin`
@@ -233,7 +233,10 @@ export async function captureAccount(now = new Date()): Promise<AccountSnapshot>
     return path
   }
   const databases: DatabaseSnapshot[] = []
-  for (const name of await accountDatabaseNames()) databases.push(await readDatabase(name, addBinary))
+  for (const name of await accountDatabaseNames(scope)) {
+    const database = await readDatabase(name, addBinary)
+    databases.push({ ...database, name: LOCAL_STORAGE_NAME + name.slice(scope.length) })
+  }
   const localStorageEntries: Record<string, string> = {}
   for (let index = 0; index < localStorage.length; index += 1) {
     const key = localStorage.key(index)
@@ -296,7 +299,7 @@ export async function readAccountBackup(file: Blob): Promise<AccountSnapshot> {
     || manifest.databases.some((database) => database.version !== STORAGE_VERSION)) {
     throw new AccountBackupError('This backup was made by an older Test Parrot whose storage this version cannot read.')
   }
-  if (manifest.databases.some((database) => !isAccountDatabase(database.name))) {
+  if (manifest.databases.some((database) => !isAccountDatabase(database.name, LOCAL_STORAGE_NAME))) {
     throw new AccountBackupError('This account backup is damaged and cannot be read.')
   }
   const binaries = new Map<string, Uint8Array>()
@@ -362,7 +365,7 @@ export async function replaceAccount(snapshot: AccountSnapshot): Promise<void> {
   const binary = binaryReader(snapshot.binaries)
   for (const name of await accountDatabaseNames()) await deleteDatabase(name)
   for (const databaseSnapshot of snapshot.manifest.databases) {
-    const database = await createDatabase(databaseSnapshot)
+    const database = await createDatabase({ ...databaseSnapshot, name: STORAGE_NAME + databaseSnapshot.name.slice(LOCAL_STORAGE_NAME.length) })
     try {
       const storeNames = databaseSnapshot.stores.map((store) => store.name)
       if (storeNames.length === 0) continue
@@ -400,7 +403,7 @@ const STAGING_KEY = 'account'
 
 function openStaging(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(STAGING_DATABASE, 1)
+    const request = indexedDB.open(`${STAGING_DATABASE}-${STORAGE_NAME}`, 1)
     request.onupgradeneeded = () => { request.result.createObjectStore(STAGING_STORE) }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)

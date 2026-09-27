@@ -17,6 +17,7 @@
 // first differing line, and that line says what the document says.
 
 import {
+  numberLabelOf,
   printsNumberLine,
   type ChoiceGrid,
   type ExportDocument,
@@ -28,6 +29,7 @@ import {
   type QuestionItem,
 } from './export-plan'
 import { arrangementRange } from './export-preparation'
+import { paperBookAnswerLines } from './cover-templates/paper-book-answers'
 import type { ProseMirrorJSON } from './question-doc'
 
 /** One block of content, normalized. See `blockLine` for the vocabulary. */
@@ -458,7 +460,7 @@ function planGrid(grid: ChoiceGrid, images: ImageOrdinals): ContentLine[] {
         ? planBlocks(
             childrenOf(choice.node),
             {
-              opener: [{ kind: 'text', text: `${choice.letter}. `, marks: [] }],
+              opener: [{ kind: 'text', text: `${choice.displayLabel ?? `${choice.letter}.`} `, marks: [] }],
             },
             images,
           )
@@ -488,14 +490,14 @@ function planMatching(set: MatchingSet, images: ImageOrdinals): ContentLine[] {
   }
   const prompts = set.prompts.map((prompt) => ({
     node: prompt.node,
-    opener: `_______ ${prompt.number}. `,
+    opener: `_______ ${prompt.displayNumber ?? `${prompt.number}.`} `,
   }))
   if (set.bankGrid) {
     const lines: ContentLine[] = [`table:${set.bankGrid.rows}x${set.bankGrid.columns}`]
     set.bankGrid.cells.forEach((row, rowIndex) => {
       row.forEach((answer, column) => {
         lines.push(`cell:${rowIndex},${column}`)
-        const content = answer ? cellLines(answer.node, `${answer.letter}. `) : []
+        const content = answer ? cellLines(answer.node, `${answer.displayLabel ?? `${answer.letter}.`} `) : []
         lines.push(...(content.length > 0 ? content : ['para']))
       })
     })
@@ -508,7 +510,7 @@ function planMatching(set: MatchingSet, images: ImageOrdinals): ContentLine[] {
     ...column(prompts),
     'cell:0,1',
     ...column(
-      set.bank.map((answer) => ({ node: answer.node, opener: `${answer.letter}. ` })),
+      set.bank.map((answer) => ({ node: answer.node, opener: `${answer.displayLabel ?? `${answer.letter}.`} ` })),
     ),
     '/table',
   ]
@@ -526,7 +528,7 @@ function planQuestion(item: QuestionItem, images: ImageOrdinals): ContentLine[] 
     ? [
         {
           kind: 'text',
-          text: `${[...item.question.marks, `${item.question.number}.`].join(' ')} `,
+          text: `${[...item.question.marks, numberLabelOf(item.question)].join(' ')} `,
           marks: [],
         },
       ]
@@ -554,7 +556,7 @@ function planPart(part: PlannedPart, images: ImageOrdinals): ContentLine[] {
   const opener: Segment[] = [
     {
       kind: 'text',
-      text: `${part.letter}. `,
+      text: `${part.displayLabel ?? `${part.letter}.`} `,
       marks: [],
     },
   ]
@@ -603,9 +605,9 @@ export function planItemLines(
         line(
           'para',
           renderInline([
-            { kind: 'text', text: `${item.number}. `, marks: [] },
-            ...(item.letter
-              ? [{ kind: 'text' as const, text: item.letter, marks: ['strong'] }]
+            { kind: 'text', text: `${item.displayNumber ?? `${item.number}.`} `, marks: [] },
+            ...(item.displayAnswer ?? item.letter
+              ? [{ kind: 'text' as const, text: item.displayAnswer ?? item.letter!, marks: ['strong'] }]
               : []),
             ...(metadata.length > 0
               ? [{ kind: 'text' as const, text: ` ${metadata.join(' ')}`, marks: [] }]
@@ -617,9 +619,9 @@ export function planItemLines(
           line(
             'para',
             renderInline([
-              { kind: 'text', text: `${part.letter}. `, marks: [] },
-              ...(part.answer
-                ? [{ kind: 'text' as const, text: part.answer, marks: ['strong'] }]
+              { kind: 'text', text: `${part.displayLabel ?? `${part.letter}.`} `, marks: [] },
+              ...(part.displayAnswer ?? part.answer
+                ? [{ kind: 'text' as const, text: part.displayAnswer ?? part.answer!, marks: ['strong'] }]
                 : []),
             ]),
           ),
@@ -638,6 +640,13 @@ function furnitureLines(furniture: PageFurniture): {
   header: ContentLine[]
   footer: ContentLine[]
 } {
+  if (furniture.paperBook) {
+    const cover = furniture.paperBook
+    return {
+      header: [`para «emphasis»${cover.subject} ${cover.schoolName} ➭ page ${furniture.pageNumber}«/»`],
+      footer: ['para'],
+    }
+  }
   const identity = [
     ...(furniture.identityLine !== undefined
       ? [normalizeSpace(furniture.identityLine).trim()]
@@ -674,7 +683,10 @@ export function layoutFingerprint(
       height: plan.pageSize.height,
       margin: plan.pageSize.margin,
       ...furnitureLines(page.furniture),
-      content: page.items.flatMap((item) => planItemLines(item, images)),
+      content: [
+        ...page.items.flatMap((item) => planItemLines(item, images)),
+        ...(page.furniture.paperBook ? paperBookAnswerLines(page.items) : []),
+      ],
     })),
   )
   return {

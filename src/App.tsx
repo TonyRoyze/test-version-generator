@@ -57,6 +57,8 @@ import {
 import type { ReactNode } from 'react'
 import {
   cleanDocument,
+  explanationDocumentOf,
+  explanationTextOf,
   suggestedAnswerDocumentOf,
   withSuggestedAnswer,
   withoutSuggestedAnswer,
@@ -76,6 +78,10 @@ import { DifficultyBadge, TopicBadge } from './badges'
 import { bankQuestionById } from './question-bank'
 import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import { ExamPage } from './exam-page'
+import { CoverDesignPage } from './cover-page-view'
+import { DEFAULT_EXAM_COVER } from './page-cover'
+import { CoverTemplatesPage } from './cover-templates-page'
+import { COVER_PAGE_TEMPLATES, DEFAULT_COVER_PAGE_TEMPLATE, type CoverPageTemplate } from './cover-templates/templates'
 import { QuestionBankPane } from './question-bank-pane'
 import { NO_FILTER, topicOptions, type QuestionBankFilter } from './question-bank-view'
 import { useSelection } from './use-selection'
@@ -447,7 +453,7 @@ function CrepeQuestion({
   value,
   onChange,
   onReady,
-  suggestedAnswer = false,
+  answerBlock = false,
   fixedChoices = false,
   matching = false,
   multipart = false,
@@ -455,7 +461,7 @@ function CrepeQuestion({
   value: ProseMirrorJSON
   onChange: (doc: ProseMirrorJSON) => void
   onReady: (readDocument: () => ProseMirrorJSON) => void
-  suggestedAnswer?: boolean
+  answerBlock?: 'Suggested Answer' | 'Explanation' | false
   /** Whether the answer list is a True/False question's fixed pair, which the
    *  teacher chooses between rather than writes. */
   fixedChoices?: boolean
@@ -551,7 +557,7 @@ function CrepeQuestion({
     })
     crepe.editor
       .use(multipleChoiceMode(true, fixedChoices))
-      .use(suggestedAnswerMode(suggestedAnswer))
+      .use(suggestedAnswerMode(answerBlock))
       .use(matchingMode(matching))
       .use(multipartMode(multipart))
       .use(subscriptSchema)
@@ -691,6 +697,10 @@ function QuestionDialog({
   const [doc] = useState<ProseMirrorJSON>(() =>
     type === 'open'
       ? withSuggestedAnswer(question.doc, question.suggestedAnswer)
+      : type === 'multiple-choice' || type === 'true-false'
+        ? withSuggestedAnswer(question.doc, question.answerReason
+          ? explanationDocumentOf(question.answerReason)
+          : undefined, 'Explanation')
       : question.doc,
   )
   const [difficulty, setDifficulty] = useState<Difficulty | ''>(question.difficulty ?? '')
@@ -737,13 +747,20 @@ function QuestionDialog({
         ...question,
         type,
         doc: await ownDocumentMedia(
-          type === 'open' ? withoutSuggestedAnswer(edited) : edited,
+          type === 'open' || type === 'multiple-choice' || type === 'true-false'
+            ? withoutSuggestedAnswer(edited)
+            : edited,
         ),
       }
       if (difficulty) saved.difficulty = difficulty
       else delete saved.difficulty
       if (topics.length > 0) saved.topics = [...topics]
       else delete saved.topics
+      if (type === 'multiple-choice' || type === 'true-false') {
+        const explanation = explanationTextOf(suggestedAnswerDocumentOf(edited))
+        if (explanation) saved.answerReason = explanation
+        else delete saved.answerReason
+      }
       if (type === 'open') {
         const answer = suggestedAnswerDocumentOf(edited)
         if (answer) saved.suggestedAnswer = await ownDocumentMedia(answer)
@@ -872,7 +889,7 @@ function QuestionDialog({
         <div className="dialog-editor">
           <CrepeQuestion
             value={doc}
-            suggestedAnswer={type === 'open'}
+            answerBlock={type === 'open' ? 'Suggested Answer' : type === 'multiple-choice' || type === 'true-false' ? 'Explanation' : false}
             fixedChoices={type === 'true-false'}
             matching={type === 'matching'}
             multipart={type === 'multipart'}
@@ -1000,6 +1017,23 @@ function BankDeletionConfirmation({ bank, impact, onCancel, onConfirm }: {
       {impact.length > 0 && <ul>{impact.map((item) => <li key={item.examId}>{item.title} — {item.questionCount} {item.questionCount === 1 ? 'Question' : 'Questions'} removed</li>)}</ul>}
       <p><strong>Export History remains unchanged.</strong> Historical exports stay viewable and can be exported again.</p>
     </>}
+  </DestructiveConfirmation>
+}
+
+function ExamDeletionConfirmation({ exam, onCancel, onConfirm }: {
+  exam: RecentExam
+  onCancel: () => void
+  onConfirm: () => Promise<void>
+}) {
+  return <DestructiveConfirmation
+    label="Permanently delete paper"
+    title={`Permanently delete “${exam.title}”?`}
+    confirmLabel="Delete paper"
+    onCancel={onCancel}
+    onConfirm={onConfirm}
+  >
+    <p>This removes the paper, including its saved and unsaved questions and export history. This cannot be undone.</p>
+    <p>Question Banks used by this paper will remain available.</p>
   </DestructiveConfirmation>
 }
 
@@ -2405,6 +2439,47 @@ function ExamEditor({
               },
             })),
           },
+          {
+            kind: 'submenu',
+            label: 'Add section',
+            icon: <Heading />,
+            items: [
+              {
+                kind: 'action',
+                label: 'Structured',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.addSection('Structured'),
+              },
+              {
+                kind: 'action',
+                label: 'Essay',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.addSection('Essay'),
+              },
+            ],
+          },
+          { kind: 'separator' },
+          {
+            kind: 'submenu',
+            label: 'Change template',
+            icon: <Pencil />,
+            items: [
+              ...COVER_PAGE_TEMPLATES.map((template) => ({
+                kind: 'radio' as const,
+                label: template.name,
+                checked: state.workingCopy.coverPage !== undefined
+                  && (state.workingCopy.coverPage.templateId ?? DEFAULT_COVER_PAGE_TEMPLATE.id) === template.id,
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.setCoverPage({ ...structuredClone(template.cover), templateId: template.id }),
+              })),
+              {
+                kind: 'action' as const,
+                label: 'Edit template details',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => navigate('/cover-design'),
+              },
+            ],
+          },
         ] : documentMenu.kind === 'file' ? [
           {
             kind: 'action',
@@ -2486,7 +2561,11 @@ function ExamEditor({
         <ExportDialog
           configuration={exportDialog.configuration}
           onConfigurationChange={(configuration) => {
-            writeExportPreferences({ format: configuration.format, selection: configuration.selection })
+            writeExportPreferences({
+              format: configuration.format,
+              selection: configuration.selection,
+              includeCoverPage: configuration.includeCoverPage,
+            })
             writeShufflePreferences(examId, {
               shuffle: configuration.shuffle ?? NO_SHUFFLE,
               versionCount: configuration.versionCount ?? DEFAULT_VERSION_COUNT,
@@ -2494,6 +2573,7 @@ function ExamEditor({
             setExportDialog((current) => (current ? { ...current, configuration } : current))
           }}
           maxVersions={maxVersionCount(exam, arrangement, exportDialog.configuration.shuffle ?? NO_SHUFFLE)}
+          showCoverPageOption={exam.coverPage?.templateId !== 'paper-book'}
           previewPlans={exportPreview?.documents ?? []}
           empty={exam.questions.length === 0}
           blocked={exportBlocked}
@@ -2535,6 +2615,9 @@ function ExamEditor({
           configuration={{
             format: reExportRecord.format,
             selection: reExportRecord.selection,
+            includeCoverPage: reExportRecord.plans.some((plan) =>
+              plan.pages.some((page) => page.furniture.coverPage !== undefined),
+            ),
             ...(reExportRecord.versions
               ? { shuffle: reExportRecord.shuffle ?? NO_SHUFFLE, versionCount: reExportRecord.versions.length }
               : { shuffle: NO_SHUFFLE, versionCount: 1 }),
@@ -2614,6 +2697,8 @@ function ExamEditor({
             onMoveSection={(sectionId, direction) => store.moveSection(sectionId, direction)}
             onDeleteSection={(sectionId) => store.deleteSection(sectionId)}
             onHeaderLineChange={(line, text) => store.setHeaderLine(line, text)}
+            onLabelStyleChange={(kind, style) => store.setLabelStyle(kind, style)}
+            onCoverPageChange={(cover) => store.setCoverPage(cover)}
             titleDisabled={isHistoricalBrowsing}
             onEdit={(questionId) => {
               const question = bankQuestionById(state.questionBank, questionId)
@@ -2653,6 +2738,12 @@ function ExamEditor({
             }}
             onSetColumns={(questionIds, columns) =>
               store.setQuestionColumns(questionIds, columns)
+            }
+            onSetNumberingRestart={(questionId, enabled) =>
+              store.setNumberingRestart(questionId, enabled)
+            }
+            onSetPageBreak={(questionIds, enabled) =>
+              store.setQuestionPageBreak(questionIds, enabled)
             }
             onSetWorkSpace={(questionIds, patch) =>
               store.setQuestionWorkSpace(questionIds, patch)
@@ -2787,6 +2878,7 @@ export default function App({
   const [editorStore, setEditorStore] = useState(store)
   const [editorId, setEditorId] = useState(initialEditorId)
   const [deletingBank, setDeletingBank] = useState<{ bank: QuestionBankCollectionItem; impact: QuestionDeletionImpact[] } | null>(null)
+  const [deletingExam, setDeletingExam] = useState<RecentExam | null>(null)
   const [inspectingBankFile, setInspectingBankFile] = useState(false)
   const [droppedBankFile, setDroppedBankFile] = useState<File | null>(null)
   const [convertDrop, setConvertDrop] = useState<{ file: File; id: number } | null>(null)
@@ -2888,6 +2980,21 @@ export default function App({
       setDeletingBank(null)
     }}
   />
+  const examDeletionConfirmation = deletingExam && <ExamDeletionConfirmation
+    exam={deletingExam}
+    onCancel={() => setDeletingExam(null)}
+    onConfirm={async () => {
+      if (editorId === deletingExam.id) await editorStore?.whenSettled()
+      await workspaces.delete(deletingExam.id)
+      if (editorId === deletingExam.id) {
+        setEditorStore(null)
+        setEditorId(null)
+      }
+      setExams(await workspaces.recent())
+      setDeletingExam(null)
+    }}
+  />
+  const requestExamDeletion = useCallback((exam: RecentExam) => setDeletingExam(exam), [])
   const saveAs = useCallback(async () => {
     if (!editorStore) return
     const sourceId = await workspaces.activeId()
@@ -2946,6 +3053,19 @@ export default function App({
   const openExam = (id: string) => window.location.assign(`/editor?exam=${id}`)
   const openBank = useCallback((id: string) => navigate(`/question-bank?id=${id}`), [])
   const newExam = () => { void workspaces.create().then((exam) => openExam(exam.id)) }
+  const applyCoverTemplate = async (examId: string | null, template: CoverPageTemplate) => {
+    try {
+      const exam = examId ? null : await workspaces.create()
+      const targetId = examId ?? exam?.id
+      if (!targetId) throw new Error('Could not create an Exam.')
+      const store = await loadExamStore(workspaces.backendFor(targetId))
+      store.setCoverPage({ ...structuredClone(template.cover), templateId: template.id })
+      await store.whenSettled()
+      openExam(targetId)
+    } catch (error) {
+      setHomeError(error instanceof Error ? error.message : 'Could not apply this cover template.')
+    }
+  }
   const newBank = () => { void bankWorkspaces.create().then((bank) => openBank(bank.id)) }
   const onBankPage = route === '/question-bank'
   const pageBankReady = onBankPage && pageBank?.search === search
@@ -2983,6 +3103,21 @@ export default function App({
     <BankFileDropTarget onFile={openImport} />
     {importDialog}
   </>
+  if (route === '/cover-design') {
+    if (!editorStore) return <>
+      <main className="cover-design-empty">
+        <h1>Open an exam to design its cover</h1>
+        <button type="button" onClick={() => navigate('/exams')}>Choose an exam</button>
+      </main>
+    </>
+    const exam = editorStore.selectedExam().exam
+    return <CoverDesignPage
+      cover={exam.coverPage ?? DEFAULT_EXAM_COVER}
+      onChange={(cover) => editorStore.setCoverPage(cover)}
+      examTitle={editorStore.getState().workingCopy.title}
+      onBack={() => navigate('/editor')}
+    />
+  }
   if (route === '/imports') return <>{globalChrome}<ImportsPage
     persistentStorage={storageStatus}
     revision={importRevision}
@@ -3015,7 +3150,7 @@ export default function App({
   }
   if (route === '/about') return <>{globalChrome}<AboutPage persistentStorage={storageStatus} /></>
   if (route === '/privacy') return <>{globalChrome}<PrivacyPage persistentStorage={storageStatus} /></>
-  if (route === '/settings') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
+  if (route === '/settings' || route === '/login') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
   if (route === '/exams') return <>{globalChrome}<ResourceCollectionPage
     kind="exams"
     exams={exams}
@@ -3024,7 +3159,8 @@ export default function App({
     onOpenExam={openExam}
     onOpenBank={openBank}
     onNewExam={newExam}
-  />{bankDeletionConfirmation}</>
+    onDeleteExam={requestExamDeletion}
+  />{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-banks') return <>{globalChrome}<ResourceCollectionPage
     kind="question-banks"
     exams={exams}
@@ -3050,6 +3186,12 @@ export default function App({
     {importDialog}
     <ConvertPage dropped={convertDrop} onOpenImport={(file, waitingImportId) => openImport(file, null, waitingImportId)} />
   </>
+  if (route === '/cover-templates') return <>{globalChrome}<CoverTemplatesPage
+    exams={exams}
+    error={homeError}
+    persistentStorage={storageStatus}
+    onApply={(examId, template) => { void applyCoverTemplate(examId, template) }}
+  />{bankDeletionConfirmation}</>
   if (route === '/') return <>{globalChrome}<HomePage
     exams={exams}
     banks={bankCollection}
@@ -3060,7 +3202,8 @@ export default function App({
     onNewBank={newBank}
     onOpenBank={openBank}
     onDeleteBank={requestBankDeletion}
-  />{bankDeletionConfirmation}</>
+    onDeleteExam={requestExamDeletion}
+  />{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-bank') return pageBank && pageBankReady ? <>{globalChrome}<QuestionBankPage
     key={pageBank.bank.id}
     bank={pageBank.bank}

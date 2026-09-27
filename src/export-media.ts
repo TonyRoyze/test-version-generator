@@ -1,3 +1,4 @@
+import { coverLogoSource } from './page-cover'
 import type { LayoutPlan } from './export-plan'
 import type { ProseMirrorJSON } from './question-doc'
 
@@ -158,18 +159,20 @@ function childrenOf(node: ProseMirrorJSON): ProseMirrorJSON[] {
 export function imageSourcesOf(plans: readonly LayoutPlan[]): string[] {
   const sources: string[] = []
   const seen = new Set<string>()
+  const add = (src: string) => {
+    if (src && !seen.has(src)) { seen.add(src); sources.push(src) }
+  }
   const visit = (node: ProseMirrorJSON) => {
     if (node.type === 'image' || node.type === 'image-block') {
-      const src = String(attrsOf(node).src ?? '')
-      if (src && !seen.has(src)) {
-        seen.add(src)
-        sources.push(src)
-      }
+      add(String(attrsOf(node).src ?? ''))
     }
     for (const child of childrenOf(node)) visit(child)
   }
   for (const plan of plans) {
     for (const page of plan.pages) {
+      add(page.furniture.headerLayout?.logo ?? '')
+      add(page.furniture.footerLayout?.logo ?? '')
+      if (page.furniture.coverPage) add(coverLogoSource(page.furniture.coverPage))
       for (const item of page.items) {
         if (item.kind !== 'question') continue
         for (const block of item.stem) visit(block)

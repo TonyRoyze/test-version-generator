@@ -30,6 +30,8 @@ export type ExportFormat = 'pdf' | 'docx'
 export type ExportConfiguration = {
   format: ExportFormat
   selection: ExportContentSelection
+  /** Whether to put the Exam's cover sheet before the student test. */
+  includeCoverPage?: boolean
   /** What to shuffle into Versions. Absent, or nothing on, prints the
    *  Working Copy's own arrangement. */
   shuffle?: ShuffleOptions
@@ -40,6 +42,7 @@ export type ExportConfiguration = {
 export const DEFAULT_EXPORT_CONFIGURATION: ExportConfiguration = {
   format: 'pdf',
   selection: { test: true, answerKey: true },
+  includeCoverPage: true,
 }
 
 const EXPORT_PREFERENCES_KEY = 'test-parrot-export-preferences-v1'
@@ -54,8 +57,15 @@ export function readExportPreferences(): ExportConfiguration {
       && typeof value.selection?.test === 'boolean'
       && typeof value.selection.answerKey === 'boolean'
       && (value.selection.test || value.selection.answerKey)
+      && (value.includeCoverPage === undefined || typeof value.includeCoverPage === 'boolean')
     ) {
-      return { format: value.format, selection: { ...value.selection } }
+      return {
+        format: value.format,
+        selection: { ...value.selection },
+        ...(typeof value.includeCoverPage === 'boolean'
+          ? { includeCoverPage: value.includeCoverPage }
+          : {}),
+      }
     }
   } catch {
     // Missing or malformed preferences fall back to the product defaults.
@@ -357,6 +367,11 @@ export function prepareExport({
     throw new Error('Choose the student test, the answer key, or both.')
   }
 
+  // Paper Book is page furniture around the questions, not a separate cover.
+  const exportExam = configuration.includeCoverPage !== false || exam.coverPage?.templateId === 'paper-book'
+    ? exam
+    : { ...exam, coverPage: undefined }
+
   // Named by the numbers the teacher sees in the Working Copy, not a
   // shuffled Version's, so the refusal points at the sheet being edited.
   refusePendingImages(exam, () => planExport({ exam, arrangement, selection: TEST_ONLY, measure }))
@@ -366,7 +381,7 @@ export function prepareExport({
   const planned = papers.map(({ arrangement: paper, name }) => {
     const plan = (selection: ExportContentSelection) => {
       const result = planExport({
-        exam,
+        exam: exportExam,
         arrangement: paper,
         selection,
         measure,

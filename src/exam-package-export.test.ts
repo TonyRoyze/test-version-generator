@@ -297,7 +297,7 @@ describe('a Multipart question in an Exam package', () => {
     expect(carried.exams[0]).toMatchObject({
       formatVersion: '0.3.0',
       sections: [
-        { title: 'Multiple Choice', instructions: 'Identify the choice that best completes the statement or answers the question.' },
+        { title: 'Multiple Choice', instructions: 'Select the most suitable answer.' },
         { title: 'Vocabulary', instructions: 'Match each item with the correct answer from the word bank. Write its letter in the blank.' },
         { title: 'Essays', instructions: '' },
       ],
@@ -324,7 +324,7 @@ describe('a Multipart question in an Exam package', () => {
   test('an Exam that keeps the default headings writes their wording out in full, and no sizes', async () => {
     const carried = await examPackage({ exam, arrangement, ownerOf, loadMedia: noImages })
     expect(carried.exams[0]!.sections).toEqual([
-      { title: 'Multiple Choice', instructions: 'Identify the choice that best completes the statement or answers the question.' },
+      { title: 'Multiple Choice', instructions: 'Select the most suitable answer.' },
       { title: 'Matching', instructions: 'Match each item with the correct answer from the word bank. Write its letter in the blank.' },
       { title: 'Short Answer', instructions: 'Answer the following questions in the space provided. Show all work.' },
     ])

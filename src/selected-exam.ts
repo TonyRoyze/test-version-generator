@@ -41,6 +41,9 @@ import {
 } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
 import { bankQuestionById, type ExamWorkingCopy, type QuestionBank } from './question-bank'
+import { isExamFurniture, sameExamFurniture } from './page-furniture'
+import { DEFAULT_EXAM_COVER, isExamCover, sameExamCover } from './page-cover'
+import { isExamLabelStyles, sameExamLabelStyles } from './number-style'
 
 function sameWorkSpace(
   left: Record<string, WorkSpace> | undefined,
@@ -56,6 +59,11 @@ function sameWorkSpace(
         && match.style === space.style
         && match.fill === space.fill
     })
+}
+
+function sameIds(left: readonly string[] | undefined, right: readonly string[] | undefined): boolean {
+  return (left ?? []).length === (right ?? []).length
+    && (left ?? []).every((id, index) => id === right?.[index])
 }
 
 /** A Multipart question with this Exam's answer columns written onto its Multiple
@@ -163,6 +171,10 @@ export function selectedExam(
     if (referenced.has(id) && typeof section === 'string') sectionOf[id] = section
   }
   const hasAnySectionOf = Object.keys(sectionOf).length > 0
+  const numberingRestarts = (draft.numberingRestarts ?? []).filter((id) => referenced.has(id))
+  const hasNumberingRestarts = numberingRestarts.length > 0
+  const pageBreaks = (draft.pageBreaks ?? []).filter((id) => referenced.has(id))
+  const hasPageBreaks = pageBreaks.length > 0
   const headingSize =
     isHeadingSize(draft.headingSize) && draft.headingSize !== DEFAULT_HEADING_SIZE
       ? draft.headingSize
@@ -171,6 +183,9 @@ export function selectedExam(
     isTextSize(draft.textSize) && draft.textSize !== DEFAULT_TEXT_SIZE ? draft.textSize : undefined
   const header =
     isExamHeader(draft.header) && Object.keys(draft.header).length > 0 ? draft.header : undefined
+  const furniture = draft.furniture && isExamFurniture(draft.furniture) ? draft.furniture : undefined
+  const labelStyles = draft.labelStyles && isExamLabelStyles(draft.labelStyles) ? draft.labelStyles : undefined
+  const coverPage = draft.coverPage && isExamCover(draft.coverPage) ? draft.coverPage : DEFAULT_EXAM_COVER
   const exam: Exam =
     previous
     && previous.exam.title === draft.title
@@ -183,6 +198,11 @@ export function selectedExam(
     && sameSectionHeadings(previous.exam.sectionHeadings, sectionHeadings)
     && previous.exam.headingSize === headingSize
     && sameExamHeader(previous.exam.header, header)
+    && sameExamFurniture(previous.exam.furniture, furniture)
+    && sameExamLabelStyles(previous.exam.labelStyles, labelStyles)
+    && sameIds(previous.exam.numberingRestarts, hasNumberingRestarts ? numberingRestarts : undefined)
+    && sameIds(previous.exam.pageBreaks, hasPageBreaks ? pageBreaks : undefined)
+    && sameExamCover(previous.exam.coverPage, coverPage)
     && previous.exam.textSize === textSize
       ? previous.exam
       : {
@@ -195,6 +215,11 @@ export function selectedExam(
           ...(headingSize ? { headingSize } : {}),
           ...(textSize ? { textSize } : {}),
           ...(header ? { header } : {}),
+          ...(furniture ? { furniture } : {}),
+          ...(labelStyles ? { labelStyles } : {}),
+          ...(hasNumberingRestarts ? { numberingRestarts } : {}),
+          ...(hasPageBreaks ? { pageBreaks } : {}),
+          coverPage,
         }
 
   // Only ids the bank can resolve: an ordering may tolerate a stranger, but an

@@ -3,7 +3,14 @@
 // can evolve together without depending on one another's implementation.
 // Independent Exams begin a fresh browser-storage generation; the preceding
 // single-workspace generation is deliberately not interpreted as an Exam.
-export const STORAGE_NAME = 'test-parrot-exams-v1'
+export const LOCAL_STORAGE_NAME = 'test-parrot-exams-v1'
+export let STORAGE_NAME = LOCAL_STORAGE_NAME
+
+/** Set once, before opening any workspace. Each login owns separate local data. */
+export function selectAccountStorage(userId: string | null) {
+  if (userId !== null && !/^[a-f0-9-]{36}$/i.test(userId)) throw new Error('Invalid account ID.')
+  STORAGE_NAME = userId ? `${LOCAL_STORAGE_NAME}-user-${userId}` : LOCAL_STORAGE_NAME
+}
 export const MEDIA_ASSET_STORE = 'media-assets'
 export const EXPORT_RECORD_STORE = 'export-records'
 export const STORAGE_VERSION = 8

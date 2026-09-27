@@ -59,6 +59,9 @@ import {
   type TextSize,
 } from './section-headings'
 import { isExamHeader, sameExamHeader, withHeaderLine, type HeaderLine } from './page-header'
+import { isExamFurniture, sameExamFurniture, withFurnitureLayout, type FurnitureLayout } from './page-furniture'
+import { isExamCover, sameExamCover, type ExamCover } from './page-cover'
+import { isExamLabelStyles, sameExamLabelStyles, withExamLabelStyle, type LabelKind, type LabelStyle } from './number-style'
 import {
   bankQuestionById,
   createWorkingCopy,
@@ -163,6 +166,10 @@ function isChoiceOrder(value: unknown): value is Record<string, string[]> {
   )
 }
 
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((id) => typeof id === 'string')
+}
+
 function isColumnSettings(value: unknown): value is Record<string, ColumnSetting> {
   return (
     typeof value === 'object'
@@ -205,11 +212,16 @@ function isWorkingCopy(value: unknown): value is ExamWorkingCopy {
     (draft.columns === undefined || isColumnSettings(draft.columns)) &&
     (draft.workSpace === undefined || isWorkSpaceSettings(draft.workSpace)) &&
     (draft.choiceOrder === undefined || isChoiceOrder(draft.choiceOrder)) &&
+    (draft.numberingRestarts === undefined || isStringList(draft.numberingRestarts)) &&
+    (draft.pageBreaks === undefined || isStringList(draft.pageBreaks)) &&
     (draft.sections === undefined || isSectionList(draft.sections)) &&
     (draft.sectionOf === undefined || isSectionPlacement(draft.sectionOf)) &&
     (draft.sectionHeadings === undefined || isSectionHeadings(draft.sectionHeadings)) &&
     (draft.headingSize === undefined || isHeadingSize(draft.headingSize)) &&
     (draft.header === undefined || isExamHeader(draft.header)) &&
+    (draft.furniture === undefined || isExamFurniture(draft.furniture)) &&
+    (draft.labelStyles === undefined || isExamLabelStyles(draft.labelStyles)) &&
+    (draft.coverPage === undefined || isExamCover(draft.coverPage)) &&
     (draft.textSize === undefined || isTextSize(draft.textSize))
   )
 }
@@ -234,11 +246,16 @@ const WORKING_COPY_SETTINGS: Readonly<Record<string, (value: unknown) => boolean
   columns: isColumnSettings,
   workSpace: isWorkSpaceSettings,
   choiceOrder: isChoiceOrder,
+  numberingRestarts: isStringList,
+  pageBreaks: isStringList,
   sections: isSectionList,
   sectionOf: isSectionPlacement,
   sectionHeadings: isSectionHeadings,
   headingSize: isHeadingSize,
   header: isExamHeader,
+  furniture: isExamFurniture,
+  labelStyles: isExamLabelStyles,
+  coverPage: isExamCover,
   textSize: isTextSize,
 }
 
@@ -300,6 +317,9 @@ export type ExamStore = {
   /** Rewords one Question Section's heading on this Exam. `null` sets a part
    *  back to its default; an empty string clears it from the printed page. */
   setSectionHeading(sectionId: string, change: SectionHeadingChange): void
+  /** Adds a named empty Section at the end of this Exam. Questions can then be
+   *  dragged into it; like every Section, its numbering follows the full Exam. */
+  addSection(title: string): void
   /** Moves one Section past its neighbour, up (`-1`) or down (`1`). */
   moveSection(sectionId: string, direction: -1 | 1): void
   /** Deletes one Section and Removes the questions it holds. Undoable, like
@@ -310,6 +330,11 @@ export type ExamStore = {
   setTextSize(size: TextSize): void
   /** Rewords one test-page header line; `null` restores its default. */
   setHeaderLine(line: HeaderLine, text: string | null): void
+  setFurnitureLayout(region: 'header' | 'footer', layout: FurnitureLayout): void
+  setLabelStyle(kind: LabelKind, style: LabelStyle): void
+  setNumberingRestart(questionId: string, enabled: boolean): void
+  setQuestionPageBreak(questionIds: readonly string[], enabled: boolean): void
+  setCoverPage(cover: ExamCover): void
   /** Refreshes the canonical Questions projected from open Question Banks.
    * Workspace browsing is not an Exam command and creates no Undo step. */
   syncCanonicalQuestions(questions: readonly Question[]): void
@@ -437,11 +462,18 @@ function sameExamWorkingCopy(left: ExamWorkingCopy, right: ExamWorkingCopy): boo
     && sameEntries(left.choiceOrder, right.choiceOrder, (first, second) =>
       first.length === second.length && first.every((id, index) => id === second[index]),
     )
+    && (left.numberingRestarts ?? []).length === (right.numberingRestarts ?? []).length
+    && (left.numberingRestarts ?? []).every((id, index) => id === right.numberingRestarts?.[index])
+    && (left.pageBreaks ?? []).length === (right.pageBreaks ?? []).length
+    && (left.pageBreaks ?? []).every((id, index) => id === right.pageBreaks?.[index])
     && sameSections(left.sections, right.sections)
     && sameSectionOf(left.sectionOf, right.sectionOf)
     && sameSectionHeadings(left.sectionHeadings, right.sectionHeadings)
     && (left.headingSize ?? DEFAULT_HEADING_SIZE) === (right.headingSize ?? DEFAULT_HEADING_SIZE)
     && sameExamHeader(left.header, right.header)
+    && sameExamFurniture(left.furniture, right.furniture)
+    && sameExamLabelStyles(left.labelStyles, right.labelStyles)
+    && sameExamCover(left.coverPage, right.coverPage)
     && (left.textSize ?? DEFAULT_TEXT_SIZE) === (right.textSize ?? DEFAULT_TEXT_SIZE)
 }
 
@@ -745,6 +777,14 @@ export function createExamStore(options: {
           : current
       }),
 
+    addSection: (title) =>
+      change((current) => {
+        const { exam, arrangement } = selectedExam(current.questionBank, current.workingCopy)
+        const layout = sectionLayoutOf(exam, arrangement)
+        layout.sections.push({ id: crypto.randomUUID(), title, instructions: '' })
+        return withExamWorkingCopy(current, withSectionLayout(current.workingCopy, layout))
+      }),
+
     setHeadingSize: (size) =>
       change((current) => {
         if ((current.workingCopy.headingSize ?? DEFAULT_HEADING_SIZE) === size) return current
@@ -769,6 +809,60 @@ export function createExamStore(options: {
         const workingCopy: ExamWorkingCopy = { ...current.workingCopy, header }
         if (!header) delete workingCopy.header
         return { ...current, workingCopy }
+      }),
+
+    setFurnitureLayout: (region, layout) =>
+      change((current) => {
+        const furniture = withFurnitureLayout(current.workingCopy.furniture, region, layout)
+        if (sameExamFurniture(furniture, current.workingCopy.furniture)) return current
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy, furniture }
+        if (!furniture) delete workingCopy.furniture
+        return { ...current, workingCopy }
+      }),
+
+    setLabelStyle: (kind, style) =>
+      change((current) => {
+        const labelStyles = withExamLabelStyle(current.workingCopy.labelStyles, kind, style)
+        if (sameExamLabelStyles(labelStyles, current.workingCopy.labelStyles)) return current
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy, labelStyles }
+        if (!labelStyles) delete workingCopy.labelStyles
+        return { ...current, workingCopy }
+      }),
+
+    setNumberingRestart: (questionId, enabled) =>
+      change((current) => {
+        if (!current.workingCopy.questionIds.includes(questionId)) return current
+        const restarts = current.workingCopy.numberingRestarts ?? []
+        const alreadyEnabled = restarts.includes(questionId)
+        if (alreadyEnabled === enabled) return current
+        const numberingRestarts = enabled
+          ? [...restarts, questionId]
+          : restarts.filter((id) => id !== questionId)
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy }
+        if (numberingRestarts.length > 0) workingCopy.numberingRestarts = numberingRestarts
+        else delete workingCopy.numberingRestarts
+        return { ...current, workingCopy }
+      }),
+
+    setQuestionPageBreak: (questionIds, enabled) =>
+      change((current) => {
+        const eligible = questionIds.filter((id) => current.workingCopy.questionIds.includes(id))
+        if (eligible.length === 0) return current
+        const breaks = current.workingCopy.pageBreaks ?? []
+        const next = enabled
+          ? [...breaks, ...eligible.filter((id) => !breaks.includes(id))]
+          : breaks.filter((id) => !eligible.includes(id))
+        if (next.length === breaks.length && next.every((id, index) => id === breaks[index])) return current
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy }
+        if (next.length > 0) workingCopy.pageBreaks = next
+        else delete workingCopy.pageBreaks
+        return { ...current, workingCopy }
+      }),
+
+    setCoverPage: (coverPage) =>
+      change((current) => {
+        if (sameExamCover(current.workingCopy.coverPage, coverPage)) return current
+        return { ...current, workingCopy: { ...current.workingCopy, coverPage } }
       }),
 
     syncCanonicalQuestions: (questions) => {

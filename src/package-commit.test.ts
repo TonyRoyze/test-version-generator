@@ -251,7 +251,7 @@ describe('committing an import', () => {
       {
         id: 'multiple-choice',
         title: 'Multiple Choice',
-        instructions: 'Identify the choice that best completes the statement or answers the question.',
+        instructions: 'Select the most suitable answer.',
       },
       { id: 'open', title: 'Essays', instructions: '' },
     ])

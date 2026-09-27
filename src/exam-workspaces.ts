@@ -193,6 +193,58 @@ export function createExamWorkspaceService(options: { now?: () => Date; createId
       })
       return true
     },
+    /** Permanently removes one Exam and its private authoring/export database.
+     * Question Banks live in the shared registry and are deliberately kept. */
+    async delete(id: string): Promise<boolean> {
+      const snapshots = await transact(
+        [EXAM_STORE, EXAM_WORKSPACE_STORE, EDITOR_WORKSPACE_STORE, QUESTION_BANK_WORKSPACE_STORE],
+        'readonly',
+        async (transaction) => {
+          const [exam, activeExam, editor, tabs] = await Promise.all([
+            requestOf(transaction.objectStore(EXAM_STORE).get(id)) as Promise<ExamSummary | undefined>,
+            requestOf(transaction.objectStore(EXAM_WORKSPACE_STORE).get('active')) as Promise<ActiveWorkspace | undefined>,
+            requestOf(transaction.objectStore(EDITOR_WORKSPACE_STORE).get('active')) as Promise<{ key: 'active'; mode: string; resourceId: string } | undefined>,
+            requestOf(transaction.objectStore(QUESTION_BANK_WORKSPACE_STORE).get(`exam:${id}`)) as Promise<{ key: string; [key: string]: unknown } | undefined>,
+          ])
+          return { exam, activeExam, editor, tabs }
+        },
+      )
+      if (!snapshots.exam) return false
+
+      await transact(
+        [EXAM_STORE, EXAM_WORKSPACE_STORE, EDITOR_WORKSPACE_STORE, QUESTION_BANK_WORKSPACE_STORE],
+        'readwrite',
+        (transaction) => {
+          transaction.objectStore(EXAM_STORE).delete(id)
+          if (snapshots.activeExam?.examId === id) transaction.objectStore(EXAM_WORKSPACE_STORE).delete('active')
+          if (snapshots.editor?.resourceId === id) transaction.objectStore(EDITOR_WORKSPACE_STORE).delete('active')
+          transaction.objectStore(QUESTION_BANK_WORKSPACE_STORE).delete(`exam:${id}`)
+        },
+      )
+
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const request = indexedDB.deleteDatabase(examDatabaseName(id))
+          request.onsuccess = () => resolve()
+          request.onerror = () => reject(request.error ?? new Error('Could not delete this paper.'))
+          // onblocked is informational: keep waiting while other tabs close
+          // their cached connections. The confirmation remains busy meanwhile.
+        })
+      } catch (error) {
+        await transact(
+          [EXAM_STORE, EXAM_WORKSPACE_STORE, EDITOR_WORKSPACE_STORE, QUESTION_BANK_WORKSPACE_STORE],
+          'readwrite',
+          (transaction) => {
+            transaction.objectStore(EXAM_STORE).put(snapshots.exam!)
+            if (snapshots.activeExam) transaction.objectStore(EXAM_WORKSPACE_STORE).put(snapshots.activeExam)
+            if (snapshots.editor) transaction.objectStore(EDITOR_WORKSPACE_STORE).put(snapshots.editor)
+            if (snapshots.tabs) transaction.objectStore(QUESTION_BANK_WORKSPACE_STORE).put(snapshots.tabs)
+          },
+        )
+        throw error
+      }
+      return true
+    },
     /**
      * The registry transaction makes the newly saved Exam visible and switches
      * the active editor as one operation. The Exam stores are independent

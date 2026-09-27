@@ -1,3 +1,4 @@
+import { AccountSettings } from './account-settings'
 import { BackupSettings } from './account-menu'
 import { AppShell } from './app-shell'
 import type { PersistentStorageStatus } from './durable-storage'
@@ -11,7 +12,8 @@ export function SettingsPage({ persistentStorage }: { persistentStorage: Persist
     >
       <div className="site-prose">
         <h1>Settings</h1>
-        <p className="site-lede">Your work is saved in this browser. Keep a copy by exporting it.</p>
+        <p className="site-lede">Your work is saved in this browser. Manage your account, cloud copy, and backups here.</p>
+        <AccountSettings />
         <BackupSettings status={persistentStorage} />
       </div>
     </AppShell>

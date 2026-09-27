@@ -25,6 +25,7 @@ export type QuestionReadingContent = {
     wordBank: { id: string; content: ProseMirrorJSON[] }[]
   }
   suggestedAnswer?: ProseMirrorJSON[]
+  answerReason?: string
   /** A Multipart question's Parts, lettered as the test prints them, each with its own
    *  answers; the shared material is `stem`. */
   parts?: {
@@ -47,6 +48,7 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
     difficulty: question.difficulty,
     topics: topicsOf(question),
     stem: stemNodesOf(question.doc),
+    answerReason: question.answerReason,
   }
   if (question.type === 'open') {
     return {

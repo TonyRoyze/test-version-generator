@@ -1,3 +1,5 @@
+import { coverLogoSource } from './page-cover'
+import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The DOCX Export Adapter.
 //
 // The second translator from a Layout Plan into a real output format, beside
@@ -80,15 +82,19 @@ import {
   questionIndentOf,
   MATCHING_BANK_WIDTH,
   PAGE_CONTENT_WIDTH,
+  PAPER_BOOK_CONTENT_WIDTH,
+  PAPER_BOOK_GAP,
+  PAPER_BOOK_SIDEBAR_WIDTH,
+  numberLabelOf,
   printsNumberLine,
   PART_INDENT,
   type AnswerKeyEntryItem,
   type AnswerKeySectionItem,
   type ChoiceGrid,
-  type IdentityField,
   US_LETTER,
   type LayoutPlan,
   type MatchingSet,
+  type IdentityField,
   type PageFurniture,
   type PageItem,
   type PlannedBankAnswer,
@@ -99,9 +105,14 @@ import {
 } from './export-plan'
 import { DIFFICULTY_LABELS, WORK_SPACE_LINE_PITCH } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
+import type { ExamCover } from './page-cover'
 
 const DOCX_MIME =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+const IDENTITY_GAP = 20
+const OUTPUT_ID_STYLE = 'OutputId'
+const IDENTITY_ID_RESERVE = 64
 
 // ---------------------------------------------------------------------------
 // Units
@@ -609,6 +620,8 @@ function prefixLine(context: BlockContext): Paragraph[] {
  *  row of Panels from a table the teacher wrote. */
 export const BLOCKQUOTE_TABLE_STYLE = 'Blockquote'
 export const SIDE_BY_SIDE_TABLE_STYLE = 'SideBySide'
+export const PAPER_BOOK_TABLE_STYLE = 'PaperBookLayout'
+export const PAPER_BOOK_TITLE_STYLE = 'PaperBookTitle'
 
 const BOX_BORDER = { style: BorderStyle.SINGLE, size: 6, color: '000000' }
 // Print's `.doc-content blockquote` padding: 6px above and below, 10px aside.
@@ -797,7 +810,7 @@ function choiceGridTable(
                   childrenOf(choice.node),
                   {
                     indent: 288,
-                    prefix: [new TextRun({ text: `${choice.letter}.\t` })],
+                    prefix: [new TextRun({ text: `${choice.displayLabel ?? `${choice.letter}.`}\t` })],
                     hanging: 288,
                   },
                   { ...build, contentWidth: cellWidth },
@@ -838,7 +851,7 @@ function matchingContent(
         {
           indent: twips(MATCHING_INDENT),
           hanging: twips(MATCHING_INDENT),
-          prefix: [new TextRun({ text: `_______  ${prompt.number}.\t` })],
+          prefix: [new TextRun({ text: `_______  ${prompt.displayNumber ?? `${prompt.number}.`}\t` })],
         },
         { ...build, contentWidth },
       ),
@@ -846,7 +859,7 @@ function matchingContent(
   const answer = (item: PlannedBankAnswer, contentWidth: number) =>
     blocks(
       childrenOf(item.node),
-      { indent: 288, prefix: [new TextRun({ text: `${item.letter}.\t` })], hanging: 288 },
+      { indent: 288, prefix: [new TextRun({ text: `${item.displayLabel ?? `${item.letter}.`}\t` })], hanging: 288 },
       { ...build, contentWidth },
     )
 
@@ -946,7 +959,7 @@ function questionContent(
   const prefix: ParagraphChild[] = numbered
     ? [
         new TextRun({
-          text: `${[...item.question.marks, `${item.question.number}.`].join('  ')}\t`,
+          text: `${[...item.question.marks, numberLabelOf(item.question)].join('  ')}\t`,
         }),
       ]
     : []
@@ -985,7 +998,7 @@ function partContent(
   const indent = twips(indentPx)
   const prefix: ParagraphChild[] = [
     new TextRun({
-      text: `${part.letter}.\t`,
+      text: `${part.displayLabel ?? `${part.letter}.`}\t`,
     }),
   ]
   const context: BlockContext = {
@@ -1027,10 +1040,10 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
   ]
   const entry = new Paragraph({
     children: [
-      new TextRun({ text: `${item.number}. ` }),
+      new TextRun({ text: `${item.displayNumber ?? `${item.number}.`} ` }),
       // A free-response question still takes a line, so the key's numbering
       // matches the paper's; it simply has no letter to print.
-      ...(item.letter ? [new TextRun({ text: item.letter, bold: true })] : []),
+      ...(item.displayAnswer ?? item.letter ? [new TextRun({ text: item.displayAnswer ?? item.letter!, bold: true })] : []),
       ...metadata.map(({ label, fill }) =>
         new TextRun({ text: ` ${label} `, size: 18, shading: { fill } }),
       ),
@@ -1046,8 +1059,8 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
     new Paragraph({
       indent: { left: ANSWER_KEY_ANSWER_INDENT },
       children: [
-        new TextRun({ text: `${part.letter}. ` }),
-        ...(part.answer ? [new TextRun({ text: part.answer, bold: true })] : []),
+        new TextRun({ text: `${part.displayLabel ?? `${part.letter}.`} ` }),
+        ...(part.displayAnswer ?? part.answer ? [new TextRun({ text: part.displayAnswer ?? part.answer!, bold: true })] : []),
       ],
     }),
     ...(part.suggestedAnswer
@@ -1130,21 +1143,13 @@ function itemContent(
 // fields 20px apart, and the ID in bold against the right margin. Word draws the
 // same thing with tab stops: an underscore leader rules each blank to its stop,
 // and a right stop at the content width holds the ID.
-const IDENTITY_GAP = 20
-const OUTPUT_ID_STYLE = 'OutputId'
-/** Room kept for the bold output ID and the gap before it. */
-const IDENTITY_ID_RESERVE = 64
-
 function identityLine(furniture: PageFurniture): Paragraph {
-  // Bold by style, as `.page-id` is bold by class: page furniture, not an
-  // authored strong mark.
   const id = new TextRun({
     text: furniture.arrangementLabel,
     style: OUTPUT_ID_STYLE,
     size: halfPointsOf('body'),
   })
   if (furniture.identityLine !== undefined) {
-    // An Exam's own line: its text, then the ID against a right stop.
     return new Paragraph({
       children: [
         new TextRun({ text: furniture.identityLine, size: halfPointsOf('body') }),
@@ -1152,6 +1157,7 @@ function identityLine(furniture: PageFurniture): Paragraph {
         id,
       ],
       tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE_CONTENT_WIDTH) }],
+      alignment: furniture.headerLayout?.alignment === 'center' ? AlignmentType.CENTER : furniture.headerLayout?.alignment === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
       spacing: { after: 60 },
     })
   }
@@ -1176,24 +1182,45 @@ function identityLine(furniture: PageFurniture): Paragraph {
   return new Paragraph({
     children: [...children, new TextRun({ children: [new Tab()] }), id],
     tabStops,
+    alignment: furniture.headerLayout?.alignment === 'center' ? AlignmentType.CENTER : furniture.headerLayout?.alignment === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT,
     spacing: { after: 60 },
   })
 }
 
-function headerParagraphs(furniture: PageFurniture): Paragraph[] {
+function headerParagraphs(furniture: PageFurniture, build: BuildContext): Paragraph[] {
+  if (furniture.coverPage) return []
+  if (furniture.paperBook) {
+    const cover = furniture.paperBook
+    return [new Paragraph({
+      children: [
+        new TextRun({ text: cover.subject, italics: true, size: 16 }),
+        new TextRun({ text: `\t${cover.schoolName} ➭ page ${furniture.pageNumber}`, italics: true, size: 16 }),
+      ],
+      tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE_CONTENT_WIDTH) }],
+    })]
+  }
+  if (furniture.headerHidden) {
+    return furniture.pageNumberInHeader
+      ? [new Paragraph({
+          text: String(furniture.pageNumber),
+          alignment: AlignmentType.CENTER,
+          style: OUTPUT_ID_STYLE,
+        })]
+      : []
+  }
+  const logo = furniture.headerLayout?.logo ? build.images.get(furniture.headerLayout.logo) : undefined
   return [
+    ...(logo ? [new Paragraph({ children: [imageRun(logo, Math.min(140, build.contentWidth))], alignment: furniture.headerLayout?.alignment === 'center' ? AlignmentType.CENTER : furniture.headerLayout?.alignment === 'right' ? AlignmentType.RIGHT : AlignmentType.LEFT, spacing: { after: 40 } })] : []),
+    ...(furniture.pageNumberInHeader && !furniture.coverPage
+      ? [new Paragraph({ text: String(furniture.pageNumber), alignment: AlignmentType.RIGHT, style: OUTPUT_ID_STYLE })]
+      : []),
     identityLine(furniture),
     ...(furniture.title === null
       ? []
       : [
-          // Print sets the title flush left, as it does every heading.
           new Paragraph({
             ...(furniture.titleSize
-              ? {
-                  children: [
-                    new TextRun({ text: furniture.title, size: titleHalfPoints(furniture.titleSize) }),
-                  ],
-                }
+              ? { children: [new TextRun({ text: furniture.title, size: titleHalfPoints(furniture.titleSize) })] }
               : { text: furniture.title }),
             heading: HeadingLevel.TITLE,
             spacing: { after: 120 },
@@ -1205,11 +1232,108 @@ function headerParagraphs(furniture: PageFurniture): Paragraph[] {
 // The plan already numbered the page — including restarting at 1 for the answer
 // key — so the footer prints that number rather than asking Word for a field
 // whose count would be the whole document's.
-function footerParagraph(furniture: PageFurniture): Paragraph {
+function footerParagraph(furniture: PageFurniture, build: BuildContext): Paragraph {
+  if (furniture.coverPage || furniture.paperBook) return new Paragraph({ text: '' })
+  const logo = furniture.footerLayout?.logo ? build.images.get(furniture.footerLayout.logo) : undefined
   return new Paragraph({
-    children: [new TextRun({ text: String(furniture.pageNumber), size: halfPointsOf('small') })],
-    alignment: AlignmentType.CENTER,
+    children: [
+      ...(logo ? [imageRun(logo, Math.min(100, build.contentWidth))] : []),
+      new TextRun({
+        text: furniture.schoolName ?? String(furniture.pageNumber),
+        size: furniture.schoolName ? halfPointsOf('body') : halfPointsOf('small'),
+        font: furniture.schoolName ? 'Cooper*' : undefined,
+        bold: furniture.schoolName ? true : undefined,
+      }),
+    ],
+    alignment: furniture.footerLayout?.alignment === 'left' ? AlignmentType.LEFT : furniture.footerLayout?.alignment === 'right' ? AlignmentType.RIGHT : AlignmentType.CENTER,
+    ...(furniture.headerHidden ? {
+      border: { top: { style: BorderStyle.SINGLE, size: 4, color: '000000', space: 4 } },
+    } : {}),
   })
+}
+
+function coverPageContent(furniture: PageFurniture, build: BuildContext): (Paragraph | Table)[] {
+  const cover = furniture.coverPage as ExamCover
+  const border = { style: BorderStyle.DOUBLE, size: 8, color: '111111' }
+  const frameWidth = PAGE_CONTENT_WIDTH
+  const logo = build.images.get(coverLogoSource(cover))
+  const centeredTitle = (text: string, size?: number) => new Paragraph({
+    children: [new TextRun({ text, bold: true, size, font: size ? 'Cooper*' : undefined })],
+    alignment: AlignmentType.CENTER,
+    spacing: { after: size ? 0 : 30 },
+  })
+  const boldLine = (text: string, spacing: IParagraphOptions['spacing'] = {}) => new Paragraph({
+    children: [new TextRun({ text, bold: true })],
+    spacing,
+  })
+  const frameChildren: (Paragraph | Table)[] = [
+    ...(logo ? [new Paragraph({ children: [imageRun(logo, 110)], alignment: AlignmentType.CENTER, spacing: { after: 80 } })] : []),
+    centeredTitle(cover.schoolName, 42),
+    ...(cover.schoolSubtitle ? [centeredTitle(cover.schoolSubtitle, 32)] : []),
+    centeredTitle(cover.assessment),
+    centeredTitle(`${cover.grade} — ${cover.subject}`),
+    boldLine('Name, ...............................................................................     Class, ............................', { before: 260, after: 60 }),
+    boldLine(`Duration: ${cover.duration}                                                        Total Marks: ${cover.totalMarks}`),
+  ]
+  const frame = new Table({
+    width: { size: twips(frameWidth), type: WidthType.DXA },
+    columnWidths: gridOf([frameWidth]),
+    rows: [new TableRow({ children: [new TableCell({
+      width: { size: twips(frameWidth), type: WidthType.DXA },
+      margins: { top: twips(20), bottom: twips(20), left: twips(20), right: twips(20) },
+      borders: { top: border, bottom: border, left: border, right: border },
+      children: frameChildren,
+    })] })],
+  })
+  const markRows = [
+    ['Question', 'Allotted', 'Obtained'],
+    ...cover.marks.map((row) => [row.label, row.allotted, '']),
+    ['Total', cover.totalMarks, ''],
+  ]
+  const markTable = new Table({
+    width: { size: twips(PAGE_CONTENT_WIDTH * 0.46), type: WidthType.DXA },
+    columnWidths: gridOf([PAGE_CONTENT_WIDTH * 0.16, PAGE_CONTENT_WIDTH * 0.15, PAGE_CONTENT_WIDTH * 0.15]),
+    rows: markRows.map((row, index) => new TableRow({
+      cantSplit: true,
+      children: row.map((cell, column) => new TableCell({
+        width: { size: twips([PAGE_CONTENT_WIDTH * 0.16, PAGE_CONTENT_WIDTH * 0.15, PAGE_CONTENT_WIDTH * 0.15][column]!), type: WidthType.DXA },
+        margins: { top: 40, bottom: 40, left: 60, right: 60 },
+        borders: { top: CELL_BORDER, bottom: CELL_BORDER, left: CELL_BORDER, right: CELL_BORDER },
+        children: [new Paragraph({ children: [new TextRun({ text: cell, bold: index === 0 || index === markRows.length - 1 })], alignment: index === 0 || column === 0 ? AlignmentType.CENTER : AlignmentType.LEFT })],
+      })),
+    })),
+  })
+  const instructionContent = [
+    boldLine('Instructions to the candidates,', { after: 80 }),
+    ...cover.instructions.map((line) => new Paragraph({ text: line, spacing: { after: 100 } })),
+  ]
+  const lower = new Table({
+    width: { size: twips(PAGE_CONTENT_WIDTH), type: WidthType.DXA },
+    columnWidths: gridOf([PAGE_CONTENT_WIDTH * 0.54, PAGE_CONTENT_WIDTH * 0.46]),
+    borders: NO_BORDERS,
+    rows: [new TableRow({
+      cantSplit: true,
+      children: [
+        new TableCell({
+          width: { size: twips(PAGE_CONTENT_WIDTH * 0.54), type: WidthType.DXA },
+          borders: NO_BORDERS,
+          margins: { top: twips(12), bottom: 0, left: 0, right: twips(14) },
+          children: instructionContent,
+        }),
+        new TableCell({
+          width: { size: twips(PAGE_CONTENT_WIDTH * 0.46), type: WidthType.DXA },
+          borders: NO_BORDERS,
+          margins: { top: 0, bottom: 0, left: twips(10), right: 0 },
+          children: [new Paragraph({ text: 'Marks', alignment: AlignmentType.CENTER }), markTable],
+        }),
+      ],
+    })],
+  })
+  return [
+    frame,
+    lower,
+    new Paragraph({ text: `This document consists of ${String(furniture.printedPageCount ?? 1).padStart(2, '0')} printed pages`, alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: '111111' } }, spacing: { before: 160 } }),
+  ]
 }
 
 // ---------------------------------------------------------------------------
@@ -1223,6 +1347,68 @@ function sectionOf(
   plan: LayoutPlan,
   build: BuildContext,
 ): ISectionOptions {
+  const book = page.furniture.paperBook
+  const bookContent = book ? [
+    ...(page.number === 1 ? [new Paragraph({
+      children: [new TextRun({ text: `${book.schoolName} - ${book.subject}`, italics: true, size: 28 })],
+      style: PAPER_BOOK_TITLE_STYLE,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 0 },
+    }), new Paragraph({
+      text: '',
+      style: PAPER_BOOK_TITLE_STYLE,
+      indent: { left: twips(234), right: twips(234) },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '222222' } },
+      spacing: { after: 90 },
+    })] : []),
+    new Table({
+      style: PAPER_BOOK_TABLE_STYLE,
+      width: { size: twips(PAGE_CONTENT_WIDTH), type: WidthType.DXA },
+      columnWidths: gridOf([PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP, PAPER_BOOK_SIDEBAR_WIDTH]),
+      borders: NO_BORDERS,
+      rows: [new TableRow({
+        cantSplit: true,
+        children: [
+          new TableCell({
+            width: { size: twips(PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: twips(PAPER_BOOK_GAP) },
+            children: page.items.flatMap((item) => itemContent(item, { ...build, contentWidth: PAPER_BOOK_CONTENT_WIDTH })),
+          }),
+          new TableCell({
+            width: { size: twips(PAPER_BOOK_SIDEBAR_WIDTH), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            shading: { fill: 'D6D6D6' },
+            margins: { top: twips(8), bottom: 0, left: twips(8), right: twips(8) },
+            children: [
+              new Paragraph({ children: [new TextRun({ text: 'Answers', italics: true })] }),
+              ...paperBookAnswersOf(page.items).flatMap((entry) => [
+                new Paragraph({ text: paperBookAnswerText(entry) }),
+                ...(entry.reason ? [new Paragraph({
+                  children: paperBookReasonParts(entry.reason).map((part): ParagraphChild => {
+                    if (part.type === 'math') return mathRun(part.value)
+                    const marks = part.marks ?? []
+                    const text = new TextRun({
+                      text: part.value,
+                      bold: marks.includes('strong'),
+                      italics: marks.includes('emphasis'),
+                      strike: marks.includes('strike_through'),
+                      subScript: marks.includes('subscript'),
+                      superScript: marks.includes('superscript'),
+                      ...(marks.includes('inlineCode') ? { font: 'Consolas' } : {}),
+                      ...(marks.some((mark) => mark.startsWith('link:')) ? { style: 'Hyperlink' } : {}),
+                    })
+                    const link = marks.find((mark) => mark.startsWith('link:'))
+                    return link ? new ExternalHyperlink({ link: link.slice(5), children: [text] }) : text
+                  }),
+                })] : []),
+              ]),
+            ],
+          }),
+        ],
+      })],
+    }),
+  ] : []
   return {
     properties: {
       page: {
@@ -1238,9 +1424,13 @@ function sectionOf(
         },
       },
     },
-    headers: { default: new Header({ children: headerParagraphs(page.furniture) }) },
-    footers: { default: new Footer({ children: [footerParagraph(page.furniture)] }) },
-    children: page.items.flatMap((item) => itemContent(item, build)),
+    headers: { default: new Header({ children: headerParagraphs(page.furniture, build) }) },
+    footers: { default: new Footer({ children: [footerParagraph(page.furniture, build)] }) },
+    children: book
+      ? bookContent
+      : page.furniture.coverPage
+      ? coverPageContent(page.furniture, build)
+      : page.items.flatMap((item) => itemContent(item, build)),
   }
 }
 
@@ -1287,7 +1477,6 @@ export function createExamDocxDocument(
         heading1: { run: { font: EXAM_FONT, size: halfPointsOf('sectionTitle'), bold: true } },
         heading2: { run: { font: EXAM_FONT, size: halfPointsOf('sectionTitle'), bold: true } },
       },
-      characterStyles: [{ id: OUTPUT_ID_STYLE, name: 'Output ID', run: { bold: true } }],
       paragraphStyles: [
         { id: WORK_SPACE_STYLES.blank, name: 'Work Space', basedOn: 'Normal' },
         { id: WORK_SPACE_STYLES.lines, name: 'Work Space Lines', basedOn: 'Normal' },

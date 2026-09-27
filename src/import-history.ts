@@ -1,3 +1,4 @@
+import { STORAGE_NAME, LOCAL_STORAGE_NAME } from './storage-schema'
 import type { ImageTag } from './source-document'
 
 /**
@@ -88,7 +89,7 @@ const newId = () => crypto.randomUUID()
 
 function open(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(IMPORT_HISTORY_DATABASE, 2)
+    const request = indexedDB.open(IMPORT_HISTORY_DATABASE + STORAGE_NAME.slice(LOCAL_STORAGE_NAME.length), 2)
     request.onupgradeneeded = () => {
       const database = request.result
       const imports = database.objectStoreNames.contains(STORE)

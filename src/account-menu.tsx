@@ -1,7 +1,10 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { supabase } from './supabase'
+import { checkCloudSync } from './cloud-account'
+import { getCloudSyncStatus, subscribeCloudSync, setCloudSyncStatus } from './cloud-sync-status'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import { CloudOff, Download, RefreshCw, Settings, Upload, X } from 'lucide-react'
+import { CloudOff, CloudCheck, CloudUpload, CloudDownload, CloudAlert, Download, RefreshCw, Settings, Upload, X } from 'lucide-react'
 import {
   accountBackupBlob,
   accountBackupFileName,
@@ -40,6 +43,64 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const panelId = useId()
+  const sync = useSyncExternalStore(subscribeCloudSync, getCloudSyncStatus)
+  const refresh = useRef<(() => void) | null>(null)
+  const presentation = {
+    local: { icon: CloudOff, label: 'Saved in this browser', detail: 'Go to Settings to sync or export your data.' },
+    checking: { icon: RefreshCw, label: 'Checking cloud sync', detail: 'Comparing this device’s work with your cloud copy.' },
+    synced: { icon: CloudCheck, label: 'Synced to cloud', detail: 'This device matches the last checked cloud copy.' },
+    pending: { icon: CloudUpload, label: 'Changes not synced', detail: 'Your work is saved in this browser. Use Sync now in Settings to upload it.' },
+    syncing: { icon: RefreshCw, label: 'Syncing to cloud', detail: 'Saving your work to your private cloud account.' },
+    conflict: { icon: CloudAlert, label: 'Sync needs attention', detail: 'The cloud copy has changed. Open Settings and sync to choose which copy to keep.' },
+    remote: { icon: CloudDownload, label: 'Cloud changes available', detail: 'Open Settings and sync to load the newer cloud copy.' },
+    error: { icon: CloudAlert, label: 'Cloud sync unavailable', detail: 'Your work remains on this device. Open Settings to retry.' },
+  }[sync.state]
+  const SyncIcon = presentation.icon
+
+  useEffect(() => {
+    if (!supabase) return
+    let stopped = false
+    let checking = false
+    let userId: string | null = null
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const check = async (remote = false) => {
+      if (stopped || checking || !userId || document.hidden) return
+      checking = true
+      try { await checkCloudSync(supabase!, userId, remote) } finally { checking = false }
+    }
+    refresh.current = () => { void check(true) }
+    // Inputs invalidate a green badge immediately; checking the stored digest
+    // distinguishes an actual edit from an unrelated form interaction.
+    const edited = () => {
+      if (getCloudSyncStatus().state === 'synced') setCloudSyncStatus({ state: 'checking' })
+      clearTimeout(timer)
+      timer = setTimeout(() => { void check() }, 700)
+    }
+    const focused = () => { void check(true) }
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (stopped) return
+      if (error) { setCloudSyncStatus({ state: 'error', detail: error.message }); return }
+      userId = data.session?.user.id ?? null
+      if (!userId) { setCloudSyncStatus({ state: 'local' }); return }
+      if (getCloudSyncStatus().state === 'local') setCloudSyncStatus({ state: 'checking' })
+      void check(true)
+    }).catch(() => { if (!stopped) setCloudSyncStatus({ state: 'error' }) })
+    const interval = setInterval(() => { void check() }, 5000)
+    document.addEventListener('input', edited)
+    document.addEventListener('change', edited)
+    window.addEventListener('focus', focused)
+    window.addEventListener('online', focused)
+    return () => {
+      stopped = true
+      refresh.current = null
+      clearInterval(interval)
+      clearTimeout(timer)
+      document.removeEventListener('input', edited)
+      document.removeEventListener('change', edited)
+      window.removeEventListener('focus', focused)
+      window.removeEventListener('online', focused)
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -61,17 +122,20 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
         type="button"
         className="storage-badge-button"
         data-status={status}
-        aria-label="Where your work is stored"
+        data-sync-status={sync.state}
+        aria-label={`Where your work is stored: ${presentation.label}`}
+        title={presentation.label}
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => { setOpen((value) => !value); if (!open) refresh.current?.() }}
       >
-        <CloudOff aria-hidden="true" />
+        <SyncIcon aria-hidden="true" className={sync.state === 'syncing' || sync.state === 'checking' ? 'account-spin' : undefined} />
       </button>
       {open && (
         <div className="account-panel" id={panelId} role="region" aria-label="Where your work is stored">
-          <strong>Your work is saved in your browser.</strong>
-          <p>Go to Settings to export your data.</p>
+          <strong role="status">{sync.state === 'local' ? 'Your work is saved in your browser.' : presentation.label}</strong>
+          <p>{presentation.detail}</p>
+          {sync.detail && <p className="account-warning">{sync.detail}</p>}
           {status === 'denied' && (
             <p className="account-warning">
               Persistent storage was denied. Your browser may clear this local data when space is needed.
