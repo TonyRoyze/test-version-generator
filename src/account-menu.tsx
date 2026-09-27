@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { checkCloudSync } from './cloud-account'
+import { checkCloudSync, CloudConflict, reloadCloudAccount, syncAccount } from './cloud-account'
 import { getCloudSyncStatus, subscribeCloudSync, setCloudSyncStatus } from './cloud-sync-status'
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import type { ReactNode } from 'react'
@@ -44,6 +44,9 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
   const root = useRef<HTMLDivElement>(null)
   const panelId = useId()
   const sync = useSyncExternalStore(subscribeCloudSync, getCloudSyncStatus)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMessage, setSyncMessage] = useState('')
+  const [syncError, setSyncError] = useState('')
   const refresh = useRef<(() => void) | null>(null)
   const presentation = {
     local: { icon: CloudOff, label: 'Saved in this browser', detail: 'Go to Settings to sync or export your data.' },
@@ -56,6 +59,42 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
     error: { icon: CloudAlert, label: 'Cloud sync unavailable', detail: 'Your work remains on this device. Open Settings to retry.' },
   }[sync.state]
   const SyncIcon = presentation.icon
+
+  const syncNow = async () => {
+    if (!supabase || syncing) return
+    setSyncing(true)
+    setSyncMessage('')
+    setSyncError('')
+    setCloudSyncStatus({ state: 'syncing' })
+    try {
+      const { data, error } = await supabase.auth.getSession()
+      if (error) throw error
+      const userId = data.session?.user.id
+      if (!userId) {
+        setSyncError('Sign in to sync your work.')
+        navigate(SETTINGS_PATH)
+        return
+      }
+      const result = await syncAccount(supabase, userId)
+      if (result === 'download') {
+        reloadCloudAccount(userId, 'download')
+        return
+      }
+      setCloudSyncStatus({ state: 'synced' })
+      setSyncMessage(result === 'unchanged' ? 'Your cloud copy is up to date.' : 'Your work is saved to the cloud.')
+    } catch (error) {
+      if (error instanceof CloudConflict) {
+        setCloudSyncStatus({ state: 'conflict' })
+        setSyncError('The cloud copy changed. Open Settings to choose which copy to keep.')
+      } else {
+        const detail = error instanceof Error ? error.message : 'Sync failed. Try again.'
+        setCloudSyncStatus({ state: 'error', detail })
+        setSyncError(detail)
+      }
+    } finally {
+      setSyncing(false)
+    }
+  }
 
   useEffect(() => {
     if (!supabase) return
@@ -136,12 +175,18 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
           <strong role="status">{sync.state === 'local' ? 'Your work is saved in your browser.' : presentation.label}</strong>
           <p>{presentation.detail}</p>
           {sync.detail && <p className="account-warning">{sync.detail}</p>}
+          {syncMessage && <p role="status" className="account-ok">{syncMessage}</p>}
+          {syncError && <p role="alert" className="account-warning">{syncError}</p>}
           {status === 'denied' && (
             <p className="account-warning">
               Persistent storage was denied. Your browser may clear this local data when space is needed.
             </p>
           )}
           <div className="account-actions">
+            <button type="button" className="primary-button account-action" disabled={syncing || !supabase} onClick={() => void syncNow()}>
+              <RefreshCw aria-hidden="true" className={syncing ? 'account-spin' : undefined} />
+              {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
             <button
               type="button"
               className="secondary-button account-action"

@@ -94,7 +94,7 @@ export function AccountSettings({ passwordSetup = false, standalone = false }: {
             window.location.replace('/settings')
           })}>Sign out</button>
         </div>
-        <p>Signing out keeps this account’s local work on this device. Sync first to make it available elsewhere.</p>
+        <p style={{ marginTop: '10px' }}>Signing out keeps this account's local work on this device. Sync first to make it available elsewhere.</p>
         {canImport && <div>
           <p>This browser has work from before login. Import it into this empty account, then sync to upload it. The original browser copy is retained.</p>
           <button className="secondary-button" disabled={busy} onClick={() => reloadCloudAccount(user.id, 'import-local')}>Import existing browser work</button>
