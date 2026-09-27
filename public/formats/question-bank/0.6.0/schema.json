@@ -628,6 +628,9 @@
         },
         "suggestedAnswer": {
           "$ref": "#/$defs/document"
+        },
+        "answerReason": {
+          "type": "string"
         }
       },
       "allOf": [

@@ -867,7 +867,96 @@ button { cursor: pointer; }
 .page-header--answer-key-later .page-identity { justify-content: flex-end; }
 /* A flex item, so its children's margins stay inside it — the same containment
    the measuring host relies on. */
-.page-content { flex: 1 1 auto; min-height: 0; }
+.page-content {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.exam-page--paper-book .page-content {
+  width: calc(100% - 180px);
+  margin-top: 28px;
+}
+.exam-page--paper-book.paper-book--first .page-content {
+  margin-top: 76px;
+}
+.exam-page--paper-book .page-footer {
+  visibility: hidden;
+}
+.paper-book-furniture {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: #151515;
+  font-family: Georgia, "Times New Roman", serif;
+}
+.paper-book-field { display: inline-grid; max-width: 100%; vertical-align: top; }
+.paper-book-field::after { grid-area: 1 / 1; content: attr(data-value) " "; visibility: hidden; white-space: pre-wrap; overflow-wrap: break-word; font: inherit; }
+.paper-book-field textarea { grid-area: 1 / 1; width: 0; min-width: 100%; resize: none; overflow: hidden; border: 0; padding: 0; margin: 0; color: inherit; background: transparent; font: inherit; line-height: inherit; outline: none; }
+.paper-book-field textarea:hover:not(:disabled) { box-shadow: 0 1px 0 #aaa; }
+.paper-book-field textarea:focus { box-shadow: 0 1px 0 #333; }
+.paper-book-field textarea:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
+.paper-book-furniture .paper-book-field, .paper-book-furniture .paper-book-field textarea { pointer-events: auto; }
+.paper-book-running-head {
+  position: absolute;
+  top: calc(var(--page-margin) - 1px);
+  right: var(--page-margin);
+  left: var(--page-margin);
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 11px;
+  font-style: italic;
+  white-space: nowrap;
+}
+.paper-book-opening-title {
+  position: absolute;
+  top: calc(var(--page-margin) + 25px);
+  right: var(--page-margin);
+  left: var(--page-margin);
+  text-align: center;
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1.2;
+}
+.paper-book-opening-title::after {
+  content: "";
+  display: block;
+  max-width: 400px;
+  margin: 5px auto 0;
+  border-bottom: 1px solid #222;
+}
+.exam-page--paper-book .exam-section { text-align: left; }
+.exam-page--paper-book .section-title { letter-spacing: .24em; }
+.paper-book-answer-column {
+  position: absolute;
+  top: calc(var(--page-margin) + 76px);
+  right: 30px;
+  bottom: calc(var(--page-margin) + 20px);
+  width: 200px;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  font-style: italic;
+}
+.exam-page--paper-book:not(.paper-book--first) .paper-book-answer-column {
+  top: calc(var(--page-margin) + 28px);
+}
+.paper-book-answer-column > div:first-child {
+  border-bottom: 1px solid #777;
+  padding-bottom: 4px;
+}
+.paper-book-answer-shade {
+  flex: 1;
+  margin-top: 20px;
+  background: #d6d6d6;
+  padding: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.5;
+}
+.paper-book-answer { overflow-wrap: anywhere; }
+.paper-book-answer + .paper-book-answer { margin-top: 10px; }
+.paper-book-answer-reason { margin: 2px 0 0; white-space: pre-wrap; }
 .page-footer {
   flex: none; height: var(--page-footer);
   display: flex; align-items: flex-end; justify-content: center;
@@ -1195,7 +1284,28 @@ button { cursor: pointer; }
    first column. That is what keeps it out of the geometry. */
 .choice-correctness-marker { display: inline-block; width: 0; overflow: visible; color: var(--easy-ink); }
 .choice-correctness-marker svg {
-  width: 12px; height: 12px; margin-left: -15px; vertical-align: -1px; stroke-width: 3.5;
+  width: 12px;
+  height: 12px;
+  margin-left: -15px;
+  vertical-align: -1px;
+  stroke-width: 3.5;
+}
+.choice-letter {
+  float: left;
+  margin-right: 6px;
+  font-weight: 400;
+}
+.choice-body {
+  display: flow-root;
+}
+.choice-body > :first-child {
+  margin-top: 0;
+}
+.choice-body > :last-child {
+  margin-bottom: 0;
+}
+.choice-body p {
+  margin: 0 0 2px;
 }
 .choice-letter { float: left; margin-right: 6px; font-weight: 400; }
 .choice-body > :first-child { margin-top: 0; }
@@ -1668,9 +1778,9 @@ button { cursor: pointer; }
 }
 @keyframes mc-caret-blink { 50% { opacity: 0; } }
 
-/* Short Answer: the Suggested Answer is one inline editing region at the end
+/* Suggested Answers and Explanations use one inline editing region at the end
    of the same document. Its dashed outline matches the Multiple Choice answer
-   section, so both question types present answers as one bounded input area.
+   section, so the answer and its explanation are bounded input areas.
    The label occupies the control lane used by a multiple-choice radio, while
    its optional rich text stays in the question's normal writing lane. */
 .milkdown [data-type="suggested-answer"] {
@@ -1692,6 +1802,10 @@ button { cursor: pointer; }
   content: 'Optional answer';
   position: absolute; inset: 4px auto auto 0;
   color: #a8988c; pointer-events: none;
+}
+.milkdown [data-type="suggested-answer"][data-label="Explanation"] .sa-body:has(> p:only-child > br.ProseMirror-trailingBreak)::before,
+.milkdown [data-type="suggested-answer"][data-label="Explanation"] .sa-body:has(> p:only-child:empty)::before {
+  content: "Optional explanation";
 }
 
 /* Matching: the items down the left and the Word Bank down the right, as the

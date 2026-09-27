@@ -112,6 +112,8 @@ export type Question = {
   /** Optional answer material for a Short Answer Question. It is canonical
    * Question Content, but is never shown on the student Exam stream. */
   suggestedAnswer?: ProseMirrorJSON
+  /** A short explanation of the correct choice on objective questions. */
+  answerReason?: string
   columns: ColumnSetting
   // Optional classification. Both are absent rather than empty on a question
   // nobody has classified, so an untagged question costs no storage and a
@@ -151,6 +153,8 @@ export type Exam = {
   labelStyles?: ExamLabelStyles
   /** Question ids at which printed question numbering starts over. */
   numberingRestarts?: string[]
+  /** Question ids that begin on a fresh printed page. */
+  pageBreaks?: string[]
   coverPage?: ExamCover
 }
 

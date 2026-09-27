@@ -24,6 +24,7 @@ export function CoverTemplatesPage({
   onApply: (examId: string | null, template: CoverPageTemplate) => void
 }) {
   const [templateToApply, setTemplateToApply] = useState<CoverPageTemplate | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<CoverPageTemplate | null>(null)
 
   return (
     <AppShell crumbs={[{ label: 'Home', href: '/' }, { label: 'Cover Page Templates' }]} persistentStorage={persistentStorage}>
@@ -41,7 +42,7 @@ export function CoverTemplatesPage({
                 </div>
                 <div className="cover-template-preview-page" aria-hidden="true">
                   <div className="exam-page cover-template-paper" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}>
-                    <PrebuiltExamPaper cover={template.cover} />
+                    <PrebuiltExamPaper template={template} />
                   </div>
                 </div>
               </div>
@@ -50,11 +51,28 @@ export function CoverTemplatesPage({
                 <h2>{template.name}</h2>
                 <p>{template.description}</p>
               </div>
-              <button type="button" className="secondary-button cover-template-apply" onClick={() => setTemplateToApply(template)}>Use template</button>
+              <div className="cover-template-actions">
+                <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(template)}>Preview design</button>
+                <button type="button" className="secondary-button" onClick={() => setTemplateToApply(template)}>Use template</button>
+              </div>
             </article>
           ))}
         </div>
       </section>
+      {previewTemplate && (
+        <div className="cover-template-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewTemplate(null) }}>
+          <section className="cover-template-design-dialog" role="dialog" aria-modal="true" aria-labelledby="cover-template-preview-heading">
+            <div className="cover-template-design-heading">
+              <h2 id="cover-template-preview-heading">{previewTemplate.name} design</h2>
+              <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>Close preview</button>
+            </div>
+            <div className="cover-template-design-pages">
+              <div><h3>Cover</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltCover template={previewTemplate} /></article></div></div>
+              <div><h3>Exam paper</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltExamPaper template={previewTemplate} /></article></div></div>
+            </div>
+          </section>
+        </div>
+      )}
       {templateToApply && (
         <div className="cover-template-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateToApply(null) }}>
           <section className="cover-template-dialog" role="dialog" aria-modal="true" aria-labelledby="apply-cover-template-heading">

@@ -57,6 +57,8 @@ import {
 import type { ReactNode } from 'react'
 import {
   cleanDocument,
+  explanationDocumentOf,
+  explanationTextOf,
   suggestedAnswerDocumentOf,
   withSuggestedAnswer,
   withoutSuggestedAnswer,
@@ -79,7 +81,7 @@ import { ExamPage } from './exam-page'
 import { CoverDesignPage } from './cover-page-view'
 import { DEFAULT_EXAM_COVER } from './page-cover'
 import { CoverTemplatesPage } from './cover-templates-page'
-import type { CoverPageTemplate } from './cover-templates/templates'
+import { COVER_PAGE_TEMPLATES, DEFAULT_COVER_PAGE_TEMPLATE, type CoverPageTemplate } from './cover-templates/templates'
 import { QuestionBankPane } from './question-bank-pane'
 import { NO_FILTER, topicOptions, type QuestionBankFilter } from './question-bank-view'
 import { useSelection } from './use-selection'
@@ -454,7 +456,7 @@ function CrepeQuestion({
   value,
   onChange,
   onReady,
-  suggestedAnswer = false,
+  answerBlock = false,
   fixedChoices = false,
   matching = false,
   multipart = false,
@@ -462,7 +464,7 @@ function CrepeQuestion({
   value: ProseMirrorJSON
   onChange: (doc: ProseMirrorJSON) => void
   onReady: (readDocument: () => ProseMirrorJSON) => void
-  suggestedAnswer?: boolean
+  answerBlock?: 'Suggested Answer' | 'Explanation' | false
   /** Whether the answer list is a True/False question's fixed pair, which the
    *  teacher chooses between rather than writes. */
   fixedChoices?: boolean
@@ -558,7 +560,7 @@ function CrepeQuestion({
     })
     crepe.editor
       .use(multipleChoiceMode(true, fixedChoices))
-      .use(suggestedAnswerMode(suggestedAnswer))
+      .use(suggestedAnswerMode(answerBlock))
       .use(matchingMode(matching))
       .use(multipartMode(multipart))
       .use(subscriptSchema)
@@ -700,6 +702,10 @@ function QuestionDialog({
   const [doc] = useState<ProseMirrorJSON>(() =>
     type === 'open'
       ? withSuggestedAnswer(question.doc, question.suggestedAnswer)
+      : type === 'multiple-choice' || type === 'true-false'
+        ? withSuggestedAnswer(question.doc, question.answerReason
+          ? explanationDocumentOf(question.answerReason)
+          : undefined, 'Explanation')
       : question.doc,
   )
   const [difficulty, setDifficulty] = useState<Difficulty | ''>(question.difficulty ?? '')
@@ -754,13 +760,20 @@ function QuestionDialog({
         ...question,
         type,
         doc: await ownDocumentMedia(
-          type === 'open' ? withoutSuggestedAnswer(edited) : edited,
+          type === 'open' || type === 'multiple-choice' || type === 'true-false'
+            ? withoutSuggestedAnswer(edited)
+            : edited,
         ),
       }
       if (difficulty) saved.difficulty = difficulty
       else delete saved.difficulty
       if (topics.length > 0) saved.topics = [...topics]
       else delete saved.topics
+      if (type === 'multiple-choice' || type === 'true-false') {
+        const explanation = explanationTextOf(suggestedAnswerDocumentOf(edited))
+        if (explanation) saved.answerReason = explanation
+        else delete saved.answerReason
+      }
       if (type === 'open') {
         const answer = suggestedAnswerDocumentOf(edited)
         if (answer) saved.suggestedAnswer = await ownDocumentMedia(answer)
@@ -903,7 +916,7 @@ function QuestionDialog({
         <div className="dialog-editor">
           <CrepeQuestion
             value={doc}
-            suggestedAnswer={type === 'open'}
+            answerBlock={type === 'open' ? 'Suggested Answer' : type === 'multiple-choice' || type === 'true-false' ? 'Explanation' : false}
             fixedChoices={type === 'true-false'}
             matching={type === 'matching'}
             multipart={type === 'multipart'}
@@ -2474,10 +2487,25 @@ function ExamEditor({
           },
           { kind: 'separator' },
           {
-            kind: 'action',
-            label: 'Open cover designer',
+            kind: 'submenu',
+            label: 'Change template',
             icon: <Pencil />,
-            onSelect: () => navigate('/cover-design'),
+            items: [
+              ...COVER_PAGE_TEMPLATES.map((template) => ({
+                kind: 'radio' as const,
+                label: template.name,
+                checked: state.workingCopy.coverPage !== undefined
+                  && (state.workingCopy.coverPage.templateId ?? DEFAULT_COVER_PAGE_TEMPLATE.id) === template.id,
+                disabled: isHistoricalBrowsing,
+                onSelect: () => store.setCoverPage({ ...structuredClone(template.cover), templateId: template.id }),
+              })),
+              {
+                kind: 'action' as const,
+                label: 'Edit template details',
+                disabled: isHistoricalBrowsing,
+                onSelect: () => navigate('/cover-design'),
+              },
+            ],
           },
         ] : documentMenu.kind === 'file' ? [
           {
@@ -2560,7 +2588,11 @@ function ExamEditor({
         <ExportDialog
           configuration={exportDialog.configuration}
           onConfigurationChange={(configuration) => {
-            writeExportPreferences({ format: configuration.format, selection: configuration.selection })
+            writeExportPreferences({
+              format: configuration.format,
+              selection: configuration.selection,
+              includeCoverPage: configuration.includeCoverPage,
+            })
             writeShufflePreferences(examId, {
               shuffle: configuration.shuffle ?? NO_SHUFFLE,
               versionCount: configuration.versionCount ?? DEFAULT_VERSION_COUNT,
@@ -2568,6 +2600,7 @@ function ExamEditor({
             setExportDialog((current) => (current ? { ...current, configuration } : current))
           }}
           maxVersions={maxVersionCount(exam, arrangement, exportDialog.configuration.shuffle ?? NO_SHUFFLE)}
+          showCoverPageOption={exam.coverPage?.templateId !== 'paper-book'}
           previewPlans={exportPreview?.documents ?? []}
           empty={exam.questions.length === 0}
           blocked={exportBlocked}
@@ -2614,6 +2647,9 @@ function ExamEditor({
           configuration={{
             format: reExportRecord.format,
             selection: reExportRecord.selection,
+            includeCoverPage: reExportRecord.plans.some((plan) =>
+              plan.pages.some((page) => page.furniture.coverPage !== undefined),
+            ),
             ...(reExportRecord.versions
               ? { shuffle: reExportRecord.shuffle ?? NO_SHUFFLE, versionCount: reExportRecord.versions.length }
               : { shuffle: NO_SHUFFLE, versionCount: 1 }),
@@ -2737,6 +2773,9 @@ function ExamEditor({
             }
             onSetNumberingRestart={(questionId, enabled) =>
               store.setNumberingRestart(questionId, enabled)
+            }
+            onSetPageBreak={(questionIds, enabled) =>
+              store.setQuestionPageBreak(questionIds, enabled)
             }
             onSetWorkSpace={(questionIds, patch) =>
               store.setQuestionWorkSpace(questionIds, patch)

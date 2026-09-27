@@ -29,6 +29,7 @@ import {
   type QuestionItem,
 } from './export-plan'
 import { arrangementRange } from './export-preparation'
+import { paperBookAnswerLines } from './cover-templates/paper-book-answers'
 import type { ProseMirrorJSON } from './question-doc'
 
 /** One block of content, normalized. See `blockLine` for the vocabulary. */
@@ -639,6 +640,13 @@ function furnitureLines(furniture: PageFurniture): {
   header: ContentLine[]
   footer: ContentLine[]
 } {
+  if (furniture.paperBook) {
+    const cover = furniture.paperBook
+    return {
+      header: [`para «emphasis»${cover.subject} ${cover.schoolName} ➭ page ${furniture.pageNumber}«/»`],
+      footer: ['para'],
+    }
+  }
   const identity = [
     ...(furniture.identityLine !== undefined
       ? [normalizeSpace(furniture.identityLine).trim()]
@@ -675,7 +683,10 @@ export function layoutFingerprint(
       height: plan.pageSize.height,
       margin: plan.pageSize.margin,
       ...furnitureLines(page.furniture),
-      content: page.items.flatMap((item) => planItemLines(item, images)),
+      content: [
+        ...page.items.flatMap((item) => planItemLines(item, images)),
+        ...(page.furniture.paperBook ? paperBookAnswerLines(page.items) : []),
+      ],
     })),
   )
   return {

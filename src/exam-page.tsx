@@ -31,6 +31,8 @@ import {
 import { headerLineOf, type HeaderLine } from './page-header'
 import type { ExamCover } from './page-cover'
 import { CoverPageView } from './cover-page-view'
+import { PaperBookFurniture } from './cover-templates/paper-book'
+import { paperBookAnswersOf } from './cover-templates/paper-book-answers'
 import {
   LABEL_KINDS,
   LABEL_BRACKET_LABELS,
@@ -232,7 +234,9 @@ function questionMenuItems({
   onRemove,
   onSetColumns,
   onSetNumberingRestart,
+  onSetPageBreak,
   numberingRestarted,
+  pageBreakBefore,
   workSpace,
   workSpaceOfPart,
   onSetWorkSpace,
@@ -253,7 +257,9 @@ function questionMenuItems({
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
   onSetNumberingRestart: (questionId: string, enabled: boolean) => void
+  onSetPageBreak: (questionIds: readonly string[], enabled: boolean) => void
   numberingRestarted: boolean
+  pageBreakBefore: boolean
   selectedQuestionIds: readonly string[]
 }): MenuItem[] {
   // Every action that can sensibly apply to more than one question applies to
@@ -309,6 +315,12 @@ function questionMenuItems({
       checked: numberingRestarted,
       icon: <ListRestart />,
       onSelect: () => onSetNumberingRestart(question.id, !numberingRestarted),
+    },
+    {
+      kind: 'checkbox',
+      label: 'Start on next page',
+      checked: pageBreakBefore,
+      onSelect: () => onSetPageBreak(actedOnIds, !pageBreakBefore),
     },
   )
   // Columns are a multiple-choice question's business. An open question has no
@@ -1352,7 +1364,8 @@ export function ExportPreview({ plan }: { plan: LayoutPlan }) {
   return (
     <main className="exam-workspace" style={PAGE_GEOMETRY}>
       {plan.pages.map((page) => (
-        <article className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}`} key={`${page.stream}-${page.header}-${page.number}`}>
+        <article className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`} key={`${page.stream}-${page.header}-${page.number}`}>
+          {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} />}
           {page.furniture.coverPage ? <CoverPageView
             cover={page.furniture.coverPage}
             printedPageCount={page.furniture.printedPageCount ?? 1}
@@ -1396,6 +1409,7 @@ export function ExamPage({
   onRemove,
   onSetColumns,
   onSetNumberingRestart,
+  onSetPageBreak,
   onSetWorkSpace,
   onTitleChange,
   onSectionHeadingChange,
@@ -1425,6 +1439,7 @@ export function ExamPage({
   onRemove: (questionIds: readonly string[]) => void
   onSetColumns: (questionIds: readonly string[], columns: ColumnSetting) => void
   onSetNumberingRestart: (questionId: string, enabled: boolean) => void
+  onSetPageBreak: (questionIds: readonly string[], enabled: boolean) => void
   /** Changes the room left for work below Short Answer questions. */
   onSetWorkSpace: SetWorkSpace
   /** Renames the Exam from its own title line. See `PageHeaderContent`. */
@@ -1802,7 +1817,7 @@ export function ExamPage({
     >
       {pages.map((page, index) => (
         <article
-          className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}`}
+          className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`}
           key={`${page.header}-${page.number}`}
           onClick={clearOnBackground}
         >
@@ -1839,6 +1854,7 @@ export function ExamPage({
                     />,
                   ]),
             ])}
+          {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} disabled={titleDisabled} onChange={onCoverPageChange} />}
           {page.furniture.coverPage ? <CoverPageView
             cover={page.furniture.coverPage}
             printedPageCount={page.furniture.printedPageCount ?? 1}
@@ -1944,7 +1960,9 @@ export function ExamPage({
             onRemove,
             onSetColumns,
             onSetNumberingRestart,
+            onSetPageBreak,
             numberingRestarted: exam.numberingRestarts?.includes(menuQuestion.id) ?? false,
+            pageBreakBefore: exam.pageBreaks?.includes(menuQuestion.id) ?? false,
             workSpace: workSpaceOf(exam, menuQuestion.id),
             workSpaceOfPart: (partId) => workSpaceOf(exam, partId),
             onSetWorkSpace,

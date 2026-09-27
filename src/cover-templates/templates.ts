@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { DEFAULT_EXAM_COVER } from '../page-cover'
 import type { ExamCover } from '../page-cover'
+import { PaperBookCover } from './paper-book'
 import { RoyalInstituteCover } from './royal-institute-cover'
 import type { CoverTemplateProps } from './template-types'
 
@@ -23,9 +24,18 @@ export const COVER_PAGE_TEMPLATES: readonly CoverPageTemplate[] = [
   {
     id: 'paper-book',
     name: 'Paper Book',
-    description: 'A simple cover with a page number and no candidate instructions.',
-    cover: DEFAULT_EXAM_COVER,
-    component: RoyalInstituteCover,
+    description: 'A unit booklet with a running heading, question column, and answers sidebar.',
+    cover: {
+      ...DEFAULT_EXAM_COVER,
+      schoolName: 'Unit 15',
+      schoolSubtitle: '',
+      assessment: 'MCQ Section',
+      grade: 'GCE O/L',
+      subject: "Hydrostatic Pressure and It's Applications",
+      instructions: [],
+      marks: [],
+    },
+    component: PaperBookCover,
   },
 ]
 

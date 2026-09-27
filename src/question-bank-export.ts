@@ -200,6 +200,7 @@ export type QuestionBankRecordQuestion = {
   /** A Multipart question's Parts, in lettered order; `stem` is the shared material. */
   parts?: QuestionBankRecordPart[]
   suggestedAnswer?: SemanticDocument
+  answerReason?: string
 }
 
 export type QuestionBankRecord = {
@@ -506,6 +507,7 @@ function portableQuestion(
     ...(topicsOf(question).length > 0
       ? { topics: [...topicsOf(question)] }
       : {}),
+    ...(question.answerReason ? { answerReason: question.answerReason } : {}),
   }
   if (question.type === 'open') {
     return {

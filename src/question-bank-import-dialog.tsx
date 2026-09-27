@@ -226,6 +226,7 @@ function readingOfRecordQuestion(
       },
     } : {}),
     ...(question.suggestedAnswer ? { suggestedAnswer: previewDocument(question.suggestedAnswer) } : {}),
+    ...(question.answerReason ? { answerReason: question.answerReason } : {}),
     ...(question.parts ? {
       parts: question.parts.map((part, index) => ({
         id: part.id,

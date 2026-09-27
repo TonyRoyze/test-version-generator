@@ -173,6 +173,8 @@ export function selectedExam(
   const hasAnySectionOf = Object.keys(sectionOf).length > 0
   const numberingRestarts = (draft.numberingRestarts ?? []).filter((id) => referenced.has(id))
   const hasNumberingRestarts = numberingRestarts.length > 0
+  const pageBreaks = (draft.pageBreaks ?? []).filter((id) => referenced.has(id))
+  const hasPageBreaks = pageBreaks.length > 0
   const headingSize =
     isHeadingSize(draft.headingSize) && draft.headingSize !== DEFAULT_HEADING_SIZE
       ? draft.headingSize
@@ -199,6 +201,7 @@ export function selectedExam(
     && sameExamFurniture(previous.exam.furniture, furniture)
     && sameExamLabelStyles(previous.exam.labelStyles, labelStyles)
     && sameIds(previous.exam.numberingRestarts, hasNumberingRestarts ? numberingRestarts : undefined)
+    && sameIds(previous.exam.pageBreaks, hasPageBreaks ? pageBreaks : undefined)
     && sameExamCover(previous.exam.coverPage, coverPage)
     && previous.exam.textSize === textSize
       ? previous.exam
@@ -215,6 +218,7 @@ export function selectedExam(
           ...(furniture ? { furniture } : {}),
           ...(labelStyles ? { labelStyles } : {}),
           ...(hasNumberingRestarts ? { numberingRestarts } : {}),
+          ...(hasPageBreaks ? { pageBreaks } : {}),
           coverPage,
         }
 

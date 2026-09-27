@@ -20,7 +20,7 @@ import {
   workSpaceLine,
 } from './export-fingerprint'
 import { child, descendants, parseXml, path, type XmlNode } from './xml'
-import { BLOCKQUOTE_TABLE_STYLE, SIDE_BY_SIDE_TABLE_STYLE } from './docx-export'
+import { BLOCKQUOTE_TABLE_STYLE, PAPER_BOOK_TABLE_STYLE, PAPER_BOOK_TITLE_STYLE, SIDE_BY_SIDE_TABLE_STYLE } from './docx-export'
 
 // ---------------------------------------------------------------------------
 // Package reading
@@ -265,6 +265,7 @@ function cellsOf(table: XmlNode): XmlNode[] {
 
 function tableLines(table: XmlNode, reader: Reader): ContentLine[] {
   const style = tableStyleOf(table)
+  if (style === PAPER_BOOK_TABLE_STYLE) return cellsOf(table).flatMap((cell) => blockLines(cell, reader))
   if (style === BLOCKQUOTE_TABLE_STYLE) {
     return ['box', ...cellsOf(table).flatMap((cell) => blockLines(cell, reader)), '/box']
   }
@@ -341,6 +342,7 @@ function blockLines(container: XmlNode, reader: Reader): ContentLine[] {
     closeSpace()
     if (node.name === 'w:p') {
       if (isSectionBreak(node)) continue
+      if (paragraphStyleOf(node) === PAPER_BOOK_TITLE_STYLE) continue
       lines.push(paragraphLine(node, reader))
     } else if (node.name === 'w:tbl') {
       lines.push(...tableLines(node, reader))

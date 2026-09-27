@@ -51,6 +51,7 @@ export type ExamWorkingCopy = {
   furniture?: import('./page-furniture').ExamFurniture
   labelStyles?: import('./number-style').ExamLabelStyles
   numberingRestarts?: string[]
+  pageBreaks?: string[]
   coverPage?: import('./page-cover').ExamCover
 }
 
@@ -144,6 +145,7 @@ export function withReferencesRemoved(
     ? { ...draft.workSpace }
     : undefined
   const numberingRestarts = draft.numberingRestarts?.filter((id) => !removing.has(id))
+  const pageBreaks = draft.pageBreaks?.filter((id) => !removing.has(id))
   const sectionOf = draft.sectionOf
     ? { ...draft.sectionOf }
     : undefined
@@ -160,6 +162,7 @@ export function withReferencesRemoved(
     ...(columns ? { columns } : {}),
     ...(workSpace ? { workSpace } : {}),
     ...(numberingRestarts && numberingRestarts.length > 0 ? { numberingRestarts } : {}),
+    ...(pageBreaks && pageBreaks.length > 0 ? { pageBreaks } : {}),
     ...(sectionOf ? { sectionOf } : {}),
   }
 }

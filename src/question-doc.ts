@@ -357,12 +357,13 @@ export function suggestedAnswerNodeOf(
   return childrenOf(doc).find((node) => node.type === 'suggestedAnswer')
 }
 
-// The document to hand the editor for a Short Answer question: the stem with
-// a Suggested Answer block at the end, holding the answer already saved for it.
-// The block is always present, so an answer is typed rather than added.
+// The document to hand the editor for a Short Answer or objective question:
+// its content with an inline answer block at the end. The block is always
+// present, so an answer or explanation is typed rather than added.
 export function withSuggestedAnswer(
   doc: ProseMirrorJSON,
   answer?: ProseMirrorJSON,
+  label: 'Suggested Answer' | 'Explanation' = 'Suggested Answer',
 ): ProseMirrorJSON {
   const content = answer ? childrenOf(answer) : []
   const without = withoutSuggestedAnswer(doc)
@@ -373,6 +374,7 @@ export function withSuggestedAnswer(
       ...(stem.length > 0 ? stem : [{ type: 'paragraph' }]),
       {
         type: 'suggestedAnswer',
+        attrs: { label },
         content: content.length > 0 ? content : [{ type: 'paragraph' }],
       },
     ],
@@ -412,6 +414,82 @@ export function suggestedAnswerDocumentOf(
   const content = childrenOf(node)
   if (content.every(isBlankParagraph)) return undefined
   return { type: 'doc', content }
+}
+
+/** Plain explanation text from the same inline editor block used for Suggested Answers. */
+export function explanationTextOf(doc: ProseMirrorJSON | undefined): string {
+  if (!doc) return ''
+  const attrsOf = (node: ProseMirrorJSON): Record<string, unknown> =>
+    typeof node.attrs === 'object' && node.attrs !== null
+      ? node.attrs as Record<string, unknown>
+      : {}
+  const parts: { type: 'text' | 'math'; value: string; marks?: string[] }[] = []
+  const visit = (node: ProseMirrorJSON) => {
+    if (node.type === 'hardBreak') {
+      parts.push({ type: 'text', value: ' ' })
+      return
+    }
+    if (node.type === 'math_inline') {
+      parts.push({ type: 'math', value: typeof attrsOf(node).value === 'string' ? attrsOf(node).value as string : '' })
+      return
+    }
+    if (typeof node.text === 'string') {
+      const supportedMarks = Array.isArray(node.marks) ? (node.marks as ProseMirrorJSON[]).flatMap((mark) => {
+        if (['strong', 'emphasis', 'inlineCode', 'strike_through', 'subscript', 'superscript'].includes(String(mark.type ?? ''))) return [String(mark.type)]
+        if (mark.type === 'link' && typeof attrsOf(mark).href === 'string') return [`link:${attrsOf(mark).href as string}`]
+        return []
+      }) : []
+      parts.push({ type: 'text', value: node.text, ...(supportedMarks.length ? { marks: supportedMarks } : {}) })
+      return
+    }
+    childrenOf(node).forEach(visit)
+  }
+  childrenOf(doc).forEach((block, index) => {
+    if (index) parts.push({ type: 'text', value: ' ' })
+    visit(block)
+  })
+  const normalized: typeof parts = parts.flatMap((part) => part.type === 'text'
+    ? [{ ...part, value: part.value.replace(/\s+/g, ' ') }]
+    : [part])
+  const first = normalized.findIndex((part) => part.type === 'math' || part.value.trim())
+  let last = normalized.length - 1
+  while (last >= 0 && normalized[last]!.type !== 'math' && !normalized[last]!.value.trim()) last -= 1
+  return first < 0 ? '' : `\u001ePB1:${JSON.stringify(normalized.slice(first, last + 1))}`
+}
+
+/** Rebuild the editable explanation document from its compact bank representation. */
+export function explanationDocumentOf(value: string | undefined): ProseMirrorJSON | undefined {
+  if (!value) return undefined
+  const prefix = '\u001ePB1:'
+  let parts: { type: 'text' | 'math'; value: string; marks?: string[] }[] | undefined
+  if (value.startsWith(prefix)) {
+    try {
+      const parsed: unknown = JSON.parse(value.slice(prefix.length))
+      if (Array.isArray(parsed)) parts = parsed as typeof parts
+    } catch { /* Older or malformed data is treated as plain text. */ }
+  }
+  if (!parts) {
+    parts = []
+    const delimiter = /\\\(([\s\S]*?)\\\)/g
+    let offset = 0
+    for (const match of value.matchAll(delimiter)) {
+      const index = match.index ?? 0
+      if (index > offset) parts.push({ type: 'text', value: value.slice(offset, index) })
+      parts.push({ type: 'math', value: match[1] ?? '' })
+      offset = index + match[0].length
+    }
+    if (offset < value.length) parts.push({ type: 'text', value: value.slice(offset) })
+  }
+  const content: ProseMirrorJSON[] = parts.map((part) => part.type === 'math'
+    ? { type: 'math_inline', attrs: { value: part.value } }
+    : {
+        type: 'text',
+        text: part.value,
+        ...(part.marks?.length ? { marks: part.marks.map((mark) => mark.startsWith('link:')
+          ? { type: 'link', attrs: { href: mark.slice(5) } }
+          : { type: mark }) } : {}),
+      })
+  return { type: 'doc', content: [{ type: 'paragraph', content }] }
 }
 
 // The document with its multiple-choice node taken out, if it has one. A

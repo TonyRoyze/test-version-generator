@@ -309,8 +309,12 @@ export const keepFixedChoices = $prose((ctx: Ctx) =>
       const choice = newState.schema.nodes.multipleChoiceChoice
       const paragraph = newState.schema.nodes.paragraph
       if (!list || !choice || !paragraph) return null
+      let explanationPosition = newState.doc.content.size
+      newState.doc.forEach((node, offset) => {
+        if (node.type.name === 'suggestedAnswer') explanationPosition = offset
+      })
       return newState.tr.insert(
-        newState.doc.content.size,
+        explanationPosition,
         list.create(
           null,
           TRUE_FALSE_LABELS.map((label) =>

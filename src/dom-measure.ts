@@ -23,7 +23,7 @@
 
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { PAGE_CONTENT_WIDTH, type Measure, type PageItem } from './export-plan'
+import { PAGE_CONTENT_WIDTH, PAPER_BOOK_CONTENT_WIDTH, type Measure, type PageItem } from './export-plan'
 import { BODY_PX } from './export-typography'
 import { PageItemMeasureView } from './page-item-view'
 import type { TextSize } from './section-headings'
@@ -75,14 +75,16 @@ const HEIGHT_CACHE_LIMIT = 600
 //
 // The host carries the Exam's text size exactly as a page's content does, and
 // the size is part of what a height is remembered by.
-function itemHeight(item: PageItem, textSize?: TextSize): number {
+function itemHeight(item: PageItem, textSize?: TextSize, width = PAGE_CONTENT_WIDTH): number {
   const element = measureHost()
   if (!element) return 0
   const markup = renderToStaticMarkup(createElement(PageItemMeasureView, { item }))
-  const key = `${textSize ?? 'normal'}:${markup}`
+  const key = `${width}:${textSize ?? 'normal'}:${markup}`
   const remembered = heights.get(key)
   if (remembered !== undefined) return remembered
   element.style.fontSize = textSize && textSize !== 'normal' ? `${BODY_PX[textSize]}px` : ''
+  element.style.width = `${width}px`
+  element.classList.toggle('exam-page--paper-book', width === PAPER_BOOK_CONTENT_WIDTH)
   element.innerHTML = markup
   // Fractional, unlike `scrollHeight`: the heights of a dozen items are summed
   // against a fixed box, and a rounded pixel each would be a rounded page.

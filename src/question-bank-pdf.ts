@@ -693,6 +693,11 @@ export async function createQuestionBankPdf(
       drawText(context, 'Suggested Answer', { font: 'bold', size: 12 })
       drawDocument(context, question.suggestedAnswer)
     }
+    if (question.answerReason) {
+      context.y -= 3
+      drawText(context, 'Explanation', { font: 'bold', size: 12 })
+      drawText(context, question.answerReason)
+    }
     context.y -= 14
   }
 

@@ -5,32 +5,30 @@ import type { Node as ProseNode } from '@milkdown/kit/prose/model'
 import { Plugin } from '@milkdown/kit/prose/state'
 import type { NodeView } from '@milkdown/kit/prose/view'
 
-// Whether the question being edited keeps a Suggested Answer block. On for an
-// Short Answer question in the editor, off everywhere else — a Multiple Choice
-// question answers with its choices, and read-only views draw the stored
-// Suggested Answer themselves rather than an editing region.
-export const suggestedAnswerModeCtx = createSlice(false, 'suggestedAnswerMode')
+// Whether the question being edited keeps an inline answer block, and the
+// label it shows. Short Answer uses Suggested Answer; objective questions use
+// Explanation below their choices.
+export type AnswerBlockLabel = 'Suggested Answer' | 'Explanation'
+export const suggestedAnswerModeCtx = createSlice<AnswerBlockLabel | false>(false, 'suggestedAnswerMode')
 
-export const suggestedAnswerMode = (enabled: boolean): MilkdownPlugin => (
+export const suggestedAnswerMode = (label: AnswerBlockLabel | false): MilkdownPlugin => (
   ctx,
 ) => {
-  ctx.inject(suggestedAnswerModeCtx, enabled)
+  ctx.inject(suggestedAnswerModeCtx, label)
   return () => () => {
     ctx.remove(suggestedAnswerModeCtx)
   }
 }
 
-// The Suggested Answer region of a Short Answer question: one block holding a
-// paragraph and any following blocks, exactly like a multiple-choice answer
-// cell. It is authored inside the question document and lifted back out into
-// the Question's own Suggested Answer when the dialog saves, so it never
-// reaches storage or export.
+// The inline answer region is authored inside the editing document and lifted
+// back out when the dialog saves. Only the question content reaches storage.
 export const suggestedAnswerSchema = $nodeSchema('suggestedAnswer', () => ({
   group: 'block',
   content: 'paragraph block*',
   defining: true,
-  parseDOM: [{ tag: 'div[data-type="suggested-answer"]' }],
-  toDOM: () => ['div', { 'data-type': 'suggested-answer' }, 0],
+  attrs: { label: { default: 'Suggested Answer' } },
+  parseDOM: [{ tag: 'div[data-type="suggested-answer"]', getAttrs: (dom) => ({ label: (dom as HTMLElement).dataset.label ?? 'Suggested Answer' }) }],
+  toDOM: (node) => ['div', { 'data-type': 'suggested-answer', 'data-label': node.attrs.label }, 0],
   parseMarkdown: { match: () => false, runner: () => undefined },
   toMarkdown: { match: () => false, runner: () => undefined },
 }))
@@ -56,15 +54,14 @@ export const keepSuggestedAnswer = $prose((ctx: Ctx) =>
       if (!block || !paragraph) return null
       return newState.tr.insert(
         newState.doc.content.size,
-        block.create(null, paragraph.create()),
+        block.create({ label: ctx.get(suggestedAnswerModeCtx) }, paragraph.create()),
       )
     },
   }),
 )
 
 // Node view: the label sits where a choice carries its radio, and the editable
-// answer beside it. The label is the whole control — there is nothing to pick,
-// so whatever is typed here is the Suggested Answer.
+// answer beside it. The label is the whole control — there is nothing to pick.
 export const suggestedAnswerView = $view(
   suggestedAnswerSchema.node,
   () => (initialNode: ProseNode): NodeView => {
@@ -73,11 +70,12 @@ export const suggestedAnswerView = $view(
     const dom = document.createElement('div')
     dom.className = 'sa-block'
     dom.dataset.type = 'suggested-answer'
+    dom.dataset.label = String(initialNode.attrs.label)
 
     const label = document.createElement('div')
     label.className = 'sa-label'
     label.contentEditable = 'false'
-    label.textContent = 'Suggested Answer'
+    label.textContent = String(initialNode.attrs.label)
 
     const contentDOM = document.createElement('div')
     contentDOM.className = 'sa-body'
@@ -90,6 +88,8 @@ export const suggestedAnswerView = $view(
       update(next) {
         if (next.type !== node.type) return false
         node = next
+        dom.dataset.label = String(next.attrs.label)
+        label.textContent = String(next.attrs.label)
         return true
       },
       ignoreMutation: (mutation) => label.contains(mutation.target),
