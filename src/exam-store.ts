@@ -213,6 +213,7 @@ function isWorkingCopy(value: unknown): value is ExamWorkingCopy {
     (draft.workSpace === undefined || isWorkSpaceSettings(draft.workSpace)) &&
     (draft.choiceOrder === undefined || isChoiceOrder(draft.choiceOrder)) &&
     (draft.numberingRestarts === undefined || isStringList(draft.numberingRestarts)) &&
+    (draft.pageBreaks === undefined || isStringList(draft.pageBreaks)) &&
     (draft.sections === undefined || isSectionList(draft.sections)) &&
     (draft.sectionOf === undefined || isSectionPlacement(draft.sectionOf)) &&
     (draft.sectionHeadings === undefined || isSectionHeadings(draft.sectionHeadings)) &&
@@ -246,6 +247,7 @@ const WORKING_COPY_SETTINGS: Readonly<Record<string, (value: unknown) => boolean
   workSpace: isWorkSpaceSettings,
   choiceOrder: isChoiceOrder,
   numberingRestarts: isStringList,
+  pageBreaks: isStringList,
   sections: isSectionList,
   sectionOf: isSectionPlacement,
   sectionHeadings: isSectionHeadings,
@@ -331,6 +333,7 @@ export type ExamStore = {
   setFurnitureLayout(region: 'header' | 'footer', layout: FurnitureLayout): void
   setLabelStyle(kind: LabelKind, style: LabelStyle): void
   setNumberingRestart(questionId: string, enabled: boolean): void
+  setQuestionPageBreak(questionIds: readonly string[], enabled: boolean): void
   setCoverPage(cover: ExamCover): void
   /** Refreshes the canonical Questions projected from open Question Banks.
    * Workspace browsing is not an Exam command and creates no Undo step. */
@@ -461,6 +464,8 @@ function sameExamWorkingCopy(left: ExamWorkingCopy, right: ExamWorkingCopy): boo
     )
     && (left.numberingRestarts ?? []).length === (right.numberingRestarts ?? []).length
     && (left.numberingRestarts ?? []).every((id, index) => id === right.numberingRestarts?.[index])
+    && (left.pageBreaks ?? []).length === (right.pageBreaks ?? []).length
+    && (left.pageBreaks ?? []).every((id, index) => id === right.pageBreaks?.[index])
     && sameSections(left.sections, right.sections)
     && sameSectionOf(left.sectionOf, right.sectionOf)
     && sameSectionHeadings(left.sectionHeadings, right.sectionHeadings)
@@ -836,6 +841,21 @@ export function createExamStore(options: {
         const workingCopy: ExamWorkingCopy = { ...current.workingCopy }
         if (numberingRestarts.length > 0) workingCopy.numberingRestarts = numberingRestarts
         else delete workingCopy.numberingRestarts
+        return { ...current, workingCopy }
+      }),
+
+    setQuestionPageBreak: (questionIds, enabled) =>
+      change((current) => {
+        const eligible = questionIds.filter((id) => current.workingCopy.questionIds.includes(id))
+        if (eligible.length === 0) return current
+        const breaks = current.workingCopy.pageBreaks ?? []
+        const next = enabled
+          ? [...breaks, ...eligible.filter((id) => !breaks.includes(id))]
+          : breaks.filter((id) => !eligible.includes(id))
+        if (next.length === breaks.length && next.every((id, index) => id === breaks[index])) return current
+        const workingCopy: ExamWorkingCopy = { ...current.workingCopy }
+        if (next.length > 0) workingCopy.pageBreaks = next
+        else delete workingCopy.pageBreaks
         return { ...current, workingCopy }
       }),
 

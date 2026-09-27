@@ -163,6 +163,7 @@ function questionOf(stored: StoredQuestion): Question {
     type: stored.type,
     doc: stored.doc,
     ...(stored.suggestedAnswer ? { suggestedAnswer: stored.suggestedAnswer } : {}),
+    ...(stored.answerReason ? { answerReason: stored.answerReason } : {}),
     columns: stored.columns,
   }
   if (stored.difficulty) question.difficulty = stored.difficulty

@@ -27,7 +27,7 @@ export const SECTION_TITLE: Record<QuestionType, string> = {
 
 export const SECTION_INSTRUCTIONS: Record<QuestionType, string> = {
   'multiple-choice':
-    'Identify the choice that best completes the statement or answers the question.',
+    'Select the most suitable answer.',
   'true-false':
     'Circle T if the statement is true and F if it is false.',
   matching:

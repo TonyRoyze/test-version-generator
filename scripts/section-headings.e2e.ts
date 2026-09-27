@@ -7,6 +7,7 @@
 
 import { expect, test, type Page } from '@playwright/test'
 import { seedAuthoringState } from './seed-authoring'
+import type { Question } from '../src/exam'
 
 const choice = (id: string, correct: boolean) => ({
   type: 'multipleChoiceChoice',
@@ -14,7 +15,7 @@ const choice = (id: string, correct: boolean) => ({
   content: [{ type: 'paragraph', content: [{ type: 'text', text: id }] }],
 })
 
-const QUESTION = {
+const QUESTION: Question = {
   id: 'q1',
   type: 'multiple-choice',
   columns: 1,
@@ -28,7 +29,7 @@ const QUESTION = {
 }
 
 const DEFAULT_DIRECTIONS =
-  'Identify the choice that best completes the statement or answers the question.'
+  'Select the most suitable answer.'
 
 async function openExam(page: Page) {
   await page.addInitScript(() => {

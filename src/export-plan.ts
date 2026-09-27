@@ -82,7 +82,7 @@ export type ColumnCount = 1 | 2 | 4
 export type Measure = {
   /** Height in px of one page item, laid out at the content box's width and
    *  at the Exam's text size. */
-  itemHeight(item: PageItem, textSize?: TextSize): number
+  itemHeight(item: PageItem, textSize?: TextSize, width?: number): number
 }
 
 // A stub that reports nothing: every item is zero-height, so an exam packs onto
@@ -213,6 +213,8 @@ export type PlannedPart = {
 export type PlannedQuestion = {
   id: string
   type: QuestionType
+  /** Whether the Exam explicitly starts this question on a fresh page. */
+  pageBreakBefore?: boolean
   /** Position on the printed test, counted continuously across sections. A
    *  matching set's number is its first prompt's: its prompts take the run of
    *  numbers from there, one each, and the set's stem prints unnumbered. */
@@ -248,6 +250,8 @@ export type PlannedQuestion = {
   /** A Short Answer question's Suggested Answer, as top-level blocks. Never
    *  printed on the test; the Answer Key prints it under the question's line. */
   suggestedAnswer?: ProseMirrorJSON[]
+  /** Brief explanation shown beside the correct choice in Paper Book. */
+  answerReason?: string
   /** A Multipart question's Parts, lettered, in authored order; `null` for every other
    *  Question Type. A Multipart question's `stem` is the shared material its Parts are asked about. */
   parts: PlannedPart[] | null
@@ -437,6 +441,8 @@ export type PageFurniture = {
   footerLayout?: FurnitureLayout
   /** Present only on the dedicated first sheet. */
   coverPage?: ExamCover
+  /** Unit-booklet furniture drawn around the actual question content. */
+  paperBook?: ExamCover
   /** The cover option names the school in the footer of each question page. */
   pageNumberInHeader?: boolean
   schoolName?: string
@@ -449,17 +455,19 @@ function furnitureOf(
   furniture: ExamFurniture | undefined,
   coverPage: ExamCover | undefined,
 ): PageFurniture {
-  const isCover = page.header === 'first' && page.number === 1 && page.stream === 'test' && coverPage !== undefined
+  const paperBook = coverPage?.templateId === 'paper-book' && page.stream === 'test'
+  const isCover = page.header === 'first' && page.number === 1 && page.stream === 'test' && coverPage !== undefined && !paperBook
   return {
     identityFields: [],
     headerHidden: true,
     title: isCover ? title : null,
     arrangementLabel: '',
     pageNumber: page.number,
-    ...(coverPage && page.stream === 'test' && !isCover
+    ...(coverPage && page.stream === 'test' && !isCover && !paperBook
       ? { pageNumberInHeader: true, schoolName: [coverPage.schoolName, coverPage.schoolSubtitle].filter(Boolean).join(' ') }
       : {}),
     ...(isCover ? { coverPage } : {}),
+    ...(paperBook ? { paperBook: coverPage } : {}),
     ...(furniture?.footer ? { footerLayout: furniture.footer } : {}),
   }
 }
@@ -481,6 +489,9 @@ export const PAGE_MARGIN = 72
 
 /** The width a page item is laid out at — what `Measure` measures against. */
 export const PAGE_CONTENT_WIDTH = PAGE_WIDTH - 2 * PAGE_MARGIN
+export const PAPER_BOOK_SIDEBAR_WIDTH = 170
+export const PAPER_BOOK_GAP = 18
+export const PAPER_BOOK_CONTENT_WIDTH = PAGE_CONTENT_WIDTH - PAPER_BOOK_SIDEBAR_WIDTH - PAPER_BOOK_GAP
 
 const PAGE_BOX_HEIGHT = PAGE_HEIGHT - 2 * PAGE_MARGIN
 
@@ -786,6 +797,7 @@ function deriveQuestion(
   return {
     id: question.id,
     type: question.type,
+    ...(exam.pageBreaks?.includes(question.id) ? { pageBreakBefore: true } : {}),
     number,
     ...(displayNumber !== undefined ? { displayNumber } : {}),
     marks: trueFalse ? TRUE_FALSE_MARKS : [],
@@ -801,6 +813,7 @@ function deriveQuestion(
     ...(question.type === 'open' && suggestedAnswerOf(question).length > 0
       ? { suggestedAnswer: suggestedAnswerOf(question) }
       : {}),
+    ...(question.answerReason ? { answerReason: question.answerReason } : {}),
     parts: multipart ? deriveParts(exam, question, arrangement) : null,
   }
 }
@@ -1045,10 +1058,11 @@ function paginate(
   initialHeader: PageHeader,
   continuedHeader: PageHeader,
   numberOffset = 0,
+  roomFor: (header: PageHeader) => number = pageContentHeight,
 ): PackedPage[] {
   const pages: PackedPage[] = []
   let header: PageHeader = initialHeader
-  let box = pageContentHeight(header)
+  let box = roomFor(header)
   let current: PageItem[] = []
   let used = 0
   // Set once a work space has taken the rest of this page: nothing else may
@@ -1061,7 +1075,7 @@ function paginate(
     used = 0
     full = false
     header = continuedHeader
-    box = pageContentHeight(header)
+    box = roomFor(header)
   }
 
   // A work space that fills its page is measured at its least height, which is
@@ -1092,7 +1106,7 @@ function paginate(
   // A heading alone on its page has nothing to move away from: the piece goes
   // on ahead of it only when a fresh page would actually hold it, and an
   // oversized piece overflows under the heading instead.
-  const fullPage = pageContentHeight(continuedHeader)
+  const fullPage = roomFor(continuedHeader)
   // A Part that fills its page ends the piece it is in: nothing may follow it
   // on that page.
   const endsPiece = (segment: Segment) =>
@@ -1115,7 +1129,7 @@ function paginate(
           current.pop()
           flush()
           place(last, measure.itemHeight(last))
-        } else if (height <= pageContentHeight(continuedHeader)) {
+        } else if (height <= roomFor(continuedHeader)) {
           flush()
           continue
         }
@@ -1135,6 +1149,13 @@ function paginate(
 
   for (const [index, item] of items.entries()) {
     if (full) flush()
+    if (item.kind === 'question' && item.question.pageBreakBefore && current.length > 0) {
+      const last = current.at(-1)
+      const heading = last?.kind === 'section-heading' && current.length > 1 ? current.pop() : undefined
+      if (heading) used -= measure.itemHeight(heading)
+      if (current.length > 0) flush()
+      if (heading) place(heading, measure.itemHeight(heading))
+    }
     const height = measure.itemHeight(item)
     // A section heading must share a page with at least the first indivisible
     // piece of its first question — the whole question, when it is one piece.
@@ -1175,7 +1196,7 @@ function paginate(
     if (
       current.length > 0
       && !followsSectionHeading
-      && height <= pageContentHeight(continuedHeader)
+      && height <= roomFor(continuedHeader)
     ) {
       flush()
       place(item, height)
@@ -1420,10 +1441,23 @@ function resolveLayout(
   const sized: Measure = textSize
     ? { itemHeight: (item) => measure.itemHeight(item, textSize) }
     : measure
+  const isPaperBook = document.coverPage?.templateId === 'paper-book'
+  const bookMeasure: Measure = {
+    itemHeight: (item) => measure.itemHeight(item, textSize, PAPER_BOOK_CONTENT_WIDTH),
+  }
+  const bookRoom = (header: PageHeader) => pageContentHeight(header) - (header === 'first' ? 76 : 28)
   const pages: PackedPage[] = []
   if (document.selection.test) {
-    if (document.coverPage) pages.push({ number: 1, header: 'first', stream: 'test', items: [] })
-    pages.push(...paginate(document.test, sized, 'test', 'first', 'later', document.coverPage ? 1 : 0))
+    if (document.coverPage && !isPaperBook) pages.push({ number: 1, header: 'first', stream: 'test', items: [] })
+    pages.push(...paginate(
+      document.test,
+      isPaperBook ? bookMeasure : sized,
+      'test',
+      'first',
+      'later',
+      document.coverPage && !isPaperBook ? 1 : 0,
+      isPaperBook ? bookRoom : pageContentHeight,
+    ))
   }
   if (document.selection.answerKey) {
     pages.push(
@@ -1446,7 +1480,7 @@ function resolveLayout(
     // explicit break. A linear format must reproduce the plan's pagination
     // rather than rediscover one of its own.
     pages: pages.map((page, index) => {
-      const isCover = page.stream === 'test' && page.number === 1 && document.coverPage
+      const isCover = page.stream === 'test' && page.number === 1 && document.coverPage && !isPaperBook
       return {
         ...page,
         furniture: {

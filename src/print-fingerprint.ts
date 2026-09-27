@@ -27,6 +27,7 @@ import {
 } from './export-fingerprint'
 import type { LayoutPlan, PlannedPage } from './export-plan'
 import { arrangementRange } from './export-preparation'
+import { paperBookAnswerLines } from './cover-templates/paper-book-answers'
 import { PageHeaderContent, PageItemMeasureView } from './page-item-view'
 import { parseXml, type XmlNode } from './xml'
 
@@ -544,12 +545,15 @@ function pageFingerprint(
   plan: LayoutPlan,
   reader: Reader,
 ): PageFingerprint {
+  const book = page.furniture.paperBook
   return {
     number: page.furniture.pageNumber,
     width: plan.pageSize.width,
     height: plan.pageSize.height,
     margin: plan.pageSize.margin,
-    header: furnitureLines(
+    header: book
+      ? [`para «emphasis»${book.subject} ${book.schoolName} ➭ page ${page.furniture.pageNumber}«/»`]
+      : furnitureLines(
       renderToStaticMarkup(
         createElement(PageHeaderContent, {
           header: page.header,
@@ -558,15 +562,18 @@ function pageFingerprint(
       ),
       reader,
     ),
-    footer: [`para ${page.furniture.pageNumber}`],
-    content: page.items.flatMap((item) =>
-      itemLines(
-        renderToStaticMarkup(
-          createElement(Fragment, null, createElement(PageItemMeasureView, { item })),
+    footer: book ? ['para'] : [`para ${page.furniture.pageNumber}`],
+    content: [
+      ...page.items.flatMap((item) =>
+        itemLines(
+          renderToStaticMarkup(
+            createElement(Fragment, null, createElement(PageItemMeasureView, { item })),
+          ),
+          reader,
         ),
-        reader,
       ),
-    ),
+      ...(book ? paperBookAnswerLines(page.items) : []),
+    ],
   }
 }
 

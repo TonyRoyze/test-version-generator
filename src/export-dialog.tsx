@@ -92,12 +92,14 @@ function ExportSettings({
   maxVersions,
   frozen,
   disabled,
+  showCoverPageOption = true,
 }: {
   configuration: ExportConfiguration
   onChange?: (configuration: ExportConfiguration) => void
   maxVersions?: number
   frozen: boolean
   disabled: boolean
+  showCoverPageOption?: boolean
 }) {
   const id = useId()
   const { selection } = configuration
@@ -145,6 +147,18 @@ function ExportSettings({
           Answer key
         </label>
       </fieldset>
+
+      {showCoverPageOption && <fieldset className="export-field" disabled={locked}>
+        <legend>Cover page</legend>
+        <label>
+          <input
+            type="checkbox"
+            checked={configuration.includeCoverPage !== false}
+            onChange={(event) => change({ includeCoverPage: event.target.checked })}
+          />
+          Include cover page
+        </label>
+      </fieldset>}
 
       <fieldset className="export-field" disabled={locked} aria-describedby={`${id}-version-hint`}>
         <legend>Shuffled Versions</legend>
@@ -413,6 +427,7 @@ export function ExportDialog({
   onConfigurationChange,
   previewPlans,
   maxVersions,
+  showCoverPageOption = true,
   empty,
   blocked = null,
   initialError,
@@ -424,6 +439,7 @@ export function ExportDialog({
   previewPlans: readonly LayoutPlan[]
   /** How many shuffled Versions the current shuffle options allow. */
   maxVersions: number
+  showCoverPageOption?: boolean
   empty: boolean
   /** Why this Exam cannot be exported as it is — a Question still needing a
    *  picture — shown in place of the preview's paper. */
@@ -458,6 +474,7 @@ export function ExportDialog({
           configuration={configuration}
           onChange={onConfigurationChange}
           maxVersions={maxVersions}
+          showCoverPageOption={showCoverPageOption}
           frozen={false}
           disabled={disabled}
         />
@@ -524,7 +541,7 @@ export function ReExportDialog({
             <div><dt>Title</dt><dd>{name}</dd></div>
             <div><dt>Exported</dt><dd><time dateTime={createdAt}>{exportTime(createdAt)}</time></dd></div>
           </dl>
-          <ExportSettings configuration={configuration} frozen disabled={disabled} />
+          <ExportSettings configuration={configuration} frozen disabled={disabled} showCoverPageOption={!plans.some((plan) => plan.pages.some((page) => page.furniture.paperBook))} />
         </>
       )}
       versions={names.length > 0

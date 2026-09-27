@@ -1,4 +1,5 @@
 import { coverLogoSource } from './page-cover'
+import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The DOCX Export Adapter.
 //
 // The second translator from a Layout Plan into a real output format, beside
@@ -81,6 +82,9 @@ import {
   questionIndentOf,
   MATCHING_BANK_WIDTH,
   PAGE_CONTENT_WIDTH,
+  PAPER_BOOK_CONTENT_WIDTH,
+  PAPER_BOOK_GAP,
+  PAPER_BOOK_SIDEBAR_WIDTH,
   numberLabelOf,
   printsNumberLine,
   PART_INDENT,
@@ -616,6 +620,8 @@ function prefixLine(context: BlockContext): Paragraph[] {
  *  row of Panels from a table the teacher wrote. */
 export const BLOCKQUOTE_TABLE_STYLE = 'Blockquote'
 export const SIDE_BY_SIDE_TABLE_STYLE = 'SideBySide'
+export const PAPER_BOOK_TABLE_STYLE = 'PaperBookLayout'
+export const PAPER_BOOK_TITLE_STYLE = 'PaperBookTitle'
 
 const BOX_BORDER = { style: BorderStyle.SINGLE, size: 6, color: '000000' }
 // Print's `.doc-content blockquote` padding: 6px above and below, 10px aside.
@@ -1183,6 +1189,16 @@ function identityLine(furniture: PageFurniture): Paragraph {
 
 function headerParagraphs(furniture: PageFurniture, build: BuildContext): Paragraph[] {
   if (furniture.coverPage) return []
+  if (furniture.paperBook) {
+    const cover = furniture.paperBook
+    return [new Paragraph({
+      children: [
+        new TextRun({ text: cover.subject, italics: true, size: 16 }),
+        new TextRun({ text: `\t${cover.schoolName} ➭ page ${furniture.pageNumber}`, italics: true, size: 16 }),
+      ],
+      tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE_CONTENT_WIDTH) }],
+    })]
+  }
   if (furniture.headerHidden) {
     return furniture.pageNumberInHeader
       ? [new Paragraph({
@@ -1217,7 +1233,7 @@ function headerParagraphs(furniture: PageFurniture, build: BuildContext): Paragr
 // key — so the footer prints that number rather than asking Word for a field
 // whose count would be the whole document's.
 function footerParagraph(furniture: PageFurniture, build: BuildContext): Paragraph {
-  if (furniture.coverPage) return new Paragraph({ text: '' })
+  if (furniture.coverPage || furniture.paperBook) return new Paragraph({ text: '' })
   const logo = furniture.footerLayout?.logo ? build.images.get(furniture.footerLayout.logo) : undefined
   return new Paragraph({
     children: [
@@ -1331,6 +1347,68 @@ function sectionOf(
   plan: LayoutPlan,
   build: BuildContext,
 ): ISectionOptions {
+  const book = page.furniture.paperBook
+  const bookContent = book ? [
+    ...(page.number === 1 ? [new Paragraph({
+      children: [new TextRun({ text: `${book.schoolName} - ${book.subject}`, italics: true, size: 28 })],
+      style: PAPER_BOOK_TITLE_STYLE,
+      alignment: AlignmentType.CENTER,
+      spacing: { after: 0 },
+    }), new Paragraph({
+      text: '',
+      style: PAPER_BOOK_TITLE_STYLE,
+      indent: { left: twips(234), right: twips(234) },
+      border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: '222222' } },
+      spacing: { after: 90 },
+    })] : []),
+    new Table({
+      style: PAPER_BOOK_TABLE_STYLE,
+      width: { size: twips(PAGE_CONTENT_WIDTH), type: WidthType.DXA },
+      columnWidths: gridOf([PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP, PAPER_BOOK_SIDEBAR_WIDTH]),
+      borders: NO_BORDERS,
+      rows: [new TableRow({
+        cantSplit: true,
+        children: [
+          new TableCell({
+            width: { size: twips(PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            margins: { top: 0, bottom: 0, left: 0, right: twips(PAPER_BOOK_GAP) },
+            children: page.items.flatMap((item) => itemContent(item, { ...build, contentWidth: PAPER_BOOK_CONTENT_WIDTH })),
+          }),
+          new TableCell({
+            width: { size: twips(PAPER_BOOK_SIDEBAR_WIDTH), type: WidthType.DXA },
+            borders: NO_BORDERS,
+            shading: { fill: 'D6D6D6' },
+            margins: { top: twips(8), bottom: 0, left: twips(8), right: twips(8) },
+            children: [
+              new Paragraph({ children: [new TextRun({ text: 'Answers', italics: true })] }),
+              ...paperBookAnswersOf(page.items).flatMap((entry) => [
+                new Paragraph({ text: paperBookAnswerText(entry) }),
+                ...(entry.reason ? [new Paragraph({
+                  children: paperBookReasonParts(entry.reason).map((part): ParagraphChild => {
+                    if (part.type === 'math') return mathRun(part.value)
+                    const marks = part.marks ?? []
+                    const text = new TextRun({
+                      text: part.value,
+                      bold: marks.includes('strong'),
+                      italics: marks.includes('emphasis'),
+                      strike: marks.includes('strike_through'),
+                      subScript: marks.includes('subscript'),
+                      superScript: marks.includes('superscript'),
+                      ...(marks.includes('inlineCode') ? { font: 'Consolas' } : {}),
+                      ...(marks.some((mark) => mark.startsWith('link:')) ? { style: 'Hyperlink' } : {}),
+                    })
+                    const link = marks.find((mark) => mark.startsWith('link:'))
+                    return link ? new ExternalHyperlink({ link: link.slice(5), children: [text] }) : text
+                  }),
+                })] : []),
+              ]),
+            ],
+          }),
+        ],
+      })],
+    }),
+  ] : []
   return {
     properties: {
       page: {
@@ -1348,7 +1426,9 @@ function sectionOf(
     },
     headers: { default: new Header({ children: headerParagraphs(page.furniture, build) }) },
     footers: { default: new Footer({ children: [footerParagraph(page.furniture, build)] }) },
-    children: page.furniture.coverPage
+    children: book
+      ? bookContent
+      : page.furniture.coverPage
       ? coverPageContent(page.furniture, build)
       : page.items.flatMap((item) => itemContent(item, build)),
   }

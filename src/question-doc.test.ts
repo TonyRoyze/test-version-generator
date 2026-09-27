@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   choiceIdOf,
   cleanDocument,
+  explanationTextOf,
   choiceNodesOf,
   matchingBankNodesOf,
   matchingPromptNodesOf,
@@ -239,6 +240,25 @@ describe('withSuggestedAnswer and withoutSuggestedAnswer', () => {
 
     expect(withoutSuggestedAnswer(editing)).toEqual(doc({ type: 'paragraph' }))
     expect(suggestedAnswerDocumentOf(editing)).toBeUndefined()
+  })
+
+  test('edits an Explanation after choices without storing the editing block', () => {
+    const question = doc(
+      { type: 'paragraph', content: [{ type: 'text', text: 'Which answer is correct?' }] },
+      { type: 'multipleChoice', content: [
+        { type: 'multipleChoiceChoice', attrs: { id: 'a', correct: false }, content: [{ type: 'paragraph' }] },
+        { type: 'multipleChoiceChoice', attrs: { id: 'b', correct: true }, content: [{ type: 'paragraph' }] },
+      ] },
+    )
+    const explanation = doc({ type: 'paragraph', content: [
+      { type: 'text', text: 'Because ', marks: [{ type: 'strong' }] },
+      { type: 'text', text: 'pressure rises with depth.' },
+    ] })
+    const editing = withSuggestedAnswer(question, explanation, 'Explanation')
+
+    expect(suggestedAnswerNodeOf(editing)?.attrs).toEqual({ label: 'Explanation' })
+    expect(explanationTextOf(suggestedAnswerDocumentOf(editing))).toBe('Because pressure rises with depth.')
+    expect(withoutSuggestedAnswer(editing)).toEqual(question)
   })
 })
 

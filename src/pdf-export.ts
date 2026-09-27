@@ -1,4 +1,5 @@
 import { coverLogoSource } from './page-cover'
+import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The PDF Export Adapter.
 //
 // It consumes retained Layout Plans exactly like the DOCX adapter: one PDF page
@@ -49,6 +50,9 @@ import {
   type PlannedWorkSpace,
   type QuestionItem,
   FOOTER_HEIGHT,
+  PAPER_BOOK_CONTENT_WIDTH,
+  PAPER_BOOK_GAP,
+  PAPER_BOOK_SIDEBAR_WIDTH,
 } from './export-plan'
 import { DIFFICULTY_LABELS, WORK_SPACE_LINE_PITCH } from './exam'
 import { bodyScale, pointsOf, sectionHeadingPoints, titlePoints } from './export-typography'
@@ -1019,6 +1023,75 @@ function drawFurniture(
   }
 }
 
+function drawPaperBookFurniture(context: DrawContext, furniture: PageFurniture, top: number, margin: number, items: readonly PageItem[]): void {
+  const cover = furniture.paperBook
+  if (!cover) return
+  const pageNumber = furniture.pageNumber
+  const header = cover.subject
+  const pageLabel = `${cover.schoolName} ➭ page ${pageNumber}`
+  const small = pt(11)
+  assertSupported(header, context.fonts.italic)
+  assertSupported(pageLabel, context.fonts.italic)
+  context.page.drawText(header, { x: context.x, y: top - small, size: small, font: context.fonts.italic, color: INK })
+  const labelWidth = context.fonts.italic.widthOfTextAtSize(pageLabel, small)
+  context.page.drawText(pageLabel, { x: context.x + pt(672) - labelWidth, y: top - small, size: small, font: context.fonts.italic, color: INK })
+  if (pageNumber === 1) {
+    const title = `${cover.schoolName} - ${cover.subject}`
+    assertSupported(title, context.fonts.italic)
+    const titleSize = pt(18)
+    const titleWidth = context.fonts.italic.widthOfTextAtSize(title, titleSize)
+    if (titleWidth > pt(672)) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(title, { x: context.x + (pt(672) - titleWidth) / 2, y: top - pt(45), size: titleSize, font: context.fonts.italic, color: INK })
+    context.page.drawLine({ start: { x: context.x + pt(234), y: top - pt(54) }, end: { x: context.x + pt(438), y: top - pt(54) }, thickness: .6, color: INK })
+  }
+  const sideX = context.x + pt(PAPER_BOOK_CONTENT_WIDTH + PAPER_BOOK_GAP)
+  const sideTop = top - pt(pageNumber === 1 ? 76 : 28)
+  context.page.drawText('Answers', { x: sideX, y: sideTop - pt(13), size: pt(13), font: context.fonts.italic, color: INK })
+  context.page.drawLine({ start: { x: sideX, y: sideTop - pt(18) }, end: { x: sideX + pt(PAPER_BOOK_SIDEBAR_WIDTH), y: sideTop - pt(18) }, thickness: .5, color: RULE })
+  context.page.drawRectangle({ x: sideX, y: margin + pt(20), width: pt(PAPER_BOOK_SIDEBAR_WIDTH), height: sideTop - pt(40) - margin - pt(20), color: rgb(.84, .84, .84) })
+  const answerSize = pt(12)
+  const answerFont = context.fonts.regular
+  const answerWidth = pt(PAPER_BOOK_SIDEBAR_WIDTH - 16)
+  let y = sideTop - pt(55)
+  const drawAnswerLine = (value: string, size: number) => {
+    assertSupported(value, answerFont)
+    if (y < margin + pt(28) || answerFont.widthOfTextAtSize(value, size) > answerWidth) throw new PdfLayoutError(context.pageNumber)
+    context.page.drawText(value, { x: sideX + pt(8), y, size, font: answerFont, color: INK })
+  }
+  paperBookAnswersOf(items).forEach((entry) => {
+    const answer = paperBookAnswerText(entry)
+    drawAnswerLine(answer, answerSize)
+    y -= pt(16)
+    if (entry.reason) {
+      const reasonSize = pt(11)
+      const pieces = paperBookReasonParts(entry.reason).flatMap((part): InlinePiece[] =>
+        part.type === 'math'
+          ? mathPieces(part.value).map((piece) => ({ ...piece, size: reasonSize * piece.size / BODY_SIZE }))
+          : [{
+              text: part.value,
+              font: part.marks?.includes('inlineCode') ? 'mono'
+                : part.marks?.includes('strong') && part.marks.includes('emphasis') ? 'boldItalic'
+                : part.marks?.includes('strong') ? 'bold'
+                  : part.marks?.includes('emphasis') ? 'italic' : 'regular',
+              size: part.marks?.includes('inlineCode') ? reasonSize * .9 : reasonSize,
+              ...(part.marks?.includes('subscript') ? { size: reasonSize * .75, rise: -reasonSize * .2 } : {}),
+              ...(part.marks?.includes('superscript') ? { size: reasonSize * .75, rise: reasonSize * .35 } : {}),
+              ...(part.marks?.includes('strike_through') ? { strike: true } : {}),
+              ...(part.marks?.find((mark) => mark.startsWith('link:')) ? { href: part.marks.find((mark) => mark.startsWith('link:'))!.slice(5) } : {}),
+            }],
+      )
+      context.y = y
+      drawInline(context, pieces, {
+        x: sideX + pt(8), width: answerWidth, line: pt(14),
+      })
+      y = context.y
+      y -= pt(6)
+    } else {
+      y -= pt(2)
+    }
+  })
+}
+
 function drawCoverPage(context: DrawContext, furniture: PageFurniture, top: number, margin: number): void {
   const cover = furniture.coverPage
   if (!cover) return
@@ -1224,9 +1297,16 @@ async function createPdf(
           drawCoverPage(context, planned.furniture, top, margin)
           continue
         }
-        drawFurniture(context, planned.furniture, top, top - headerHeight)
-        context.y = top - headerHeight
+        if (planned.furniture.paperBook) {
+          drawPaperBookFurniture(context, planned.furniture, top, margin, planned.items)
+          context.width = pt(PAPER_BOOK_CONTENT_WIDTH)
+          context.y = top - pt(planned.number === 1 ? 76 : 28)
+        } else {
+          drawFurniture(context, planned.furniture, top, top - headerHeight)
+          context.y = top - headerHeight
+        }
         for (const item of planned.items) drawItem(context, item)
+        if (planned.furniture.paperBook) continue
         const footer = planned.furniture.schoolName ?? String(planned.furniture.pageNumber)
         const footerFont = planned.furniture.schoolName ? fonts.cooperBold : fonts.regular
         const footerSize = planned.furniture.schoolName ? pointsOf('body') : SMALL_SIZE

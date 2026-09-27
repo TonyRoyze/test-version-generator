@@ -296,6 +296,10 @@ export function QuestionBankExportDialog({
                       />
                     </section>
                   )}
+                  {question.answerReason && <section>
+                    <h3>Explanation</h3>
+                    <p>{question.answerReason}</p>
+                  </section>}
                 </article>
               ))}
             </div>
