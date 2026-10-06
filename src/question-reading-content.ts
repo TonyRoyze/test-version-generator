@@ -18,7 +18,9 @@ export type QuestionReadingContent = {
   difficulty?: Difficulty
   topics: readonly string[]
   stem: ProseMirrorJSON[]
-  choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean }[]
+  /** `locked` marks a Locked Answer, which keeps its letter when answers are
+   *  shuffled. */
+  choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean; locked?: boolean }[]
   matching?: {
     /** `letter` is the Word Bank letter the item is matched to, if any. */
     prompts: { id: string; content: ProseMirrorJSON[]; letter?: string }[]
@@ -33,7 +35,7 @@ export type QuestionReadingContent = {
     letter: string
     typeLabel: string
     stem: ProseMirrorJSON[]
-    choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean }[]
+    choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean; locked?: boolean }[]
     suggestedAnswer?: ProseMirrorJSON[]
   }[]
 }
@@ -72,6 +74,7 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
                 id: choice.id,
                 content: childNodes(choice.node),
                 correct: choice.correct,
+                locked: choice.locked,
               })),
             }
           : {}),
@@ -100,6 +103,7 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
       id: choice.id,
       content: childNodes(choice.node),
       correct: choice.correct,
+      locked: choice.locked,
     })),
   }
 }

@@ -62,7 +62,7 @@ export function paperBookAnswersOf(items: readonly PageItem[]): PaperBookAnswer[
 
     if (item.matching) {
       for (const prompt of item.matching.prompts) {
-        const match = item.matching.bank.find((candidate) => candidate.letter === prompt.letter)
+        const match = item.matching.bank.find((candidate) => candidate.letter.toUpperCase() === prompt.letter?.toUpperCase())
         if (match) answers.push({ number: prompt.displayNumber ?? String(prompt.number), answer: match.displayLabel ?? match.letter })
       }
       continue

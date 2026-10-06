@@ -18,6 +18,7 @@ export function ResourceCollectionPage({
   onOpenBank,
   onNewExam,
   onNewBank,
+  onExportBank,
   onDeleteBank,
   onDeleteExam,
   onImportBank,
@@ -30,6 +31,7 @@ export function ResourceCollectionPage({
   onOpenBank: (id: string) => void
   onNewExam?: () => void
   onNewBank?: () => void
+  onExportBank?: (bank: QuestionBankCollectionItem) => void
   onDeleteBank?: (bank: QuestionBankCollectionItem) => void
   onDeleteExam?: (exam: RecentExam) => void
   onImportBank?: () => void
@@ -117,6 +119,7 @@ export function ResourceCollectionPage({
                   key={bank.id}
                   bank={bank}
                   onOpen={onOpenBank}
+                  onExport={onExportBank}
                   onDelete={onDeleteBank}
                 />
               ))}

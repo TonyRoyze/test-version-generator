@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { paperBookReasonParts } from './cover-templates/paper-book-answers'
 import {
   choiceIdOf,
   cleanDocument,
@@ -257,7 +258,10 @@ describe('withSuggestedAnswer and withoutSuggestedAnswer', () => {
     const editing = withSuggestedAnswer(question, explanation, 'Explanation')
 
     expect(suggestedAnswerNodeOf(editing)?.attrs).toEqual({ label: 'Explanation' })
-    expect(explanationTextOf(suggestedAnswerDocumentOf(editing))).toBe('Because pressure rises with depth.')
+    expect(paperBookReasonParts(explanationTextOf(suggestedAnswerDocumentOf(editing))!)).toEqual([
+      { type: 'text', value: 'Because ', marks: ['strong'] },
+      { type: 'text', value: 'pressure rises with depth.' },
+    ])
     expect(withoutSuggestedAnswer(editing)).toEqual(question)
   })
 })

@@ -29,5 +29,5 @@ test('Royal Institute PDF preserves the preview logo, student rows, marks total,
   expect(grade).toBeDefined()
   expect(subject.transform[5]).toBeLessThan(grade.transform[5]!)
   expect((await text(2)).map(item => item.str)).toContain('Royal Institute International School')
-  expect((await text(2)).some(item => item.str.trim() === '1')).toBe(true)
+  expect((await text(2)).some(item => item.str.trim() === '2')).toBe(true)
 })

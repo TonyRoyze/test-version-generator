@@ -243,11 +243,43 @@ export function originName(picture: ResolvedPicture, source: ResolvingSource | n
   }
 }
 
-export const pictureSource = (asset: MediaAssetDeclaration) => `data:${asset.mimeType};base64,${asset.bytes}`
+// One object URL per Media Asset, made the first time it is drawn: a picture
+// shown in several places, or drawn again, reuses it. An import's pictures are
+// few, and are kept until the page goes.
+const pictureUrls = new Map<string, string>()
+
+/** A source that draws a Media Asset's bytes, before it is stored here. */
+export function pictureSource(asset: MediaAssetDeclaration): string {
+  let url = pictureUrls.get(asset.id)
+  if (!url) {
+    url = URL.createObjectURL(new Blob([asset.bytes.slice()], { type: asset.mimeType }))
+    pictureUrls.set(asset.id, url)
+  }
+  return url
+}
 
 /** Store a picture as a Media Asset here, returning its owned source. */
 export async function storedPicture(asset: MediaAssetDeclaration): Promise<string> {
   const { saveImage } = await import('./local-images')
-  const bytes = Uint8Array.from(atob(asset.bytes), (character) => character.charCodeAt(0))
-  return saveImage(new Blob([bytes], { type: asset.mimeType }))
+  return saveImage(new Blob([asset.bytes.slice()], { type: asset.mimeType }))
+}
+
+/**
+ * The pictures a teacher had in place before dropping an assistant's
+ * corrected file, kept for the Pending Images the corrected file still has
+ * at the same place, naming the same tag or page. One that moved, or names
+ * something else now, is found again from the Source Document like any other.
+ */
+export function carriedResolutions(
+  resolutions: Resolutions,
+  before: readonly Pick<PendingImageOccurrence, 'key' | 'pending'>[],
+  after: readonly Pick<PendingImageOccurrence, 'key' | 'pending'>[],
+): Resolutions {
+  const named = new Map(before.map(({ key, pending }) => [key, JSON.stringify(pending)]))
+  const carried = new Map<string, ResolvedPicture>()
+  for (const { key, pending } of after) {
+    const picture = resolutions.get(key)
+    if (picture && named.get(key) === JSON.stringify(pending)) carried.set(key, picture)
+  }
+  return carried
 }

@@ -15,6 +15,15 @@ describe('routeImportFile', () => {
     expect(route.to).toBe('error')
     expect(route).not.toMatchObject({ aiMade: true })
   })
+
+  test('a question file from another tool is imported as it is, with no AI', async () => {
+    const file = new File(
+      ['MC\nWhich planet is closest to the Sun?\nVenus\n*Mercury\n'],
+      'chapter 1.txt',
+      { type: 'text/plain' },
+    )
+    expect(await routeImportFile(file)).toEqual({ to: 'import' })
+  })
 })
 
 describe('aiFixRequest', () => {

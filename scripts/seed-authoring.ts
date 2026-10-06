@@ -24,6 +24,16 @@ export async function seedAuthoringState(
     if (!examId || !await workspaces.exists(examId)) {
       examId = (await workspaces.create()).id
     }
+    const { createQuestionBankWorkspaceService } = await import(
+      /* @vite-ignore */ '/src/question-bank-workspaces.ts'
+    ) as typeof import('../src/question-bank-workspaces')
+    const banks = createQuestionBankWorkspaceService()
+    const bank = await banks.create()
+    await banks.commit(bank.id, { kind: 'rename', name: 'Seeded Question Bank' })
+    for (const question of snapshot.questionBank.questions) {
+      await banks.commit(bank.id, { kind: 'create-question', question })
+    }
+    await banks.openTab({ examId }, bank.id)
     await workspaces.backendFor(examId).write(snapshot)
   }, state)
   // The bare editor route deliberately restores the registry's active Exam.

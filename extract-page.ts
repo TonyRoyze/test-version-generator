@@ -107,6 +107,12 @@ export function extractPage(): Plugin {
   }
   return {
     name: 'extract-page',
+    resolveId(id) {
+      if (id === 'virtual:extract-instructions') return '\0extract-instructions'
+    },
+    load(id) {
+      if (id === '\0extract-instructions') return `export default ${JSON.stringify(fs.readFileSync(source, 'utf8'))}`
+    },
     configResolved(config) {
       source = path.resolve(config.root, SOURCE)
       outDir = path.resolve(config.root, config.build.outDir)

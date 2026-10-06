@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { MilkdownProvider } from '@milkdown/react'
 import App from './App'
 import { loadExamStore } from './exam-store'
+import { domMeasure } from './dom-measure'
 import { createExamWorkspaceService } from './exam-workspaces'
 import {
   createQuestionBankWorkspaceService,
@@ -107,13 +108,13 @@ async function start() {
       const activeEditor = await bankWorkspaces.activeEditor()
       if (!activeEditor || !await workspaces.exists(activeEditor.resourceId)) return false
       editorId = activeEditor.resourceId
-      store = await loadExamStore(workspaces.backendFor(activeEditor.resourceId))
+      store = await loadExamStore(workspaces.backendFor(activeEditor.resourceId), undefined, domMeasure.bankAnswerWidth)
       return true
     }
     if (launchId) {
       if (await workspaces.open(launchId)) {
         editorId = launchId
-        store = await loadExamStore(workspaces.backendFor(launchId))
+        store = await loadExamStore(workspaces.backendFor(launchId), undefined, domMeasure.bankAnswerWidth)
         window.history.replaceState(null, '', startingPath)
       } else {
         error = 'That Exam is unavailable on this device.'

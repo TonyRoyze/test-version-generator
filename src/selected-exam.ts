@@ -17,6 +17,8 @@
 // Arrangement, and nothing here writes anything back.
 
 import { isExamHeader, sameExamHeader } from './page-header'
+import { isPageMargins, sameMargins } from './page-margins'
+import { DEFAULT_QUESTION_STYLE, isQuestionStyle } from './question-style'
 import {
   DEFAULT_HEADING_SIZE,
   isHeadingSize,
@@ -28,6 +30,7 @@ import {
 import {
   columnsOf,
   readExamSection,
+  isWordBankLayout,
   isWorkSpace,
   sameSectionOf,
   sameSections,
@@ -37,6 +40,7 @@ import {
   type Exam,
   type Arrangement,
   type Question,
+  type WordBankLayout,
   type WorkSpace,
 } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
@@ -44,6 +48,15 @@ import { bankQuestionById, type ExamWorkingCopy, type QuestionBank } from './que
 import { isExamFurniture, sameExamFurniture } from './page-furniture'
 import { DEFAULT_EXAM_COVER, isExamCover, sameExamCover } from './page-cover'
 import { isExamLabelStyles, sameExamLabelStyles } from './number-style'
+
+function sameStrings(
+  left: Readonly<Record<string, string>> | undefined,
+  right: Readonly<Record<string, string>> | undefined,
+): boolean {
+  const entries = Object.entries(left ?? {})
+  return entries.length === Object.keys(right ?? {}).length
+    && entries.every(([key, value]) => right?.[key] === value)
+}
 
 function sameWorkSpace(
   left: Record<string, WorkSpace> | undefined,
@@ -151,6 +164,16 @@ export function selectedExam(
     if (presented.has(id) && isWorkSpace(space)) workSpace[id] = space
   }
   const hasAnyWorkSpace = Object.keys(workSpace).length > 0
+  // So is where a Matching question's Word Bank prints: only a referenced
+  // Matching question's, and only a choice other than Auto.
+  const matchingIds = new Set(
+    bankedQuestions.filter((question) => question.type === 'matching').map(({ id }) => id),
+  )
+  const wordBankLayout: Record<string, WordBankLayout> = {}
+  for (const [id, layout] of Object.entries(draft.wordBankLayout ?? {})) {
+    if (matchingIds.has(id) && isWordBankLayout(layout)) wordBankLayout[id] = layout
+  }
+  const hasAnyWordBankLayout = Object.keys(wordBankLayout).length > 0
   // Section wording and size are this Exam's presentation too, carried only
   // when readable and only when they say something other than the default.
   const sectionHeadings =
@@ -181,17 +204,24 @@ export function selectedExam(
       : undefined
   const textSize =
     isTextSize(draft.textSize) && draft.textSize !== DEFAULT_TEXT_SIZE ? draft.textSize : undefined
+  const questionStyle =
+    isQuestionStyle(draft.questionStyle) && draft.questionStyle !== DEFAULT_QUESTION_STYLE
+      ? draft.questionStyle
+      : undefined
   const header =
     isExamHeader(draft.header) && Object.keys(draft.header).length > 0 ? draft.header : undefined
   const furniture = draft.furniture && isExamFurniture(draft.furniture) ? draft.furniture : undefined
   const labelStyles = draft.labelStyles && isExamLabelStyles(draft.labelStyles) ? draft.labelStyles : undefined
   const coverPage = draft.coverPage && isExamCover(draft.coverPage) ? draft.coverPage : DEFAULT_EXAM_COVER
+  const margins =
+    isPageMargins(draft.margins) && !sameMargins(draft.margins, undefined) ? draft.margins : undefined
   const exam: Exam =
     previous
     && previous.exam.title === draft.title
     && previous.exam.questions.length === questions.length
     && previous.exam.questions.every((question, index) => question === questions[index])
     && sameWorkSpace(previous.exam.workSpace, hasAnyWorkSpace ? workSpace : undefined)
+    && sameStrings(previous.exam.wordBankLayout, hasAnyWordBankLayout ? wordBankLayout : undefined)
     && sameSections(previous.exam.sections, sections)
     && (previous.exam.sections === undefined) === (sections === undefined)
     && sameSectionOf(previous.exam.sectionOf, hasAnySectionOf ? sectionOf : undefined)
@@ -204,22 +234,27 @@ export function selectedExam(
     && sameIds(previous.exam.pageBreaks, hasPageBreaks ? pageBreaks : undefined)
     && sameExamCover(previous.exam.coverPage, coverPage)
     && previous.exam.textSize === textSize
+    && previous.exam.questionStyle === questionStyle
+    && previous.exam.margins === margins
       ? previous.exam
       : {
           title: draft.title,
           questions,
           ...(hasAnyWorkSpace ? { workSpace } : {}),
+          ...(hasAnyWordBankLayout ? { wordBankLayout } : {}),
           ...(sections ? { sections } : {}),
           ...(hasAnySectionOf ? { sectionOf } : {}),
           ...(sectionHeadings ? { sectionHeadings } : {}),
           ...(headingSize ? { headingSize } : {}),
           ...(textSize ? { textSize } : {}),
+          ...(questionStyle ? { questionStyle } : {}),
           ...(header ? { header } : {}),
           ...(furniture ? { furniture } : {}),
           ...(labelStyles ? { labelStyles } : {}),
           ...(hasNumberingRestarts ? { numberingRestarts } : {}),
           ...(hasPageBreaks ? { pageBreaks } : {}),
           coverPage,
+          ...(margins ? { margins } : {}),
         }
 
   // Only ids the bank can resolve: an ordering may tolerate a stranger, but an
@@ -235,11 +270,13 @@ export function selectedExam(
         && right[questionId].every((choiceId, index) => choiceId === choices[index]),
       )
   }
+  const hiddenAnswers = draft.hiddenAnswers ?? {}
   const arrangement: Arrangement =
     previous
     && previous.arrangement.questionOrder.length === questionOrder.length
     && previous.arrangement.questionOrder.every((id, index) => id === questionOrder[index])
     && sameChoiceOrder(previous.arrangement.choiceOrder, choiceOrder)
+    && sameChoiceOrder(previous.arrangement.hiddenAnswers ?? {}, hiddenAnswers)
       ? previous.arrangement
       : {
           id: EXAM_DRAFT_VERSION_ID,
@@ -249,6 +286,8 @@ export function selectedExam(
           // answer shuffling records only this presentation state, never
           // changes the canonical Question Content in the Question Bank.
           choiceOrder,
+          // Likewise the incorrect answers a question hides (ADR-0038).
+          ...(Object.keys(hiddenAnswers).length > 0 ? { hiddenAnswers } : {}),
         }
 
   return previous && exam === previous.exam && arrangement === previous.arrangement

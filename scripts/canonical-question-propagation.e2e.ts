@@ -52,7 +52,7 @@ test('a canonical edit propagates to clean and dirty Exams without manufacturing
       workingCopy: { ...savedOnlyState.workingCopy, title: 'Saved only', questionIds: [] },
       dirty: true,
     })
-    await bankService.openTab({ mode: 'exam', resourceId: clean.id }, otherBank.id)
+    await bankService.openTab({ examId: clean.id }, otherBank.id)
     return { bankId: bank.id, bankUpdatedAt: (await bankService.read(bank.id))!.lastUpdatedAt, cleanId: clean.id, dirtyId: dirty.id }
   }, question)
 
@@ -69,7 +69,7 @@ test('a canonical edit propagates to clean and dirty Exams without manufacturing
   await expect(page.getByRole('tab', { name: 'Chemistry' })).toHaveAttribute('aria-selected', 'true')
   await expect(page.getByRole('tab', { name: 'Biology' })).toHaveCount(0)
   await dialog.locator('.milkdown').click()
-  await page.keyboard.press('Control+A')
+  await page.keyboard.press('ControlOrMeta+A')
   await page.keyboard.type('Edited everywhere')
   await dialog.getByRole('button', { name: 'Save question' }).click()
   await expect(dialog).toBeHidden()
