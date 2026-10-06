@@ -292,6 +292,62 @@ const COMPOSITE_EXAM: Exam = {
   ],
 }
 
+// One question of every type, for the Question Style fixtures. The Short
+// Answer Part has a Work Space of its own, which wins over a style's lines;
+// the Short Answer question has none, so a style's lines show there.
+const QUESTION_STYLE_EXAM: Exam = {
+  title: 'Question Styles',
+  questions: [
+    multipleChoice(
+      'ys-mc',
+      1,
+      [paragraph(text('Which gas do plants take in?'))],
+      [
+        choice('ys-mc-a', false, paragraph(text('Oxygen'))),
+        choice('ys-mc-b', true, paragraph(text('Carbon dioxide'))),
+        choice('ys-mc-c', false, paragraph(text('Helium'))),
+        choice('ys-mc-d', false, paragraph(text('Neon'))),
+      ],
+    ),
+    trueFalse('ys-tf', [paragraph(text('Roots absorb water.'))], 'true'),
+    matching(
+      'ys-mx',
+      [paragraph(text('Match each part to its job.'))],
+      [
+        prompt('ys-mx-p1', 'ys-mx-a2', paragraph(text('Leaf'))),
+        prompt('ys-mx-p2', 'ys-mx-a1', paragraph(text('Root'))),
+      ],
+      [
+        bankAnswer('ys-mx-a1', paragraph(text('Takes up water'))),
+        bankAnswer('ys-mx-a2', paragraph(text('Makes food'))),
+        bankAnswer('ys-mx-a3', paragraph(text('Holds seeds'))),
+      ],
+    ),
+    open('ys-sa', paragraph(text('Name one thing a plant needs to grow.'))),
+    multipart(
+      'ys-mp',
+      [paragraph(text('A seed is planted in dry soil.'))],
+      [
+        part(
+          'ys-mp-a',
+          [paragraph(text('What does it need first?'))],
+          choicesOf(
+            choice('ys-mp-a1', true, paragraph(text('Water'))),
+            choice('ys-mp-a2', false, paragraph(text('Shade'))),
+          ),
+          1,
+        ),
+        part(
+          'ys-mp-b',
+          [paragraph(text('Explain why.'))],
+          suggestedAnswer(paragraph(text('It cannot sprout without it.'))),
+        ),
+      ],
+    ),
+  ],
+  workSpace: { 'ys-mp-b': { height: 64, style: 'blank', fill: false } },
+}
+
 export const FIXTURES: readonly Fixture[] = [
   // A Multipart question is the one shape that takes one number for several questions:
   // the material prints under the number, and each Part prints lettered
@@ -302,23 +358,23 @@ export const FIXTURES: readonly Fixture[] = [
   fixture(
     'a multipart with a multiple-choice part and a short-answer part',
     {
-      title: 'Ottoman Empire',
+      title: 'Kingdom of Aldmere',
       questions: [
         multipart(
           's1',
           [
             paragraph(
               text(
-                'The power of the Empire was waning by 1683 when the second and last attempt was made to conquer Vienna. It failed.',
+                'The power of the Kingdom was fading by 1450, when its last deep harbor silted up.',
               ),
             ),
-            paragraph(text('Several other factors contributed to the Empire’s decline:')),
+            paragraph(text('Several other factors contributed to the Kingdom’s decline:')),
             {
               type: 'bullet_list',
               content: [
                 {
                   type: 'list_item',
-                  content: [paragraph(text('Competition from trade from the Americas'))],
+                  content: [paragraph(text('Competition from newer ports to the south'))],
                 },
                 {
                   type: 'list_item',
@@ -326,24 +382,24 @@ export const FIXTURES: readonly Fixture[] = [
                 },
               ],
             },
-            paragraph(text('Source: “Ottoman Empire (1301–1922),” (adapted)', mark('emphasis'))),
+            paragraph(text('Source: “A Short History of Aldmere” (adapted)', mark('emphasis'))),
           ],
           [
             part(
               's1-a',
-              [paragraph(text('Which region was controlled by the Ottoman Empire in 1683?'))],
+              [paragraph(text('Which region was controlled by the Kingdom of Aldmere in 1450?'))],
               choicesOf(
-                choice('s1-a1', false, paragraph(text('Central America'))),
-                choice('s1-a2', false, paragraph(text('South Asia'))),
-                choice('s1-a3', false, paragraph(text('East Asia'))),
-                choice('s1-a4', true, paragraph(text('Middle East'))),
+                choice('s1-a1', false, paragraph(text('Western Hills'))),
+                choice('s1-a2', false, paragraph(text('Southern Plains'))),
+                choice('s1-a3', false, paragraph(text('Eastern Forests'))),
+                choice('s1-a4', true, paragraph(text('Northern Coast'))),
               ),
               4,
             ),
             part(
               's1-b',
-              [paragraph(text('Identify an issue faced by the Ottoman Empire in the 1600s.'))],
-              suggestedAnswer(paragraph(text('Global trade routes shifted.'))),
+              [paragraph(text('Identify an issue faced by the Kingdom of Aldmere in the 1400s.'))],
+              suggestedAnswer(paragraph(text('Its harbors silted up.'))),
             ),
           ],
         ),
@@ -421,15 +477,15 @@ export const FIXTURES: readonly Fixture[] = [
           'x1',
           [paragraph(text('Match each event to the correct time period.'))],
           [
-            prompt('x1-p1', 'x1-a3', paragraph(text('The Pharisees and Sadducees were formed.'))),
-            prompt('x1-p2', 'x1-a1', paragraph(text('The synagogue system was set up.'))),
-            prompt('x1-p3', '', paragraph(text('The Septuagint was completed.'))),
+            prompt('x1-p1', 'x1-a3', paragraph(text('Iron tools replaced bronze ones.'))),
+            prompt('x1-p2', 'x1-a1', paragraph(text('The first stone tools were made.'))),
+            prompt('x1-p3', '', paragraph(text('Bronze tools were first made.'))),
           ],
           [
-            bankAnswer('x1-a1', paragraph(text('Persian'))),
-            bankAnswer('x1-a2', paragraph(text('Grecian'))),
-            bankAnswer('x1-a3', paragraph(text('Maccabean'))),
-            bankAnswer('x1-a4', paragraph(text('Roman'))),
+            bankAnswer('x1-a1', paragraph(text('Stone Age'))),
+            bankAnswer('x1-a2', paragraph(text('Bronze Age'))),
+            bankAnswer('x1-a3', paragraph(text('Iron Age'))),
+            bankAnswer('x1-a4', paragraph(text('Middle Ages'))),
           ],
         ),
       ],
@@ -619,6 +675,30 @@ export const FIXTURES: readonly Fixture[] = [
     { answerKey: true },
   ),
 
+  // An Exam's own Page Margins, a different one on each side: every adapter
+  // cuts the sheet the plan packed against.
+  fixture(
+    'an exam with its own page margins',
+    {
+      title: 'Own margins',
+      questions: [
+        multipleChoice(
+          'm1',
+          2,
+          [paragraph(text('Which particle is neutral?'))],
+          [
+            choice('m1-a', false, paragraph(text('Proton'))),
+            choice('m1-b', true, paragraph(text('Neutron'))),
+          ],
+        ),
+        open('o1', paragraph(text('Explain osmosis.'))),
+      ],
+      margins: { top: 1, right: 0.6, bottom: 1.25, left: 0.85 },
+    },
+    arrangement(['m1', 'o1']),
+    { answerKey: true },
+  ),
+
   fixture(
     'a plain short-answer question',
     {
@@ -735,13 +815,13 @@ export const FIXTURES: readonly Fixture[] = [
               {
                 type: 'bullet_list',
                 content: [
-                  { type: 'list_item', content: [paragraph(text('Competition from the Americas'))] },
+                  { type: 'list_item', content: [paragraph(text('Competition from newer ports'))] },
                   { type: 'list_item', content: [paragraph(text('Rising unemployment'))] },
                 ],
               },
             ],
           },
-          paragraph(text('Source: BBC online, 2009 (adapted)')),
+          paragraph(text('Source: A Short History of Aldmere, 1998 (adapted)')),
           paragraph(text('Identify one cause of the decline.')),
         ),
       ],
@@ -823,10 +903,10 @@ export const FIXTURES: readonly Fixture[] = [
               {
                 type: 'sideBySidePanel',
                 content: [
-                  paragraph(text('Upper classes: '), text('12.5%', mark('emphasis'))),
+                  paragraph(text('Group A: '), text('12.5%', mark('emphasis'))),
                   {
                     type: 'blockquote',
-                    content: [paragraph(text('Peasants: 82%'))],
+                    content: [paragraph(text('Group B: 82%'))],
                   },
                 ],
               },
@@ -835,7 +915,7 @@ export const FIXTURES: readonly Fixture[] = [
                 content: [
                   paragraph(
                     text('Where '),
-                    { type: 'math_inline', attrs: { value: '-2 \\le x \\le 4' } },
+                    { type: 'math_inline', attrs: { value: '-1 \\le x \\le 5' } },
                   ),
                 ],
               },
@@ -1039,31 +1119,31 @@ export const FIXTURES: readonly Fixture[] = [
     arrangement(['o1']),
   ),
 
-  // The notation a precalculus test is written in, as an AI conversion writes
+  // The notation a math test is written in, as an AI conversion writes
   // it: display fractions, relations, sized delimiters, composition and
   // explicit spaces.
   fixture(
     'school mathematics notation',
     {
-      title: 'Function Theory',
+      title: 'Math Notation',
       questions: [
         open(
           'o1',
           paragraph(
             text('The function f is given by '),
-            { type: 'math_inline', attrs: { value: 'f(x) = \\dfrac{3x - 4}{2x - 5}' } },
+            { type: 'math_inline', attrs: { value: 'f(x) = \\dfrac{2x + 1}{x - 3}' } },
             text(' for '),
-            { type: 'math_inline', attrs: { value: '-2 \\le x \\le 4' } },
+            { type: 'math_inline', attrs: { value: '-1 \\le x \\le 5' } },
             text('.'),
           ),
           paragraph(
-            { type: 'math_inline', attrs: { value: 'h(x) = 3f\\left(\\frac{x}{2}\\right) + 1' } },
+            { type: 'math_inline', attrs: { value: 'h(x) = 2f\\left(\\frac{x}{3}\\right) - 4' } },
             text(', '),
             { type: 'math_inline', attrs: { value: '(f \\circ g)(x)' } },
             text(', '),
-            { type: 'math_inline', attrs: { value: '\\left[-\\tfrac{1}{5}, \\tfrac{1}{4}\\right]' } },
+            { type: 'math_inline', attrs: { value: '\\left[-\\tfrac{1}{2}, \\tfrac{1}{3}\\right]' } },
             text(', '),
-            { type: 'math_inline', attrs: { value: '[-4,\\ 3]' } },
+            { type: 'math_inline', attrs: { value: '[-2,\\ 6]' } },
             text(', '),
             { type: 'math_inline', attrs: { value: 'f^{-1}(x) \\ne g(x)' } },
             text(', '),
@@ -1358,5 +1438,24 @@ export const FIXTURES: readonly Fixture[] = [
       answerKey: true,
       measure: stubHeights({ m1: 300, m2: 300, o1: 300 }),
     },
+  ),
+
+  // Each Question Style over every Question Type, so every adapter prints its
+  // blanks, its letters, its Word Bank and its default Work Space the way the
+  // plan resolved them. Two questions to a page, so the PDF has room to draw
+  // them; Condensed's measure fits every answer four across.
+  ...(['classic', 'condensed'] as const).map((questionStyle) =>
+    fixture(
+      `every question type in the ${questionStyle} question style`,
+      { ...QUESTION_STYLE_EXAM, title: `${questionStyle} style`, questionStyle },
+      arrangement(['ys-mc', 'ys-tf', 'ys-mx', 'ys-sa', 'ys-mp']),
+      {
+        answerKey: true,
+        measure: {
+          itemHeight: (item: PageItem) => (item.kind === 'question' ? 330 : 40),
+          ...(questionStyle === 'condensed' ? { choiceWidth: () => 80 } : {}),
+        },
+      },
+    ),
   ),
 ]

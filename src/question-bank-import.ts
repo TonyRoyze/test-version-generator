@@ -1,12 +1,16 @@
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020'
 import { DEFAULT_COLUMNS, type Question, type QuestionType } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
+import { jpegOrientation } from './export-media'
 import questionBankSchema010 from './question-bank-record-0.1.0.schema.json'
 import questionBankSchema020 from './question-bank-record-0.2.0.schema.json'
 import questionBankSchema030 from './question-bank-record-0.3.0.schema.json'
 import questionBankSchema040 from './question-bank-record-0.4.0.schema.json'
 import questionBankSchema050 from './question-bank-record-0.5.0.schema.json'
 import questionBankSchema060 from './question-bank-record-0.6.0.schema.json'
+import questionBankSchema070 from './question-bank-record-0.7.0.schema.json'
+import questionBankSchema080 from './question-bank-record-0.8.0.schema.json'
+import questionBankSchema090 from './question-bank-record-0.9.0.schema.json'
 import {
   QUESTION_BANK_ATTACHMENT_DESCRIPTION,
   QUESTION_BANK_FORMAT,
@@ -16,6 +20,7 @@ import {
   partLetter,
   recordDocumentToEditorNodes,
   type QuestionBankRecord,
+  type QuestionBankRecordChoice,
   type QuestionBankRecordPart,
   type QuestionBankRecordQuestion,
   type QuestionBankRecordQuestionType,
@@ -66,6 +71,8 @@ export type QuestionBankImportErrorCode =
   | 'rich-text-depth-limit'
   | 'image-dimension-limit'
   | 'invalid-media'
+  | 'missing-media'
+  | 'invalid-zip'
 
 export class QuestionBankImportError extends Error {
   constructor(
@@ -102,12 +109,35 @@ type ParsedRecord = {
   media: ParsedMediaAsset[]
 }
 
-type ParsedMediaAsset = {
+/** A Media Asset with its original bytes, however the record carried them. */
+export type ParsedMediaAsset = {
   id: string
   mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
   width: number
   height: number
-  bytes: string
+  bytes: Uint8Array
+}
+
+/** A Media Asset as a record declares it, before its bytes are checked:
+ *  0.1.0–0.7.0 carry them as base64, 0.8.0 and later name a file in the
+ *  package's zip. */
+type DeclaredMediaAsset = Omit<ParsedMediaAsset, 'bytes'> & ({ bytes: string } | { file: string })
+
+/** A record structurally parsed, its Media Assets still as declared. */
+type DeclaredRecord = Omit<ParsedRecord, 'media'> & { media: DeclaredMediaAsset[] }
+
+/**
+ * The files a package's zip carries beside `parrot.json`, by path. Each file
+ * a Media Asset names is marked used, so a package can refuse a picture no
+ * record declares, as a record refuses a Media Asset nothing shows.
+ */
+export type PackageFiles = {
+  get: (path: string) => Uint8Array | undefined
+  used: Set<string>
+}
+
+export function packageFiles(files: ReadonlyMap<string, Uint8Array>): PackageFiles {
+  return { get: (path) => files.get(path), used: new Set() }
 }
 
 export type QuestionBankRecordSummary = QuestionBankImportProposal['summary']
@@ -211,7 +241,7 @@ function importedParts(
                   answerIds.set(choice.id, choiceId)
                   return {
                     type: 'multipleChoiceChoice',
-                    attrs: { id: choiceId, correct: choice.correct },
+                    attrs: { id: choiceId, correct: choice.correct, ...lockAttrOf(choice) },
                     content: recordDocumentToEditorNodes(choice.content),
                   }
                 }),
@@ -226,6 +256,14 @@ function importedParts(
       }
     }),
   }
+}
+
+/** The teacher's decision a record's choice carries, as the editor keeps it.
+ *  A choice that says nothing has no decision, and its wording locks it or
+ *  not — so an older record's “All of the above”, a Question File's or an
+ *  assistant's is locked on import as a typed one is (ADR-0038). */
+function lockAttrOf(choice: QuestionBankRecordChoice): { locked?: boolean } {
+  return choice.locked === undefined ? {} : { locked: choice.locked }
 }
 
 /** A document's blocks, or one empty paragraph for a visibly blank one — a
@@ -267,7 +305,11 @@ export function importedQuestionIdentities(
                       answers.set(choice.id, id)
                       return {
                         type: 'multipleChoiceChoice',
-                        attrs: { id, correct: choice.correct },
+                        attrs: {
+                          id,
+                          correct: choice.correct,
+                          ...(question.type === 'multiple-choice' ? lockAttrOf(choice) : {}),
+                        },
                         content: recordDocumentToEditorNodes(choice.content),
                       }
                     }),
@@ -302,7 +344,7 @@ export function importedQuestionsFromRecord(
   )
 }
 
-type Parser = (value: unknown) => ParsedRecord
+type Parser = (value: unknown) => DeclaredRecord
 
 const ajv = new Ajv2020({ allErrors: true, strict: false })
 const validate010 = ajv.compile(questionBankSchema010)
@@ -311,6 +353,9 @@ const validate030 = ajv.compile(questionBankSchema030)
 const validate040 = ajv.compile(questionBankSchema040)
 const validate050 = ajv.compile(questionBankSchema050)
 const validate060 = ajv.compile(questionBankSchema060)
+const validate070 = ajv.compile(questionBankSchema070)
+const validate080 = ajv.compile(questionBankSchema080)
+const validate090 = ajv.compile(questionBankSchema090)
 
 function schemaMessage(errors: ErrorObject[] | null | undefined): string {
   const first = errors?.[0]
@@ -319,11 +364,48 @@ function schemaMessage(errors: ErrorObject[] | null | undefined): string {
     : 'Question Bank Record schema validation failed.'
 }
 
-function copyNode(node: SemanticNode): SemanticNode {
+/** How one record's nodes are read: whether its `authoredSize` is Record
+ *  0.7.0's share of the container or an older record's legacy ratio, and the
+ *  pixel size of each Media Asset it declares, which a crop carries into the
+ *  editor. */
+type CopyContext = {
+  currentSize: boolean
+  crops: boolean
+  /** Whether the record's choices may say they are locked; an older record
+   *  that carries `locked` carries an unknown optional field, ignored. */
+  locks: boolean
+  media: ReadonlyMap<string, { width: number; height: number }>
+}
+
+/** The versions whose `authoredSize` is a share of the picture's container,
+ *  and which know the Picture Crop — both added in 0.7.0. */
+const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0'])
+
+/** The versions that know the Locked Answer, added in 0.9.0. */
+const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0'])
+
+function copyPicture(node: SemanticNode, context: CopyContext): Partial<SemanticNode> {
+  const size =
+    node.authoredSize === undefined
+      ? {}
+      : context.currentSize
+        ? { authoredSize: node.authoredSize }
+        : { legacyRatio: node.authoredSize }
+  if (!context.crops || node.crop === undefined) return size
+  const { left, top, right, bottom } = node.crop
+  const pictureSize = node.asset !== undefined ? context.media.get(node.asset) : undefined
+  return {
+    ...size,
+    crop: { left, top, right, bottom },
+    ...(pictureSize ? { pictureSize: { width: pictureSize.width, height: pictureSize.height } } : {}),
+  }
+}
+
+function copyNode(node: SemanticNode, context: CopyContext): SemanticNode {
   return {
     type: node.type,
     ...(node.text !== undefined ? { text: node.text } : {}),
-    ...(node.content ? { content: node.content.map(copyNode) } : {}),
+    ...(node.content ? { content: node.content.map((child) => copyNode(child, context)) } : {}),
     ...(node.marks
       ? {
           marks: node.marks.map((mark) =>
@@ -346,15 +428,21 @@ function copyNode(node: SemanticNode): SemanticNode {
     ...(node.pending !== undefined ? { pending: { ...node.pending } } : {}),
     ...(node.alt !== undefined ? { alt: node.alt } : {}),
     ...(node.caption !== undefined ? { caption: node.caption } : {}),
-    ...(node.authoredSize !== undefined ? { authoredSize: node.authoredSize } : {}),
+    ...(node.type === 'inline-image' || node.type === 'block-image' ? copyPicture(node, context) : {}),
   }
 }
 
-function copyDocument(document: SemanticDocument): SemanticDocument {
-  return { type: 'document', content: document.content.map(copyNode) }
-}
-
-function copyQuestion(question: QuestionBankRecordQuestion): QuestionBankRecordQuestion {
+function copyQuestion(question: QuestionBankRecordQuestion, context: CopyContext): QuestionBankRecordQuestion {
+  const copyDocument = (document: SemanticDocument): SemanticDocument => ({
+    type: 'document',
+    content: document.content.map((node) => copyNode(node, context)),
+  })
+  const copyChoice = (choice: QuestionBankRecordChoice): QuestionBankRecordChoice => ({
+    id: choice.id,
+    content: copyDocument(choice.content),
+    correct: choice.correct,
+    ...(context.locks && choice.locked !== undefined ? { locked: choice.locked } : {}),
+  })
   return {
     id: question.id,
     type: question.type,
@@ -362,13 +450,7 @@ function copyQuestion(question: QuestionBankRecordQuestion): QuestionBankRecordQ
     ...(question.difficulty !== undefined ? { difficulty: question.difficulty } : {}),
     ...(question.topics !== undefined ? { topics: [...question.topics] } : {}),
     ...(question.choices !== undefined
-      ? {
-          choices: question.choices.map((choice) => ({
-            id: choice.id,
-            content: copyDocument(choice.content),
-            correct: choice.correct,
-          })),
-        }
+      ? { choices: question.choices.map(copyChoice) }
       : {}),
     ...(question.prompts !== undefined
       ? {
@@ -394,13 +476,7 @@ function copyQuestion(question: QuestionBankRecordQuestion): QuestionBankRecordQ
             type: part.type,
             stem: copyDocument(part.stem),
             ...(part.choices !== undefined
-              ? {
-                  choices: part.choices.map((choice) => ({
-                    id: choice.id,
-                    content: copyDocument(choice.content),
-                    correct: choice.correct,
-                  })),
-                }
+              ? { choices: part.choices.map(copyChoice) }
               : {}),
             ...(part.suggestedAnswer !== undefined
               ? { suggestedAnswer: copyDocument(part.suggestedAnswer) }
@@ -427,11 +503,56 @@ function valueAt(value: unknown, pointer: string): unknown {
         : undefined, value)
 }
 
+const isTypedObject = (value: unknown): value is { type: string } =>
+  typeof value === 'object' && value !== null && !Array.isArray(value) &&
+  typeof (value as { type?: unknown }).type === 'string'
+
+/**
+ * Content written under a member no node has — a table an assistant nested
+ * in a paragraph's `table` instead of placing beside it — is not an optional
+ * field to ignore: dropping it would discard Question Content without a word.
+ * Only `content` holds child nodes, and only a mark list holds marks.
+ */
+function misplacedContent(value: unknown): string | undefined {
+  const questions = valueAt(value, 'bank/questions')
+  if (!Array.isArray(questions)) return undefined
+  for (const question of questions) {
+    const id = typeof question?.id === 'string' ? question.id : undefined
+    let found: string | undefined
+    const visitNode = (node: unknown) => {
+      if (found || !isTypedObject(node)) return
+      for (const [key, member] of Object.entries(node)) {
+        if (key === 'content') {
+          if (Array.isArray(member)) member.forEach(visitNode)
+          continue
+        }
+        if (key === 'marks') continue
+        const nested = Array.isArray(member) ? member.find(isTypedObject) : isTypedObject(member) ? member : undefined
+        if (nested) {
+          found = `${id ? `Question “${id}”` : 'A Question'} has a ${nested.type} inside a ${node.type}’s “${key}” member, where it cannot be read. ` +
+            `Put the ${nested.type} in the “content” list beside the ${node.type}, as a block of its own.`
+          return
+        }
+      }
+    }
+    // Every document a Question holds — stem, answers, Items, Word Bank,
+    // Parts, Suggested Answer — wherever it sits in the Question.
+    const visitQuestion = (part: unknown) => {
+      if (found || typeof part !== 'object' || part === null) return
+      if (isTypedObject(part) && part.type === 'document') return visitNode(part)
+      Object.values(part).forEach(visitQuestion)
+    }
+    visitQuestion(question)
+    if (found) return found
+  }
+  return undefined
+}
+
 /** The versions that know the Pending Image, added in 0.5.0. */
-const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0'])
+const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0'])
 
 /** The versions that know the Side-by-Side, added in 0.6.0. */
-const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0'])
+const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0'])
 
 /** Where a Side-by-Side may stand: a top-level block of a Question's stem or
  *  of a Multipart Part's stem, and nowhere else. */
@@ -493,6 +614,51 @@ function malformedSideBySide(
   return undefined
 }
 
+/** What is wrong with the Picture Crop of an image node, if anything the
+ *  schema can see. Its order within the kept part is checked with the
+ *  record's semantics, since a schema cannot compare two numbers. */
+function cropProblem(node: unknown): string | undefined {
+  if (typeof node !== 'object' || node === null || !('crop' in node)) return undefined
+  const { type, crop, pending } = node as { type?: unknown; crop?: unknown; pending?: unknown }
+  if (type === 'inline-image') return 'A Picture Crop belongs only to a block image; an inline image cannot carry one.'
+  if (type !== 'block-image') return 'Only a block image may carry a Picture Crop.'
+  if (pending !== undefined)
+    return 'A Pending Image cannot carry a Picture Crop: crop the picture once Resolve Images has given it a Media Asset.'
+  const sides = ['left', 'top', 'right', 'bottom']
+  if (
+    typeof crop !== 'object' ||
+    crop === null ||
+    Object.keys(crop).some((key) => !sides.includes(key)) ||
+    sides.some((side) => {
+      const value = (crop as Record<string, unknown>)[side]
+      return typeof value !== 'number' || value < 0 || value > 1
+    })
+  )
+    return 'A Picture Crop must give exactly `left`, `top`, `right` and `bottom`, each a number from 0 to 1.'
+  return undefined
+}
+
+/**
+ * A malformed Picture Crop is lifted out of the generic structural failure,
+ * as a malformed Pending Image is: the message should say what a crop may be
+ * and where it may go rather than name a JSON pointer.
+ */
+function malformedCrop(
+  errors: ErrorObject[] | null | undefined,
+  value: unknown,
+  sourceVersion: string,
+): QuestionBankImportError | undefined {
+  if (!SHARE_SIZE_VERSIONS.has(sourceVersion)) return undefined
+  for (const error of errors ?? []) {
+    const path = error.instancePath.replace(/\/crop(?:\/.*)?$/, '')
+    for (const candidate of [path, path.replace(/\/[^/]*$/, '')]) {
+      const problem = cropProblem(valueAt(value, candidate))
+      if (problem) return new QuestionBankImportError('invalid-question', problem)
+    }
+  }
+  return undefined
+}
+
 /**
  * A malformed Pending Image is lifted out of the generic structural failure,
  * as an unsafe link is: it is the mistake an assistant converting a test is
@@ -547,7 +713,9 @@ function parseWith(
   validate: SchemaValidator & { errors?: ErrorObject[] | null },
   sourceVersion: string,
   value: unknown,
-): ParsedRecord {
+): DeclaredRecord {
+  const misplaced = misplacedContent(value)
+  if (misplaced) throw new QuestionBankImportError('invalid-question', misplaced)
   if (!validate(value)) {
     const unsafeLink = validate.errors?.find(
       (error) =>
@@ -561,6 +729,8 @@ function parseWith(
         `The link “${String(href)}” is unsafe. Question Bank links must use absolute HTTP or HTTPS URLs.`,
       )
     }
+    const cropError = malformedCrop(validate.errors, value, sourceVersion)
+    if (cropError) throw cropError
     const pendingError = malformedPendingImage(validate.errors, value, sourceVersion)
     if (pendingError) throw pendingError
     const sideBySideError = malformedSideBySide(validate.errors, value, sourceVersion)
@@ -570,9 +740,9 @@ function parseWith(
       schemaMessage(validate.errors),
     )
   }
-  const record = value as QuestionBankRecord & {
+  const record = value as Omit<QuestionBankRecord, 'media'> & {
     bank: ParsedRecord['bank']
-    media: ParsedMediaAsset[]
+    media: DeclaredMediaAsset[]
   }
   return {
     format: QUESTION_BANK_FORMAT,
@@ -599,26 +769,40 @@ function parseWith(
             },
           }
         : {}),
-      questions: record.bank.questions.map(copyQuestion),
+      questions: record.bank.questions.map((question) =>
+        copyQuestion(question, {
+          currentSize: SHARE_SIZE_VERSIONS.has(sourceVersion),
+          crops: SHARE_SIZE_VERSIONS.has(sourceVersion),
+          locks: LOCKED_ANSWER_VERSIONS.has(sourceVersion),
+          media: new Map(record.media.map((asset) => [asset.id, asset])),
+        }),
+      ),
     },
     media: record.media.map((asset) => ({
       id: asset.id,
       mimeType: asset.mimeType,
       width: asset.width,
       height: asset.height,
-      bytes: asset.bytes,
+      ...('file' in asset ? { file: asset.file } : { bytes: asset.bytes }),
     })),
   }
 }
 
 /**
- * Every retained version migrates forward without rewriting anything. 0.2.0
- * added `true-false` to 0.1.0, 0.3.0 added `matching` to 0.2.0, and 0.4.0
- * added `multipart` to 0.3.0, 0.5.0 added Pending Images to 0.4.0, and 0.6.0
- * added the Side-by-Side to 0.5.0; none can appear in an older record, and no
- * version changed anything an older record already says — so a record that
- * satisfies an older schema is already a conforming 0.6.0 record once its
- * version is restated.
+ * Every retained version migrates forward. 0.2.0 added `true-false` to 0.1.0,
+ * 0.3.0 added `matching` to 0.2.0, 0.4.0 added `multipart` to 0.3.0, 0.5.0
+ * added Pending Images to 0.4.0, 0.6.0 added the Side-by-Side to 0.5.0, and
+ * 0.7.0 added the Picture Crop to 0.6.0; none can appear in an older record.
+ * 0.8.0 changed only how a Media Asset's bytes travel: it names a file in the
+ * package's zip where 0.1.0–0.7.0 carry base64 (ADR-0036). 0.9.0 added a
+ * choice's optional `locked` (ADR-0038); a choice of an older record has none,
+ * and is locked by its wording once imported, as an undecided one is.
+ * 0.7.0 is the one version that changed something an older record already
+ * says: its `authoredSize` is a share of the picture's container, where
+ * 0.1.0–0.6.0's was Crepe's ratio against the size the picture fit at. An
+ * older record's is therefore read as that legacy ratio (`legacyRatio`, which
+ * no record carries), and otherwise a record that satisfies an older schema
+ * is a conforming 0.7.0 record once its version is restated.
  */
 const parser010: Parser = (value) => parseWith(validate010, '0.1.0', value)
 
@@ -632,6 +816,12 @@ const parser050: Parser = (value) => parseWith(validate050, '0.5.0', value)
 
 const parser060: Parser = (value) => parseWith(validate060, '0.6.0', value)
 
+const parser070: Parser = (value) => parseWith(validate070, '0.7.0', value)
+
+const parser080: Parser = (value) => parseWith(validate080, '0.8.0', value)
+
+const parser090: Parser = (value) => parseWith(validate090, '0.9.0', value)
+
 /** Exact versions only: adding compatibility requires adding an explicit parser or migration. */
 export const SUPPORTED_QUESTION_BANK_VERSIONS: Readonly<Record<string, Parser>> =
   Object.freeze({
@@ -641,6 +831,9 @@ export const SUPPORTED_QUESTION_BANK_VERSIONS: Readonly<Record<string, Parser>> 
     '0.4.0': parser040,
     '0.5.0': parser050,
     '0.6.0': parser060,
+    '0.7.0': parser070,
+    '0.8.0': parser080,
+    '0.9.0': parser090,
   })
 
 const utf8 = new TextDecoder('utf-8', { fatal: true })
@@ -671,7 +864,7 @@ function requiredString(object: unknown, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-function structuralParse(value: unknown): ParsedRecord {
+function structuralParse(value: unknown): DeclaredRecord {
   const format = requiredString(value, 'format')
   if (format !== QUESTION_BANK_FORMAT) {
     throw new QuestionBankImportError(
@@ -747,6 +940,12 @@ function inspectDocument(document: SemanticDocument): DocumentStats {
         )
       }
       mediaReferences.add(reference)
+      if (node.crop && (node.crop.left >= node.crop.right || node.crop.top >= node.crop.bottom)) {
+        throw new QuestionBankImportError(
+          'invalid-question',
+          'A Picture Crop must keep part of its picture: `left` must be less than `right`, and `top` less than `bottom`.',
+        )
+      }
     }
     for (const child of node.content ?? []) visit(child, atDepth + 1)
   }
@@ -757,9 +956,9 @@ function inspectDocument(document: SemanticDocument): DocumentStats {
 function validatedBase64Size(value: string): number {
   if (
     value.length % 4 !== 0 ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
-      value,
-    )
+    // One flat character class, never a repeated group: a group repeated over
+    // a photo's millions of characters overflows V8's regex stack.
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(value)
   ) {
     throw new QuestionBankImportError(
       'invalid-media',
@@ -840,14 +1039,22 @@ export function mediaDimensions(
   bytes: Uint8Array,
 ): { width: number; height: number } | null {
   if (mimeType === 'image/png') return pngDimensions(bytes)
-  if (mimeType === 'image/jpeg') return jpegDimensions(bytes)
+  if (mimeType === 'image/jpeg') {
+    // Declared upright, as a browser measures it: orientations 5–8 store a
+    // camera's pixels a quarter turn from how they are seen.
+    const stored = jpegDimensions(bytes)
+    return stored && jpegOrientation(bytes) >= 5
+      ? { width: stored.height, height: stored.width }
+      : stored
+  }
   return webpDimensions(bytes)
 }
 
 async function validateSemantics(
-  record: ParsedRecord,
+  record: DeclaredRecord,
   limits: QuestionBankImportLimits,
-): Promise<QuestionBankImportProposal['summary']> {
+  files: PackageFiles | undefined,
+): Promise<{ summary: QuestionBankImportProposal['summary']; media: ParsedMediaAsset[] }> {
   if (record.requiredFeatures.length > 0) {
     throw new QuestionBankImportError(
       'unsupported-feature',
@@ -1083,9 +1290,8 @@ async function validateSemantics(
   let decodedMediaBytes = 0
   const mediaIds = new Set<string>()
   const mediaSizes = new Map<string, number>()
-  // Validate declarations and encoded lengths in a cheap pass. No attacker-
-  // controlled base64 buffer is allocated until every layered size limit is
-  // known to hold.
+  // Validate declarations and sizes in a cheap pass. No attacker-controlled
+  // base64 buffer is allocated until every layered size limit is known to hold.
   for (const asset of record.media) {
     if (mediaIds.has(asset.id)) {
       throw new QuestionBankImportError(
@@ -1100,7 +1306,7 @@ async function validateSemantics(
         `Media Asset “${asset.id}” exceeds the ${limits.imageWidth} by ${limits.imageHeight} pixel limit.`,
       )
     }
-    const size = validatedBase64Size(asset.bytes)
+    const size = 'file' in asset ? packageFile(asset, files).byteLength : validatedBase64Size(asset.bytes)
     if (size > limits.mediaAssetBytes) {
       throw new QuestionBankImportError(
         'media-asset-size-limit',
@@ -1116,8 +1322,9 @@ async function validateSemantics(
     }
     mediaSizes.set(asset.id, size)
   }
+  const media: ParsedMediaAsset[] = []
   for (const asset of record.media) {
-    const bytes = decodeBase64(asset.bytes)
+    const bytes = 'file' in asset ? packageFile(asset, files) : decodeBase64(asset.bytes)
     if (bytes.byteLength !== mediaSizes.get(asset.id)) {
       throw new QuestionBankImportError(
         'invalid-media',
@@ -1144,6 +1351,7 @@ async function validateSemantics(
         `Media Asset “${asset.id}” does not match its SHA-256 digest.`,
       )
     }
+    media.push({ id: asset.id, mimeType: asset.mimeType, width: asset.width, height: asset.height, bytes })
   }
   for (const reference of references) {
     if (!mediaIds.has(reference)) {
@@ -1162,7 +1370,7 @@ async function validateSemantics(
     }
   }
 
-  return {
+  const summary = {
     bankName: record.bank.name,
     questionCounts: counts,
     topics: [...topics].sort((left, right) => left.localeCompare(right)),
@@ -1173,6 +1381,23 @@ async function validateSemantics(
     externalLinks,
     formatVersion: record.sourceVersion,
   }
+  return { summary, media }
+}
+
+/** The bytes of the zip file a 0.8.0 or later Media Asset names. A record read
+ *  outside its zip has none, so it may declare no Media Asset at all. */
+function packageFile(asset: DeclaredMediaAsset & { file: string }, files: PackageFiles | undefined): Uint8Array {
+  const bytes = files?.get(asset.file)
+  if (!bytes) {
+    throw new QuestionBankImportError(
+      'missing-media',
+      files
+        ? `Media Asset “${asset.id}” names “${asset.file}”, which is not in this zip.`
+        : 'This file names pictures that travel beside it in a zip. Import the .parrot.zip or the PDF it came in instead.',
+    )
+  }
+  files!.used.add(asset.file)
+  return bytes
 }
 
 /** One Question Bank Record already decoded from JSON, checked against its
@@ -1182,10 +1407,11 @@ async function validateSemantics(
 export async function inspectQuestionBankRecordValue(
   value: unknown,
   limits: QuestionBankImportLimits = DEFAULT_QUESTION_BANK_IMPORT_LIMITS,
+  files?: PackageFiles,
 ): Promise<QuestionBankImportProposal> {
-  const record = structuralParse(value)
-  const summary = await validateSemantics(record, limits)
-  return { record, summary }
+  const declared = structuralParse(value)
+  const { summary, media } = await validateSemantics(declared, limits, files)
+  return { record: { ...declared, media }, summary }
 }
 
 export async function inspectQuestionBankRecord(
@@ -1211,8 +1437,9 @@ export async function inspectQuestionBankFile(
 }
 
 /** The bytes of the one `pdf-canonical-extraction` attachment a Test Parrot
- *  PDF carries — a Question Bank File's Question Bank Record, or an Exam PDF's
- *  Test Parrot Package. What those bytes are is for the caller to read. */
+ *  PDF carries: a package zip (ADR-0036), or, in a PDF made before it, a
+ *  Question Bank File's bare Question Bank Record or an Exam PDF's package as
+ *  JSON. What those bytes are is for the caller to read. */
 export async function readCanonicalAttachment(
   bytes: Uint8Array,
   limits: QuestionBankImportLimits = DEFAULT_QUESTION_BANK_IMPORT_LIMITS,
@@ -1270,10 +1497,14 @@ export async function readCanonicalAttachment(
         'The canonical attachment could not be decoded.',
       )
     }
-    if (content.byteLength > limits.recordBytes) {
+    // A package zip carries its pictures too, so it may be as large as the
+    // PDF allows; the JSON inside it is held to the record limit when read.
+    const zip = content[0] === 0x50 && content[1] === 0x4b && content[2] === 0x03 && content[3] === 0x04
+    const limit = zip ? limits.pdfBytes : limits.recordBytes
+    if (content.byteLength > limit) {
       throw new QuestionBankImportError(
         'record-size-limit',
-        `The decoded canonical JSON attachment exceeds the ${limits.recordBytes} byte limit.`,
+        `The canonical attachment exceeds the ${limit} byte limit.`,
       )
     }
     return content

@@ -141,7 +141,9 @@ describe('PDF Export Adapter', () => {
     expect(Math.max(...lefts)).toBeGreaterThanOrEqual(body + 17)
   })
 
-  test('typesets common inline and display math rather than printing LaTeX commands', async () => {
+  // Equations are drawn from MathJax's outlines and written over themselves,
+  // invisibly, so the PDF's text still holds them for search and copying.
+  test('keeps inline and display math searchable, never as LaTeX commands', async () => {
     const { plans } = plansOf('inline and display mathematics')
     const bytes = await createPublicationPdf(plans, noImages, fonts)
     const document = await getDocument({ data: bytes, disableWorker: true }).promise
@@ -160,9 +162,10 @@ describe('PDF Export Adapter', () => {
     expect(text).not.toContain('\\sqrt')
   })
 
-  // A converted precalculus test printed `dfrac{3x - 4}{2x - 5}` and
-  // `-2 le x le 4`: every command the typesetter did not know lost its
-  // backslash and printed as a word.
+  // A converted math test printed `dfrac{2x + 1}{x - 3}` and
+  // `-1 le x le 5`: every command the typesetter did not know lost its
+  // backslash and printed as a word. The written equation is now the
+  // searchable text over the drawn one.
   test('writes school notation as notation, never as LaTeX command names', async () => {
     const { plans } = plansOf('school mathematics notation')
     const bytes = await createPublicationPdf(plans, noImages, fonts)
@@ -172,18 +175,31 @@ describe('PDF Export Adapter', () => {
       .join(' ')
     const compact = text.replace(/\s+/g, '')
 
-    expect(compact).toContain('f(x)=(3x−4)⁄(2x−5)')
-    expect(compact).toContain('−2≤x≤4')
-    expect(compact).toContain('h(x)=3f(x⁄2)+1')
+    expect(compact).toContain('f(x)=(2x+1)⁄(x−3)')
+    expect(compact).toContain('−1≤x≤5')
+    expect(compact).toContain('h(x)=2f(x⁄3)−4')
     expect(compact).toContain('(f∘g)(x)')
-    expect(compact).toContain('[−1⁄5,1⁄4]')
-    expect(compact).toContain('[−4,3]')
+    expect(compact).toContain('[−1⁄2,1⁄3]')
+    expect(compact).toContain('[−2,6]')
     expect(compact).toContain('≠g(x)')
     expect(compact).toContain('undefined')
     expect(compact).toContain('√(x+1)⁄2≥0')
     for (const leak of ['frac', 'left', 'right', 'circ', 'text', 'geq', '\\', '{', '}']) {
       expect(compact).not.toContain(leak)
     }
+  })
+
+  // Written on the line, a PDF printed `3⁄5+4⁄15` where print stacks the
+  // fractions; the PDF now fills the same outlines print's typesetting draws.
+  test('draws equations as typeset outlines rather than as text', async () => {
+    const { plans } = plansOf('school mathematics notation')
+    const bytes = await createPublicationPdf(plans, noImages, fonts)
+    const page = await (await getDocument({ data: bytes, disableWorker: true }).promise).getPage(1)
+    const operators = await page.getOperatorList()
+    const paths = operators.fnArray.filter((op) => op === OPS.constructPath).length
+    // A glyph or a rule is a path of its own: `f(x)=(2x+1)⁄(x−3)` alone has
+    // more than a dozen, where the page's own rules are a handful.
+    expect(paths).toBeGreaterThan(40)
   })
 
   test('draws a boxed passage inside a black border around its text', async () => {
@@ -193,8 +209,8 @@ describe('PDF Export Adapter', () => {
     const text = (await page.getTextContent()).items
       .map((item) => ('str' in item ? item.str : ''))
       .join(' ')
-    expect(text).toContain('Competition from the Americas')
-    expect(text).toContain('Source: BBC online')
+    expect(text).toContain('Competition from newer ports')
+    expect(text).toContain('Source: A Short History of Aldmere')
 
     // pdf-lib strokes a bordered rectangle in the colour it is given: the box
     // is the one black stroke on the page.
@@ -368,6 +384,28 @@ describe('PDF Export Adapter', () => {
     expect(sizeOf('Which particle is neutral?')).toBeCloseTo(bodyPoints('large'), 2)
     expect(sizeOf('Sized type')).toBeCloseTo(titlePoints('small'), 2)
     expect(sizeOf('Brave Otter')).toBeCloseTo(pointsOf('body'), 2)
+  })
+
+  // A Question Style's blanks and letters reach the page as the plan resolved
+  // them, and the Answer Key keeps its capitals.
+  test.each([
+    ['classic', '_______ 1.', 'b. Carbon dioxide'],
+    ['condensed', 'T F 2.', 'B. Carbon dioxide'],
+  ] as const)('draws the %s question style’s blanks and letters', async (style, blank, answer) => {
+    const { plans } = plansOf(`every question type in the ${style} question style`)
+    const bytes = await createPublicationPdf(plans, noImages, fonts)
+    const document = await getDocument({ data: bytes, disableWorker: true }).promise
+    let drawn = ''
+    for (let index = 1; index <= document.numPages; index += 1) {
+      drawn += ' ' + (await (await document.getPage(index)).getTextContent()).items
+        .map((item) => ('str' in item ? item.str : ''))
+        .join(' ')
+    }
+    drawn = drawn.replace(/\s+/g, ' ')
+    expect(drawn).toContain(blank)
+    expect(drawn).toContain(answer)
+    // The key's letter for Multiple Choice is a capital whatever the test prints.
+    expect(drawn).toMatch(/1\. B\b/)
   })
 
   // A matching question once printed its stem and nothing else: no prompts, no

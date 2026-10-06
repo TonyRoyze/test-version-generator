@@ -102,7 +102,7 @@ import {
 } from './export-preparation'
 import { ExportDialog, ReExportDialog } from './export-dialog'
 import { DEFAULT_VERSION_COUNT, maxVersionCount, NO_SHUFFLE, seededRandom } from './export-versions'
-import { domMeasure } from './dom-measure'
+import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
 import { ownDocumentMedia, saveImage } from './local-images'
 import { configurePastedImages, settlePendingMedia } from './pasted-images'
 import {
@@ -113,13 +113,16 @@ import {
   type ResolveImageRequest,
 } from './pending-image-view'
 import { ResolveImagesDialog } from './resolve-images-dialog'
+import { configurePictures, pictureKeys, PICTURE_MENU_EVENT, type PictureMenuRequest } from './picture-view'
 import { storedPicture } from './resolved-pictures'
 import { pendingImagesOfQuestions, withStoredPictures, type PendingImageResolution, type StoredPicture } from './pending-images'
 import {
   AlignLeft,
   BookOpenText,
+  Captions,
   Check,
   CircleDot,
+  Crop,
   FileType2,
   FolderOpen,
   Gauge,
@@ -128,6 +131,7 @@ import {
   History,
   Library,
   ListChecks,
+  ListOrdered,
   ToggleLeft,
   Link2,
   Pencil,
@@ -145,6 +149,7 @@ import {
   X,
 } from 'lucide-react'
 import { ContextMenu, type MenuPoint } from './context-menu'
+import { MarginsPanel } from './margins-panel'
 import { usePopOver } from './pop-over-context'
 import {
   DEFAULT_HEADING_SIZE,
@@ -153,6 +158,11 @@ import {
   HEADING_SIZE_LABELS,
   TEXT_SIZES,
 } from './section-headings'
+import {
+  DEFAULT_QUESTION_STYLE,
+  QUESTION_STYLES,
+  QUESTION_STYLE_LABELS,
+} from './question-style'
 import { BEFORE_NAVIGATE_EVENT, navigate, replaceRoute, useLocationSearch, useRoute } from './use-route'
 import { Footer } from './site-chrome'
 import { HomePage } from './home-page'
@@ -178,10 +188,11 @@ import { SettingsPage } from './settings-page'
 import { persistentStorageStatus, requestPersistentStorage, type PersistentStorageStatus } from './durable-storage'
 import { ResourceCollectionPage } from './resource-collection-page'
 import { BankFileDropTarget } from './bank-file-drop'
-import { ImportsPage, NewImportPage, WaitingImportPage } from './imports-page'
+import { ImportsPage, WaitingImportPage } from './imports-page'
 import { questionBankCollection, type QuestionBankCollectionItem } from './resource-collections'
 import { QuestionBankExportDialog } from './question-bank-export-dialog'
 import { QuestionBankImportDialog } from './question-bank-import-dialog'
+import { MarginsIcon, QuestionStylePreview } from './format-icons'
 import {
   keepMultipartParts,
   multipartMode,
@@ -584,6 +595,7 @@ function CrepeQuestion({
       .use(matchingKeymap)
       .use(syncMatchingPicks)
       .use(keepMatching)
+      .use(pictureKeys)
       .use(pendingImageBlockView)
       .use(pendingInlineImageView)
       .use(multipartPartsSchema)
@@ -606,6 +618,7 @@ function CrepeQuestion({
     crepe.editor.config((ctx) => {
       configurePastedImages(ctx)
       configurePendingImages(ctx)
+      configurePictures(ctx)
       ctx.update(uploadConfig.key, (prev) => ({
         ...prev,
         enableHtmlFileUploader: true,
@@ -717,6 +730,14 @@ function QuestionDialog({
     const onResolve = (event: Event) => setResolving((event as CustomEvent<ResolveImageRequest>).detail)
     element?.addEventListener(RESOLVE_IMAGE_EVENT, onResolve)
     return () => element?.removeEventListener(RESOLVE_IMAGE_EVENT, onResolve)
+  }, [])
+  /** A picture's right-click menu. */
+  const [pictureMenu, setPictureMenu] = useState<PictureMenuRequest | null>(null)
+  useEffect(() => {
+    const element = dialog.current
+    const onMenu = (event: Event) => setPictureMenu((event as CustomEvent<PictureMenuRequest>).detail)
+    element?.addEventListener(PICTURE_MENU_EVENT, onMenu)
+    return () => element?.removeEventListener(PICTURE_MENU_EVENT, onMenu)
   }, [])
 
   // Escape that lands on nothing: a click on a bare patch of the dialog, or a
@@ -830,6 +851,20 @@ function QuestionDialog({
             if (picture) resolving.apply(await storedPicture(picture.asset), picture.authoredSize)
             setResolving(null)
           }}
+        />}
+        {pictureMenu && <ContextMenu
+          point={pictureMenu.point}
+          ariaLabel="Picture"
+          items={[
+            { kind: 'action', label: 'Reset crop', icon: <Crop />, disabled: !pictureMenu.cropped, onSelect: pictureMenu.resetCrop },
+            {
+              kind: 'action',
+              label: pictureMenu.captioned ? 'Remove caption' : 'Add caption',
+              icon: <Captions />,
+              onSelect: pictureMenu.toggleCaption,
+            },
+          ]}
+          onClose={() => setPictureMenu(null)}
         />}
         <header className="dialog-header">
           <h2>{isNew ? 'Add question' : 'Edit question'}</h2>
@@ -1191,6 +1226,7 @@ function QuestionBankWorkspace({
       selectedQuestionIds={selection.selectedIds}
       onSelect={selection.selectOne}
       onClearSelection={selection.clear}
+      onSelectAll={selection.selectAll}
       drag={drag}
       onCreate={setChoosingType}
       onExport={() => setExporting(true)}
@@ -1662,7 +1698,7 @@ function QuestionBankPage({
   const resolvePictures = async (pictures: PendingImageResolution) => {
     const sources = new Map<string, StoredPicture>()
     for (const [key, picture] of pictures) {
-      sources.set(key, { src: await storedPicture(picture.asset), ...(picture.authoredSize !== undefined ? { ratio: picture.authoredSize } : {}) })
+      sources.set(key, { src: await storedPicture(picture.asset), ...(picture.authoredSize !== undefined ? { size: picture.authoredSize } : {}) })
     }
     let updated = bank
     for (const question of bank.questions) {
@@ -1921,6 +1957,9 @@ function ExamEditor({
     kind: DocumentMenuKind
     point: MenuPoint
   } | null>(null)
+  // Where the Margins panel opened from the Format menu stands, while it is open.
+  const [marginsPanel, setMarginsPanel] = useState<MenuPoint | null>(null)
+  const closeMarginsPanel = useCallback(() => setMarginsPanel(null), [])
   const closeExportHistory = useCallback(() => {
     setHistoryOpen(false)
     requestAnimationFrame(() => historyButton.current?.focus())
@@ -2480,6 +2519,33 @@ function ExamEditor({
               },
             ],
           },
+          // One style for every question on the Exam, never per question or
+          // per type (ADR-0041). The sheet reflows as soon as it changes.
+          {
+            kind: 'submenu',
+            label: 'Questions',
+            icon: <ListOrdered />,
+            value: QUESTION_STYLE_LABELS[state.workingCopy.questionStyle ?? DEFAULT_QUESTION_STYLE].label,
+            items: QUESTION_STYLES.map((style) => ({
+              kind: 'radio' as const,
+              label: QUESTION_STYLE_LABELS[style].label,
+              description: QUESTION_STYLE_LABELS[style].description,
+              preview: <QuestionStylePreview style={style} />,
+              checked: (state.workingCopy.questionStyle ?? DEFAULT_QUESTION_STYLE) === style,
+              onSelect: () => {
+                if (!isHistoricalBrowsing) store.setQuestionStyle(style)
+              },
+            })),
+          },
+          {
+            // Opens beside the menu it came from, and stays while the sheet
+            // reflows behind it.
+            kind: 'action',
+            label: 'Margins…',
+            icon: <MarginsIcon />,
+            disabled: isHistoricalBrowsing,
+            onSelect: () => setMarginsPanel(documentMenu.point),
+          },
         ] : documentMenu.kind === 'file' ? [
           {
             kind: 'action',
@@ -2542,6 +2608,14 @@ function ExamEditor({
         onClose={() => setDocumentMenu(null)}
       />}
 
+      {marginsPanel && <MarginsPanel
+        point={marginsPanel}
+        margins={state.workingCopy.margins}
+        disabled={isHistoricalBrowsing}
+        onChange={(sides, inches, continuing) => store.setMargins(sides, inches, { continuing })}
+        onClose={closeMarginsPanel}
+      />}
+
       {choosingExam && <ResourcePicker
         title="Open Exam"
         closeLabel="Close Exam picker"
@@ -2580,6 +2654,11 @@ function ExamEditor({
           initialError={exportDialog.error ?? previewError}
           onSubmit={async (configuration, onProgress) => {
             const { withExamPackage } = await import('./exam-package-export')
+            // Pages are planned from measured heights, and a picture still
+            // loading measures as nothing.
+            await domMeasure.loadImages(imageSourcesOfDocuments(
+              exam.questions.flatMap((question) => [question.doc, question.suggestedAnswer]),
+            ))
             await runPreparedExport(await withExamPackage(prepareForPublication(configuration, onProgress), {
               exam,
               arrangement,
@@ -2696,6 +2775,10 @@ function ExamEditor({
             onSectionHeadingChange={(sectionId, change) => store.setSectionHeading(sectionId, change)}
             onMoveSection={(sectionId, direction) => store.moveSection(sectionId, direction)}
             onDeleteSection={(sectionId) => store.deleteSection(sectionId)}
+            onSplitSection={(questionId) => store.splitSection(questionId)}
+            onMoveToNewSection={(questionIds) => store.moveToNewSection(questionIds)}
+            onInsertSection={(sectionId, placement) => store.insertSection(sectionId, placement)}
+            onMergeSection={(sectionId, direction) => store.mergeSection(sectionId, direction)}
             onHeaderLineChange={(line, text) => store.setHeaderLine(line, text)}
             onLabelStyleChange={(kind, style) => store.setLabelStyle(kind, style)}
             onCoverPageChange={(cover) => store.setCoverPage(cover)}
@@ -2732,6 +2815,12 @@ function ExamEditor({
             }}
             onShuffleSelected={shuffleSelectedQuestions}
             onShuffleSelectedAnswers={shuffleSelectedAnswers}
+            onSetShownIncorrect={(questionIds, count) => {
+              store.setShownIncorrect(questionIds, count)
+              setVarySummary(count === Infinity
+                ? 'Showing every incorrect answer.'
+                : `Showing ${count} incorrect ${count === 1 ? 'answer' : 'answers'}.`)
+            }}
             onRemove={(questionIds) => {
               store.removeFromWorkingCopy(questionIds)
               selection.clear()
@@ -2744,6 +2833,9 @@ function ExamEditor({
             }
             onSetPageBreak={(questionIds, enabled) =>
               store.setQuestionPageBreak(questionIds, enabled)
+            }
+            onSetWordBankLayout={(questionIds, layout) =>
+              store.setWordBankLayout(questionIds, layout)
             }
             onSetWorkSpace={(questionIds, patch) =>
               store.setQuestionWorkSpace(questionIds, patch)
@@ -2879,6 +2971,7 @@ export default function App({
   const [editorId, setEditorId] = useState(initialEditorId)
   const [deletingBank, setDeletingBank] = useState<{ bank: QuestionBankCollectionItem; impact: QuestionDeletionImpact[] } | null>(null)
   const [deletingExam, setDeletingExam] = useState<RecentExam | null>(null)
+  const [exportingBank, setExportingBank] = useState<QuestionBankResource | null>(null)
   const [inspectingBankFile, setInspectingBankFile] = useState(false)
   const [droppedBankFile, setDroppedBankFile] = useState<File | null>(null)
   const [convertDrop, setConvertDrop] = useState<{ file: File; id: number } | null>(null)
@@ -2895,6 +2988,20 @@ export default function App({
     setImportWaitingId(waitingImportId ?? null)
     setInspectingBankFile(true)
   }, [])
+  // Starting an import used to be a page of its own; it is the Import
+  // dialog now, so an old link to that page opens the dialog over Imports.
+  useEffect(() => {
+    if (route !== '/imports/new') return
+    navigate('/imports', { replace: true })
+    openImport()
+  }, [route, openImport])
+  /** A file dropped while the Import dialog is open belongs to it — an
+   *  assistant's corrected file replaces the one under review — rather than
+   *  starting the dialog over. */
+  const [dialogDrop, setDialogDrop] = useState<{ file: File; id: number } | null>(null)
+  const dropping = (elsewhere: (file: File, targetBankId?: string) => void) =>
+    (file: File, targetBankId?: string) =>
+      inspectingBankFile ? setDialogDrop({ file, id: Date.now() }) : elsewhere(file, targetBankId)
   const closeImport = useCallback(() => {
     setInspectingBankFile(false)
     setDroppedBankFile(null)
@@ -2914,7 +3021,10 @@ export default function App({
       history: { fileName: string; kind: import('./import-history').ImportFileKind; waitingImportId?: string }
     },
   ) => {
-    const result = await bankWorkspaces.commitImport(proposal, selection, options)
+    const result = await bankWorkspaces.commitImport(proposal, selection, {
+      ...options,
+      bankAnswerWidth: domMeasure.bankAnswerWidth,
+    })
     // One Exam is what a converted test is: it opens in the editor with the
     // banks it was built from as its tabs, from onboarding as from anywhere.
     const [onlyExam, ...otherExams] = result.createdExamIds
@@ -2967,6 +3077,15 @@ export default function App({
       setDeletingBank({ bank, impact })
     })
   }, [bankWorkspaces, workspaces])
+  const requestBankExport = useCallback((bank: QuestionBankCollectionItem) => {
+    void bankWorkspaces.read(bank.id).then((resource) => {
+      if (resource) setExportingBank(resource)
+    })
+  }, [bankWorkspaces])
+  const bankExportDialog = exportingBank && <QuestionBankExportDialog
+    bank={exportingBank}
+    onClose={() => setExportingBank(null)}
+  />
   const bankDeletionConfirmation = deletingBank && <BankDeletionConfirmation
     bank={deletingBank.bank}
     impact={deletingBank.impact}
@@ -3014,6 +3133,7 @@ export default function App({
       saved,
       initial: target,
       initialHistory: session.history,
+      bankAnswerWidth: domMeasure.bankAnswerWidth,
     }))
     setEditorId(targetId)
   }, [editorStore, workspaces])
@@ -3093,14 +3213,21 @@ export default function App({
     initialFile={droppedBankFile ?? undefined}
     targetBankId={importTargetBankId ?? undefined}
     waitingImportId={importWaitingId ?? undefined}
+    dropped={dialogDrop ?? undefined}
     loadBanks={loadImportBanks}
     onClose={closeImport}
     onImport={importBank}
+    onConverting={(waiting) => {
+      // A test to convert waits for its AI on its own page, which outlives
+      // the dialog: the teacher comes back to it with the file their AI made.
+      closeImport()
+      navigate(`/import?id=${encodeURIComponent(waiting.id)}`)
+    }}
   />
   // Importing by drop is offered on every page, the editor included, so the
   // overlay and the dialog live outside the route switch below.
   const globalChrome = <>
-    <BankFileDropTarget onFile={openImport} />
+    <BankFileDropTarget onFile={dropping(openImport)} />
     {importDialog}
   </>
   if (route === '/cover-design') {
@@ -3118,32 +3245,23 @@ export default function App({
       onBack={() => navigate('/editor')}
     />
   }
-  if (route === '/imports') return <>{globalChrome}<ImportsPage
+  if (route === '/imports' || route === '/imports/new') return <>{globalChrome}<ImportsPage
+    onImport={() => openImport()}
     persistentStorage={storageStatus}
     revision={importRevision}
     picturesNeededIn={picturesNeededIn}
   /></>
-  // A new import takes a test as readily as a Test Parrot file, so a drop is
-  // the page's to read, as on the convert page.
-  if (route === '/imports/new') return <>
-    <BankFileDropTarget tests onFile={(file) => setConvertDrop({ file, id: Date.now() })} />
-    {importDialog}
-    <NewImportPage
-      persistentStorage={storageStatus}
-      dropped={convertDrop}
-      onOpenImport={(file, waitingImportId) => openImport(file, null, waitingImportId)}
-    />
-  </>
   if (route === '/import') {
     const waitingId = new URLSearchParams(window.location.search).get('id') ?? ''
     // A file dropped on a waiting import's page is the AI's answer to it.
     return <>
-      <BankFileDropTarget onFile={(file) => openImport(file, null, waitingId)} />
+      <BankFileDropTarget onFile={dropping((file) => setConvertDrop({ file, id: Date.now() }))} />
       {importDialog}
       <WaitingImportPage
         id={waitingId}
         persistentStorage={storageStatus}
         revision={importRevision}
+        dropped={convertDrop}
         onReturnedFile={(file) => openImport(file, null, waitingId)}
       />
     </>
@@ -3169,9 +3287,10 @@ export default function App({
     onOpenExam={openExam}
     onOpenBank={openBank}
     onNewBank={newBank}
+    onExportBank={requestBankExport}
     onDeleteBank={requestBankDeletion}
-    onImportBank={() => navigate('/imports/new')}
-  />{bankDeletionConfirmation}</>
+    onImportBank={() => openImport()}
+  />{bankExportDialog}{bankDeletionConfirmation}</>
   // A device that has never been here gets the front door instead of empty
   // shelves; the same page stays reachable at /welcome afterwards.
   const firstVisit = exams.length === 0 && bankCollection.length === 0 && !hasBeenWelcomed()
@@ -3182,7 +3301,7 @@ export default function App({
   // Converting starts from the test itself, so on the convert page a drop is
   // the page's to read: only a Test Parrot file goes straight to the import.
   if (route === '/get-started/convert') return <>
-    <BankFileDropTarget tests onFile={(file) => setConvertDrop({ file, id: Date.now() })} />
+    <BankFileDropTarget tests onFile={dropping((file) => setConvertDrop({ file, id: Date.now() }))} />
     {importDialog}
     <ConvertPage dropped={convertDrop} onOpenImport={(file, waitingImportId) => openImport(file, null, waitingImportId)} />
   </>
@@ -3201,9 +3320,11 @@ export default function App({
     onOpen={openExam}
     onNewBank={newBank}
     onOpenBank={openBank}
+    onExportBank={requestBankExport}
     onDeleteBank={requestBankDeletion}
     onDeleteExam={requestExamDeletion}
-  />{bankDeletionConfirmation}{examDeletionConfirmation}</>
+    onImport={() => openImport()}
+  />{bankExportDialog}{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-bank') return pageBank && pageBankReady ? <>{globalChrome}<QuestionBankPage
     key={pageBank.bank.id}
     bank={pageBank.bank}
@@ -3228,7 +3349,7 @@ export default function App({
       void (async () => {
         await bankWorkspaces.carryWorkspace({ examId: editorId }, { examId: id })
         if (!await workspaces.open(id)) return
-        setEditorStore(await loadExamStore(workspaces.backendFor(id)))
+        setEditorStore(await loadExamStore(workspaces.backendFor(id), undefined, domMeasure.bankAnswerWidth))
         setEditorId(id)
       })()
     }}

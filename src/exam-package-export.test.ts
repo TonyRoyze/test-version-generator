@@ -17,8 +17,9 @@ import { createPublicationPdf, type PdfFontLoader } from './pdf-export'
 import { examPackage, withExamPackage } from './exam-package-export'
 import { initialSelection } from './import-selection'
 import { planImport } from './package-commit'
-import { inspectImportFile, inspectImportRecord } from './package-import'
+import { inspectImportFile, inspectImportRecord, type ExamRecord } from './package-import'
 import { selectedExam } from './selected-exam'
+import { shownChoices } from './hidden-answers'
 import type { QuestionBankResource } from './question-bank-workspaces'
 
 const fontFiles = {
@@ -143,6 +144,60 @@ function printed(sheet: Exam, order: Arrangement) {
 }
 
 describe('an Exam PDF carrying its Exam', () => {
+  test('carries the Question Style, and only the Work Space the teacher set, "None" included where the style rules lines', async () => {
+    const recordOf = async (sheet: Exam) =>
+      (await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })).package.exams[0]!
+    const shortAnswerOf = (record: ExamRecord) =>
+      record.positions.find((position) => position.workSpace !== undefined)?.workSpace
+
+    // The room the style rules is the style's, and is not written out.
+    const ruled = await recordOf({ ...exam, workSpace: {}, questionStyle: 'condensed' })
+    expect(ruled.questionStyle).toBe('condensed')
+    expect(shortAnswerOf(ruled)).toBeUndefined()
+
+    // "None" set against the style travels, so it still wins on import.
+    const none = { height: 0, style: 'blank' as const, fill: false }
+    const cleared = await recordOf({ ...exam, workSpace: { 'forces-1': none }, questionStyle: 'classic' })
+    expect(shortAnswerOf(cleared)).toEqual(none)
+
+    const plain = await recordOf(exam)
+    expect(plain).not.toHaveProperty('questionStyle')
+    expect(shortAnswerOf(plain)).toEqual({ height: 96, style: 'lines', fill: false })
+  })
+
+  test('carries where a Matching question’s Word Bank prints, and brings it back on import', async () => {
+    const matchingId = exam.questions.find((question) => question.type === 'matching')!.id
+    const matchingPosition = (record: ExamRecord) =>
+      record.positions.filter((position) => position.wordBankLayout !== undefined)
+    const sheet: Exam = { ...exam, wordBankLayout: { [matchingId]: 'above' } }
+    const { package: written } = await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })
+    expect(matchingPosition(written.exams[0]!).map((position) => position.wordBankLayout)).toEqual(['above'])
+    // Every Matching position says where its Word Bank prints, one stored
+    // before every position carried a layout included.
+    const plain = await examPackage({ exam, arrangement, ownerOf, loadMedia: noImages })
+    expect(matchingPosition(plain.package.exams[0]!)).toHaveLength(1)
+
+    const proposal = await inspectImportRecord(new TextEncoder().encode(JSON.stringify(written)))
+    const planned = planImport(proposal, initialSelection(proposal)).exams[0]!
+    const imported = selectedExam(planned.saved.questionBank, planned.saved.workingCopy).exam
+    const importedMatching = imported.questions.find((question) => question.type === 'matching')!
+    expect(imported.wordBankLayout).toEqual({ [importedMatching.id]: 'above' })
+  })
+
+  test('places a Word Bank on import that its record does not, by its Question Style and the fit rule', async () => {
+    const { package: written } = await examPackage({ exam, arrangement, ownerOf, loadMedia: noImages })
+    for (const position of written.exams[0]!.positions) delete position.wordBankLayout
+    const importedWith = async (questionStyle: Exam['questionStyle'], width: number) => {
+      const record = { ...written, exams: [{ ...written.exams[0]!, ...(questionStyle ? { questionStyle } : {}) }] }
+      const proposal = await inspectImportRecord(new TextEncoder().encode(JSON.stringify(record)))
+      const planned = planImport(proposal, initialSelection(proposal), undefined, undefined, () => width).exams[0]!
+      return Object.values(planned.saved.workingCopy.wordBankLayout ?? {})
+    }
+    expect(await importedWith(undefined, 40)).toEqual(['beside'])
+    expect(await importedWith(undefined, 2000)).toEqual(['above'])
+    expect(await importedWith('classic', 40)).toEqual(['above'])
+  })
+
   test('re-importing an answer-key PDF reproduces exactly what it printed', async () => {
     const withPackage = await withExamPackage(
       prepared({ format: 'pdf', selection: { test: true, answerKey: true } }),
@@ -152,14 +207,13 @@ describe('an Exam PDF carrying its Exam', () => {
 
     const proposal = await inspectImportFile(pdf)
 
-    // Each owning bank holds only the Questions this Exam uses.
+    // One bank, named for the Exam, holds exactly the Questions it printed,
+    // in the order it printed them, whichever banks they came from.
     expect(proposal.banks.map(({ record }) => ({
       name: record.bank.name,
       questions: record.bank.questions.length,
-    }))).toEqual([
-      { name: 'Forces', questions: 2 },
-      { name: 'Cells', questions: 2 },
-    ])
+    }))).toEqual([{ name: 'Cells and Forces Question Bank', questions: 4 }])
+    expect(proposal.banks[0]!.record.bank).not.toHaveProperty('description')
     expect(JSON.stringify(proposal)).not.toContain('Never printed')
     expect(proposal.exams).toHaveLength(1)
 
@@ -171,6 +225,30 @@ describe('an Exam PDF carrying its Exam', () => {
     )
     expect(imported.title).toBe('Cells and Forces')
     expect(printed(imported, importedOrder)).toEqual(printed(exam, arrangement))
+  })
+
+  test('a position that hides incorrect answers carries them, and imports hiding the same ones', async () => {
+    const hiding: Arrangement = { ...arrangement, hiddenAnswers: { 'cells-1': ['cells-1-choice-3', 'cells-1-choice-1'] } }
+    const carried = (await examPackage({ exam, arrangement: hiding, ownerOf, loadMedia: noImages })).package
+    const position = carried.exams[0]!.positions.find(({ hiddenAnswers }) => hiddenAnswers)!
+    // The bank keeps every answer; the position names the two it leaves off.
+    expect(position.hiddenAnswers).toEqual(['q2-c4', 'q2-c2'])
+    const record = carried.questionBanks[0]!.record as { bank: { questions: { id: string; choices?: unknown[] }[] } }
+    expect(record.bank.questions.find(({ id }) => id === 'q2')!.choices).toHaveLength(4)
+
+    const proposal = await inspectImportRecord(new TextEncoder().encode(JSON.stringify(carried)))
+    let next = 0
+    const plan = planImport(proposal, initialSelection(proposal), () => `local-${next++}`)
+    const { exam: imported, arrangement: importedOrder } = selectedExam(
+      plan.exams[0]!.saved.questionBank,
+      plan.exams[0]!.saved.workingCopy,
+    )
+    const shownTexts = (sheet: Exam, order: Arrangement) => {
+      const question = sheet.questions.find((candidate) => text(candidate) === 'Which organelle releases energy?')!
+      return shownChoices(question, order).map((choice) => JSON.stringify(choice.node).match(/"text":"([^"]+)"/)![1])
+    }
+    expect(shownTexts(imported, importedOrder)).toEqual(['Ribosome', 'Mitochondrion'])
+    expect(shownTexts(imported, importedOrder)).toEqual(shownTexts(exam, hiding))
   })
 
   test('a shuffled answer-key PDF carries the Exam as authored, not one Exam per Version', async () => {
@@ -219,6 +297,23 @@ describe('an Exam PDF carrying its Exam', () => {
     expect(after.record.plans).toEqual(before.record.plans)
   })
 
+  test('credits an author or license only when every bank the Exam drew on declares the same one', async () => {
+    const license = { name: 'CC BY 4.0', url: 'https://creativecommons.org/licenses/by/4.0/' }
+    const credited = (author: string, bankLicense = license) => (questionId: string) =>
+      ownerOf(questionId).then((owner) => owner && { ...owner, author, license: bankLicense, description: 'Kept at home' })
+    const shared = (await examPackage({ exam, arrangement, ownerOf: credited('A. Teacher'), loadMedia: noImages })).package
+    expect(shared.questionBanks[0]!.record).toMatchObject({ bank: { author: 'A. Teacher', license } })
+    expect(shared.questionBanks[0]!.record).not.toHaveProperty('bank.description')
+
+    const mixed = async (questionId: string) => {
+      const owner = await ownerOf(questionId)
+      return owner && { ...owner, author: owner.id === 'cells' ? 'A. Teacher' : 'B. Teacher', license }
+    }
+    const differing = (await examPackage({ exam, arrangement, ownerOf: mixed, loadMedia: noImages })).package
+    expect(differing.questionBanks[0]!.record).not.toHaveProperty('bank.author')
+    expect(differing.questionBanks[0]!.record).toMatchObject({ bank: { license } })
+  })
+
   test('a historical re-export embeds the record’s own package', async () => {
     const original = await withExamPackage(
       prepared({ format: 'pdf', selection: { test: true, answerKey: true } }),
@@ -229,7 +324,8 @@ describe('an Exam PDF carrying its Exam', () => {
       createdAt: '2026-09-25T00:00:00.000Z',
       createId: () => 'record-2',
     })
-    expect(again.record.examPackage).toBe(original.record.examPackage)
+    expect(again.record.examPackage).toEqual(original.record.examPackage)
+    expect(again.record.examPackage).toBeInstanceOf(Uint8Array)
   })
 })
 
@@ -241,7 +337,7 @@ describe('a Multipart question in an Exam package', () => {
       columns: 2,
       doc: {
         type: 'doc',
-        content: [paragraph('The power of the Empire was waning by 1683.'), {
+        content: [paragraph('The power of the Kingdom was fading by 1450.'), {
           type: 'multipartParts',
           content: [{
             type: 'multipartPart',
@@ -250,7 +346,7 @@ describe('a Multipart question in an Exam package', () => {
               { type: 'multipartPartStem', content: [paragraph('Which region?')] },
               {
                 type: 'multipleChoice',
-                content: ['Middle East', 'East Asia'].map((answer, index) => ({
+                content: ['Northern Coast', 'Eastern Forests'].map((answer, index) => ({
                   type: 'multipleChoiceChoice',
                   attrs: { id: `reading-1-choice-${index}`, correct: index === 0 },
                   content: [paragraph(answer)],
@@ -268,7 +364,7 @@ describe('a Multipart question in an Exam package', () => {
       questionOrder: ['reading-1'],
       choiceOrder: { 'reading-1-part-a': ['reading-1-choice-1', 'reading-1-choice-0'] },
     }
-    const carried = await examPackage({ exam: sheet, arrangement: order, ownerOf: async () => null, loadMedia: noImages })
+    const carried = (await examPackage({ exam: sheet, arrangement: order, ownerOf: async () => null, loadMedia: noImages })).package
 
     // Per-Part answer order and columns are not carried yet: the position is bare.
     expect(carried.exams[0]!.positions).toEqual([{ question: { bank: 'bank-1', question: 'q1' }, section: 0 }])
@@ -291,11 +387,12 @@ describe('a Multipart question in an Exam package', () => {
       headingSize: 'small',
       header: { first: 'Student: ____  Period: __', later: '' },
       textSize: 'large',
+      margins: { top: 1, right: 0.6, bottom: 1, left: 1.25 },
     }
-    const carried = await examPackage({ exam: worded, arrangement, ownerOf, loadMedia: noImages })
+    const carried = (await examPackage({ exam: worded, arrangement, ownerOf, loadMedia: noImages })).package
     // Each derived Section travels with its wording in full, and no type.
     expect(carried.exams[0]).toMatchObject({
-      formatVersion: '0.3.0',
+      formatVersion: '0.4.0',
       sections: [
         { title: 'Multiple Choice', instructions: 'Select the most suitable answer.' },
         { title: 'Vocabulary', instructions: 'Match each item with the correct answer from the word bank. Write its letter in the blank.' },
@@ -304,6 +401,7 @@ describe('a Multipart question in an Exam package', () => {
       headingSize: 'small',
       header: { first: 'Student: ____  Period: __', later: '' },
       textSize: 'large',
+      margins: { top: 1, right: 0.6, bottom: 1, left: 1.25 },
     })
     expect(carried.exams[0]).not.toHaveProperty('sectionHeadings')
 
@@ -319,10 +417,11 @@ describe('a Multipart question in an Exam package', () => {
     expect(imported.headingSize).toBe('small')
     expect(imported.header).toEqual(worded.header)
     expect(imported.textSize).toBe('large')
+    expect(imported.margins).toEqual(worded.margins)
   })
 
   test('an Exam that keeps the default headings writes their wording out in full, and no sizes', async () => {
-    const carried = await examPackage({ exam, arrangement, ownerOf, loadMedia: noImages })
+    const carried = (await examPackage({ exam, arrangement, ownerOf, loadMedia: noImages })).package
     expect(carried.exams[0]!.sections).toEqual([
       { title: 'Multiple Choice', instructions: 'Select the most suitable answer.' },
       { title: 'Matching', instructions: 'Match each item with the correct answer from the word bank. Write its letter in the blank.' },
@@ -359,9 +458,11 @@ describe('an Exam’s stored Sections in its package', () => {
   }
 
   test('travel in print order, empty ones included, each position naming its Section', async () => {
-    const carried = await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })
+    const carried = (await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })).package
     const record = carried.exams[0]!
-    expect(record.formatVersion).toBe('0.3.0')
+    expect(record.formatVersion).toBe('0.4.0')
+    // An Exam that keeps today's margins writes none.
+    expect(record).not.toHaveProperty('margins')
     expect(record.sections).toEqual([
       { title: 'Warm-up', instructions: 'Answer each question.' },
       { title: 'Written', instructions: '' },
@@ -373,7 +474,7 @@ describe('an Exam’s stored Sections in its package', () => {
   })
 
   test('import again as the same Sections under fresh ids, printing the same sheet', async () => {
-    const carried = await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })
+    const carried = (await examPackage({ exam: sheet, arrangement, ownerOf, loadMedia: noImages })).package
     const proposal = await inspectImportRecord(new TextEncoder().encode(JSON.stringify(carried)))
     let next = 0
     const plan = planImport(proposal, initialSelection(proposal), () => `local-${next++}`)

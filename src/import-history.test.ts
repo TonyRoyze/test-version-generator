@@ -129,7 +129,7 @@ describe('the import history', () => {
   })
 })
 
-const example = join(import.meta.dir, '..', 'public', 'formats', 'question-bank', '0.6.0', 'examples', 'pending-images.json')
+const example = join(import.meta.dir, '..', 'public', 'formats', 'question-bank', '0.7.0', 'examples', 'pending-images.json')
 
 async function storedMediaHashes(): Promise<string[]> {
   const database = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -193,7 +193,7 @@ describe('committing an import with Pending Images', () => {
     const images = bank.questions.map((question) => imagesOf(question.doc))
     const hash = map.id.slice('sha256:'.length)
     expect(images[0]).toEqual([
-      expect.objectContaining({ src: `/local-images/${hash}`, caption: 'Major European Trading Stations c. 1750' }),
+      expect.objectContaining({ src: `/local-images/${hash}`, caption: 'Riverton Bus Routes, 2020' }),
     ])
     expect(images[0]![0]!.pending).toBeUndefined()
     expect(images[2]![0]).toMatchObject({ src: `/local-images/${hash}` })

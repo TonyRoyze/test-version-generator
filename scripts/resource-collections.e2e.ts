@@ -218,8 +218,8 @@ test('meaningful Question Bank changes update recency while browsing, compositio
     })
     const exam = await exams.create(question)
     await banks.open(bank.id)
-    await banks.openTab({ mode: 'exam', resourceId: exam.id }, bank.id)
-    await banks.updateFilter({ mode: 'exam', resourceId: exam.id }, bank.id, {
+    await banks.openTab({ examId: exam.id }, bank.id)
+    await banks.updateFilter({ examId: exam.id }, bank.id, {
       search: 'Original',
       types: [],
       difficulties: [],

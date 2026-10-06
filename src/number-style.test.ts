@@ -47,7 +47,7 @@ describe('sequence tokens', () => {
     expect(sequenceTokenAt('lower-roman', 18)).toBe('xix')
     expect(sequenceTokenAt('lower-roman', 87)).toBe('lxxxviii')
     expect(sequenceTokenAt('upper-roman', 87)).toBe('LXXXVIII')
-    expect(sequenceTokenAt('upper-roman', 98)).toBe('XCVIII')
+    expect(sequenceTokenAt('upper-roman', 98)).toBe('XCIX')
   })
 })
 
@@ -97,7 +97,7 @@ describe('reading a stored style', () => {
     expect(isLabelStyle(null)).toBe(false)
   })
 
-  test('compares against the kind's own default, so absent means default', () => {
+  test("compares against the kind's own default, so absent means default", () => {
     expect(sameLabelStyle('answers', undefined, DEFAULT_LABEL_STYLES.answers)).toBe(true)
     expect(sameLabelStyle('questions', undefined, DEFAULT_LABEL_STYLES.answers)).toBe(false)
     expect(sameLabelStyle('parts', undefined, DEFAULT_LABEL_STYLES.parts)).toBe(true)
@@ -120,7 +120,7 @@ describe('what a label column can hold', () => {
     expect(labelFits(style('lower-roman', 'dot'), 'parts')).toBe(false)
   })
 
-  test('an answer's label has room a number does not, so it may be roman', () => {
+  test("an answer's label has room a number does not, so it may be roman", () => {
     expect(labelFits(style('lower-roman', 'close'), 'answers')).toBe(true)
     expect(labelFits(style('lower-roman', 'paren'), 'answers')).toBe(true)
     expect(labelFits(style('upper-roman', 'plain'), 'answers')).toBe(true)
@@ -164,7 +164,7 @@ describe('measured widths', () => {
     // A three-digit number is what the 34px column was sized for.
     expect(labelWidth('100.')).toBeCloseTo(33.3, 1)
     expect(labelWidth('XXVIII.')).toBeCloseTo(60.7, 1)
-    expect(labelWidth('viii)')).toBeCloseTo(28.6, 1)
+    expect(labelWidth('viii)')).toBeCloseTo(31.1, 1)
   })
 
   test('a label narrower than its budget is one the column can hold', () => {

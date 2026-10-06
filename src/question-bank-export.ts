@@ -3,21 +3,33 @@ import {
   partsOf,
   promptsOf,
   topicsOf,
+  type Choice,
   type Difficulty,
   type Question,
   type QuestionType,
 } from './exam'
 import { bankLetter } from './matching'
 import {
+  choiceLockOf,
   pendingImageOf,
   stemNodesOf,
   type PendingImageReference,
   type ProseMirrorJSON,
 } from './question-doc'
 import type { QuestionBankResource } from './question-bank-workspaces'
+import { PAGE_CONTENT_WIDTH } from './export-plan'
+import { mediaFilePath } from './package-zip'
+import { jpegOrientation } from './export-media'
+import {
+  MIN_SIZE,
+  clampSize,
+  legacyRatioOf,
+  pictureCropOf,
+  type CropBox,
+} from './picture-geometry'
 
 export const QUESTION_BANK_FORMAT = 'test-parrot/question-bank'
-export const QUESTION_BANK_FORMAT_VERSION = '0.6.0'
+export const QUESTION_BANK_FORMAT_VERSION = '0.9.0'
 export const QUESTION_BANK_ATTACHMENT_NAME = 'pdfcx.json'
 export const QUESTION_BANK_ATTACHMENT_DESCRIPTION = 'pdf-canonical-extraction'
 
@@ -84,8 +96,22 @@ export type SemanticNode = {
   pending?: PendingImageReference
   alt?: string
   caption?: string
+  /** From 0.7.0, the width of what the picture shows as a share of its
+   *  container, 0.05–1. */
   authoredSize?: number
+  /** A Picture Crop, on a block image with an `asset` only (0.7.0). */
+  crop?: CropBox
+  /** Importer-only, never written to a record: the Authored Image Size a
+   *  0.1.0–0.6.0 record gave, which meant Crepe's ratio against the size the
+   *  picture fit at, not a share of its container. */
+  legacyRatio?: number
+  /** Importer-only, never written to a record: the pixel size of the Media
+   *  Asset a cropped picture shows, from the record's media declaration. */
+  pictureSize?: { width: number; height: number }
 }
+
+/** A Media Asset an export embeds for one image source. */
+type EmbeddedMedia = { id: string; width: number }
 
 export type SemanticDocument = { type: 'document'; content: SemanticNode[] }
 
@@ -151,8 +177,20 @@ export type QuestionBankRecordPart = {
   id: string
   type: QuestionBankRecordPartType
   stem: SemanticDocument
-  choices?: { id: string; content: SemanticDocument; correct: boolean }[]
+  choices?: QuestionBankRecordChoice[]
   suggestedAnswer?: SemanticDocument
+}
+
+/** One answer of a Multiple Choice or True/False Question or a Multiple
+ *  Choice Part. `locked` is a Locked Answer's: `true` keeps it at its
+ *  authored letter however answers are shuffled; `false` says the author
+ *  unlocked it, so a consumer that locks answers by their wording must not;
+ *  absent, it moves unless its wording locks it (ADR-0038). Added in 0.9.0. */
+export type QuestionBankRecordChoice = {
+  id: string
+  content: SemanticDocument
+  correct: boolean
+  locked?: boolean
 }
 
 /** How each Part type is written wherever a teacher reads one. */
@@ -172,7 +210,7 @@ export type QuestionBankRecordQuestion = {
   stem: SemanticDocument
   difficulty?: Difficulty
   topics?: string[]
-  choices?: { id: string; content: SemanticDocument; correct: boolean }[]
+  choices?: QuestionBankRecordChoice[]
   prompts?: QuestionBankRecordPrompt[]
   wordBank?: { id: string; content: SemanticDocument }[]
   /** A Multipart question's Parts, in lettered order; `stem` is the shared material. */
@@ -193,18 +231,22 @@ export type QuestionBankRecord = {
     license?: { name: string; url?: string }
     questions: QuestionBankRecordQuestion[]
   }
+  /** Each Media Asset's bytes are the file it names, beside the record in
+   *  its package's zip (ADR-0036). */
   media: {
     id: string
     mimeType: 'image/png' | 'image/jpeg' | 'image/webp'
     width: number
     height: number
-    bytes: string
+    file: string
   }[]
 }
 
 export type PreparedQuestionBankExport = {
   record: QuestionBankRecord
   recordBytes: Uint8Array
+  /** Each Media Asset's original bytes, by the path its `file` names. */
+  files: Map<string, Uint8Array>
   filename: string
   /** Renderer-oriented bytes; canonical source bytes remain in record.media. */
   previewMedia?: Map<string, { data: Uint8Array; type: 'png' | 'jpg'; width: number; height: number }>
@@ -283,29 +325,50 @@ function semanticMarks(node: ProseMirrorJSON): SemanticMark[] | undefined {
 
 function imageSemanticNode(
   node: ProseMirrorJSON,
-  mediaIds: ReadonlyMap<string, string>,
+  mediaIds: ReadonlyMap<string, EmbeddedMedia>,
 ): SemanticNode {
   const attrs = attributes(node)
   const pending = pendingImageOf(node)
   const source = stringValue(attrs.src)
-  const asset = pending ? undefined : mediaIds.get(source)
-  if (!pending && !asset) {
+  const media = pending ? undefined : mediaIds.get(source)
+  if (!pending && !media) {
     throw new Error(`Required media “${source || 'without a source'}” could not be resolved. Re-add the image and try again.`)
   }
-  const authoredSize = Number(attrs.ratio)
-  if (Number.isFinite(authoredSize) && (authoredSize < 0.05 || authoredSize > 1)) {
-    throw new Error('Authored Image Size must be between 0.05 and 1.')
-  }
+  const block = node.type !== 'image'
+  const authoredSize = block ? recordSize(attrs, media) : undefined
+  const crop = block && media ? pictureCropOf(attrs) : null
   return {
-    type: node.type === 'image' ? 'inline-image' : 'block-image',
-    ...(pending ? { pending } : { asset }),
+    type: block ? 'block-image' : 'inline-image',
+    ...(pending ? { pending } : { asset: media!.id }),
     ...(stringValue(attrs.alt) ? { alt: stringValue(attrs.alt) } : {}),
     ...(stringValue(attrs.caption) ? { caption: stringValue(attrs.caption) } : {}),
-    ...(Number.isFinite(authoredSize) ? { authoredSize } : {}),
+    ...(authoredSize !== undefined ? { authoredSize } : {}),
+    ...(crop ? { crop: { left: crop.left, top: crop.top, right: crop.right, bottom: crop.bottom } } : {}),
   }
 }
 
-function semanticNode(node: ProseMirrorJSON, mediaIds: ReadonlyMap<string, string>): SemanticNode {
+/**
+ * A block image's Authored Image Size as Record 0.7.0 writes it: a share of
+ * its container. A picture sized in the editor already has one. One that has
+ * only Crepe's legacy `ratio` — the size a drag left it at over the size it
+ * fit at — is converted against the Question Content lane, where it fit at
+ * its own width or the lane's when narrower; a picture no one sized has none.
+ */
+function recordSize(attrs: Record<string, unknown>, media: EmbeddedMedia | undefined): number | undefined {
+  if (attrs.size !== null && attrs.size !== undefined) {
+    const size = Number(attrs.size)
+    if (!Number.isFinite(size) || size < MIN_SIZE || size > 1) {
+      throw new Error('Authored Image Size must be between 0.05 and 1.')
+    }
+    return size
+  }
+  const ratio = legacyRatioOf(attrs)
+  if (ratio === 1) return undefined
+  const fitted = media ? Math.min(media.width, PAGE_CONTENT_WIDTH) : PAGE_CONTENT_WIDTH
+  return clampSize((ratio * fitted) / PAGE_CONTENT_WIDTH)
+}
+
+function semanticNode(node: ProseMirrorJSON, mediaIds: ReadonlyMap<string, EmbeddedMedia>): SemanticNode {
   const attrs = attributes(node)
   const content = () => childNodes(node).map((child) => semanticNode(child, mediaIds))
   switch (node.type) {
@@ -399,7 +462,7 @@ function semanticNode(node: ProseMirrorJSON, mediaIds: ReadonlyMap<string, strin
 
 function semanticDocument(
   nodes: readonly ProseMirrorJSON[],
-  mediaIds: ReadonlyMap<string, string>,
+  mediaIds: ReadonlyMap<string, EmbeddedMedia>,
 ): SemanticDocument {
   return { type: 'document', content: nodes.map((node) => semanticNode(node, mediaIds)) }
 }
@@ -407,7 +470,7 @@ function semanticDocument(
 /** A Side-by-Side: its two or three Panels, each holding ordinary blocks. */
 function semanticSideBySide(
   node: ProseMirrorJSON,
-  mediaIds: ReadonlyMap<string, string>,
+  mediaIds: ReadonlyMap<string, EmbeddedMedia>,
 ): SemanticNode {
   const panels = childNodes(node)
   if (panels.length < 2 || panels.length > 3) {
@@ -430,7 +493,7 @@ function semanticSideBySide(
  *  also be Side-by-Sides. */
 function semanticStem(
   nodes: readonly ProseMirrorJSON[],
-  mediaIds: ReadonlyMap<string, string>,
+  mediaIds: ReadonlyMap<string, EmbeddedMedia>,
 ): SemanticDocument {
   return {
     type: 'document',
@@ -454,7 +517,7 @@ export const RECORD_TYPES: Record<QuestionType, QuestionBankRecordQuestionType> 
 function portableQuestion(
   question: Question,
   index: number,
-  mediaIds: ReadonlyMap<string, string>,
+  mediaIds: ReadonlyMap<string, EmbeddedMedia>,
 ): QuestionBankRecordQuestion {
   const base: QuestionBankRecordQuestion = {
     id: `q${index + 1}`,
@@ -544,6 +607,7 @@ function portableQuestion(
             id: `${id}-c${choiceIndex + 1}`,
             content: semanticDocument(childNodes(choice.node), mediaIds),
             correct: choice.correct,
+            ...recordLockOf(choice),
           })),
         }
       }),
@@ -569,8 +633,19 @@ function portableQuestion(
       id: `q${index + 1}-c${choiceIndex + 1}`,
       content: semanticDocument(childNodes(choice.node), mediaIds),
       correct: choice.correct,
+      ...(question.type === 'multiple-choice' ? recordLockOf(choice) : {}),
     })),
   }
+}
+
+/** A choice's `locked` as a record writes it: `true` for every Locked Answer,
+ *  whether the teacher or its wording locked it, so no consumer needs Test
+ *  Parrot's reading of the wording; `false` for one the teacher unlocked, so
+ *  an importer that locks by wording leaves it alone; nothing otherwise. A
+ *  True/False answer is never locked, so it never carries one. */
+function recordLockOf(choice: Choice): { locked?: boolean } {
+  if (choice.locked) return { locked: true }
+  return choiceLockOf(choice.node) === false ? { locked: false } : {}
 }
 
 function hex(bytes: ArrayBuffer): string {
@@ -636,7 +711,20 @@ const browserQuestionBankMedia: QuestionBankMediaLoader = async (source) => {
       let mimeType: QuestionBankMediaSource['mimeType']
       let previewData = data
       let previewType: 'png' | 'jpg'
-      if (originalMimeType === 'image/png' || originalMimeType === 'image/jpeg') {
+      if (originalMimeType === 'image/jpeg' && jpegOrientation(data) !== 1) {
+        // A camera photo stored turned: the record keeps its bytes as they
+        // are, but a PDF draws stored pixels as they are, so the preview is
+        // drawn from the bitmap, which the browser has already turned upright.
+        mimeType = originalMimeType
+        const canvas = document.createElement('canvas')
+        canvas.width = bitmap.width
+        canvas.height = bitmap.height
+        canvas.getContext('2d')?.drawImage(bitmap, 0, 0)
+        const jpeg = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.92))
+        if (!jpeg) return null
+        previewData = new Uint8Array(await jpeg.arrayBuffer())
+        previewType = 'jpg'
+      } else if (originalMimeType === 'image/png' || originalMimeType === 'image/jpeg') {
         mimeType = originalMimeType
         previewType = originalMimeType === 'image/jpeg' ? 'jpg' : 'png'
       } else {
@@ -664,12 +752,6 @@ const browserQuestionBankMedia: QuestionBankMediaLoader = async (source) => {
   }
 }
 
-function base64(bytes: Uint8Array): string {
-  let value = ''
-  for (const byte of bytes) value += String.fromCharCode(byte)
-  return btoa(value)
-}
-
 export async function prepareQuestionBankExport(
   bank: QuestionBankResource,
   loadMedia: QuestionBankMediaLoader = browserQuestionBankMedia,
@@ -684,17 +766,20 @@ export async function prepareQuestionBankExport(
     ...imageSources(question.suggestedAnswer ? childNodes(question.suggestedAnswer) : []),
   ]).filter((source, index, all) => all.indexOf(source) === index)
   const loaded = await Promise.all(sources.map((source) => loadMedia(source)))
-  const mediaIds = new Map<string, string>()
+  const mediaIds = new Map<string, EmbeddedMedia>()
   const media: QuestionBankRecord['media'] = []
+  const files = new Map<string, Uint8Array>()
   const previewMedia = new Map<string, NonNullable<PreparedQuestionBankExport['previewMedia']> extends Map<string, infer V> ? V : never>()
   for (const [index, source] of sources.entries()) {
     const asset = loaded[index]
     if (!asset) throw new Error(`Required media for “${source}” could not be resolved. Re-add the image and try again.`)
     const digest = hex(await crypto.subtle.digest('SHA-256', asset.data))
     const id = `sha256:${digest}`
-    mediaIds.set(source, id)
+    mediaIds.set(source, { id, width: asset.width })
     if (!media.some((candidate) => candidate.id === id)) {
-      media.push({ id, mimeType: asset.mimeType, width: asset.width, height: asset.height, bytes: base64(asset.data) })
+      const file = mediaFilePath(id, asset.mimeType)
+      media.push({ id, mimeType: asset.mimeType, width: asset.width, height: asset.height, file })
+      files.set(file, asset.data)
       previewMedia.set(id, {
         data: asset.previewData ?? asset.data,
         type: asset.previewType ?? (asset.mimeType === 'image/jpeg' ? 'jpg' : 'png'),
@@ -719,6 +804,7 @@ export async function prepareQuestionBankExport(
   return {
     record: serialized.record,
     recordBytes: serialized.bytes,
+    files,
     filename: questionBankFilename(bank.name),
     previewMedia,
   }
@@ -748,7 +834,27 @@ const EDITOR_MARK_TYPES: Record<SemanticMark['type'], string> = {
   link: 'link',
 }
 
-function editorNode(node: SemanticNode): ProseMirrorJSON {
+/** The media declarations a record's pictures are read against. */
+export type RecordMediaSizes = readonly { id: string; width: number; height: number }[]
+
+/**
+ * A block image's size and crop as the editor holds them: a 0.7.0
+ * `authoredSize` is its `size`, a share of its container; an older record's is
+ * the legacy `ratio` it always meant. A crop carries the whole Media Asset's
+ * pixel size, from the importer or else from the record's media.
+ */
+function editorPictureAttrs(node: SemanticNode, media: RecordMediaSizes | undefined): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {}
+  if (node.authoredSize !== undefined) attrs.size = node.authoredSize
+  else if (node.legacyRatio !== undefined) attrs.ratio = node.legacyRatio
+  const size = node.pictureSize ?? media?.find((asset) => asset.id === node.asset)
+  if (node.crop && size) {
+    attrs.crop = { ...node.crop, width: size.width, height: size.height }
+  }
+  return attrs
+}
+
+function editorNode(node: SemanticNode, media?: RecordMediaSizes): ProseMirrorJSON {
   if (node.type === 'inline-math')
     return { type: 'math_inline', attrs: { value: node.source ?? '' } }
   if (node.type === 'display-math') {
@@ -769,7 +875,7 @@ function editorNode(node: SemanticNode): ProseMirrorJSON {
           : { src: `/local-images/${node.asset!.slice('sha256:'.length)}` }),
         ...(node.alt !== undefined ? { alt: node.alt } : {}),
         ...(node.caption !== undefined ? { caption: node.caption } : {}),
-        ...(node.authoredSize !== undefined ? { ratio: node.authoredSize } : {}),
+        ...(node.type === 'block-image' ? editorPictureAttrs(node, media) : {}),
       },
     }
   }
@@ -787,7 +893,7 @@ function editorNode(node: SemanticNode): ProseMirrorJSON {
   const converted: ProseMirrorJSON = {
     type,
     ...(node.text !== undefined ? { text: node.text } : {}),
-    ...(node.content ? { content: node.content.map(editorNode) } : {}),
+    ...(node.content ? { content: node.content.map((child) => editorNode(child, media)) } : {}),
   }
   if (node.type === 'table-row' && node.header)
     converted.type = 'table_header_row'
@@ -808,9 +914,12 @@ function editorNode(node: SemanticNode): ProseMirrorJSON {
   return converted
 }
 
-/** Preview adapter: the preview consumes only the portable record. */
+/** Preview adapter: the preview consumes only the portable record. Pass the
+ *  record's `media` so a Picture Crop in a record the importer did not parse,
+ *  such as the export preview's, can find its Media Asset's pixel size. */
 export function recordDocumentToEditorNodes(
   document: SemanticDocument,
+  media?: RecordMediaSizes,
 ): ProseMirrorJSON[] {
-  return document.content.map(editorNode)
+  return document.content.map((node) => editorNode(node, media))
 }

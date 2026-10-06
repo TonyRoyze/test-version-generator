@@ -439,6 +439,9 @@ export function createQuestionBankWorkspaceService(
       options: {
         /** Pending Images resolved in Resolve Images. */
         resolution?: import('./pending-images').PendingImageResolution
+        /** Measures a Word Bank answer, so a Matching position the record
+         *  does not place takes the layout that fits (`wordBankLayoutFor`). */
+        bankAnswerWidth?: import('./export-plan').BankAnswerWidth
         /** What the import history records once it lands: the file, and the
          *  waiting import it finishes — whose Source Document is then deleted
          *  — when it was paired with one. */
@@ -450,7 +453,7 @@ export function createQuestionBankWorkspaceService(
       } = {},
     ): Promise<ImportResult> {
       const { planImport } = await import('./package-commit')
-      const plan = planImport(proposal, selection, createId, options.resolution)
+      const plan = planImport(proposal, selection, createId, options.resolution, options.bankAnswerWidth)
       const timestamp = now().toISOString()
       const written: string[] = []
       const bankNames = new Map(plan.banks.flatMap(({ bankId, created }) => (created ? [[bankId, created.name] as const] : [])))
@@ -501,12 +504,10 @@ export function createQuestionBankWorkspaceService(
             }
             const mediaStore = transaction.objectStore(MEDIA_ASSET_STORE)
             for (const asset of plan.media) {
-              const binary = atob(asset.bytes)
-              const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
               mediaStore.put({
                 hash: asset.id.slice('sha256:'.length),
                 mimeType: asset.mimeType,
-                bytes: bytes.buffer,
+                bytes: asset.bytes.slice().buffer,
                 width: asset.width,
                 height: asset.height,
               })

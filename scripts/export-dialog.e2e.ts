@@ -75,7 +75,9 @@ test('Export defaults to PDF with both selected documents and a clean preview', 
   await expect(dialog.getByRole('radio', { name: 'PDF' })).toBeChecked()
   await expect(dialog.getByRole('checkbox', { name: 'Student test' })).toBeChecked()
   await expect(dialog.getByRole('checkbox', { name: 'Answer key' })).toBeChecked()
-  await expect(dialog.getByLabel('Export Preview').locator('.exam-page')).toHaveCount(2)
+  // The default cover precedes the student test and answer key.
+  await expect(dialog.getByLabel('Export Preview').locator('.exam-page')).toHaveCount(3)
+  await expect(dialog.getByLabel('Export Preview').getByRole('region', { name: 'Exam cover details' })).toBeVisible()
   await expect(dialog.getByLabel('Export Preview')).toContainText('Which is a mammal?')
   await expect(dialog.getByLabel('Export Preview').locator('.choice-correctness-marker')).toHaveCount(0)
 })
@@ -161,7 +163,7 @@ test('empty Exams cannot export and Cmd/Ctrl+P opens Export for non-empty Exams'
   await expect(dialogOf(page)).toBeVisible()
 })
 
-test('a Short Answer question sits close to its number, and its Suggested Answer prints only in the key', async ({ page }) => {
+test('a Short Answer question has no answer blank, and its Suggested Answer prints only in the key', async ({ page }) => {
   const [mc, sa] = EXAM.questions
   const withAnswer = {
     ...sa!,
@@ -169,14 +171,12 @@ test('a Short Answer question sits close to its number, and its Suggested Answer
   }
   await open(page, { ...AUTHORING, questionBank: { questions: [mc!, withAnswer] } })
 
-  // On the sheet, a Short Answer question has no blank beside its number, so
-  // its text starts well short of where a Multiple Choice stem does.
-  const stemLeft = async (id: string) =>
-    (await page.locator(`.exam-workspace [data-question-id="${id}"] .question-stem`).boundingBox())!.x
-  expect(await stemLeft('o1')).toBeLessThan(await stemLeft('m1') - 40)
+  const shortAnswer = page.locator('.exam-workspace [data-question-id="o1"]')
+  await expect(shortAnswer.locator('.question-marks')).toHaveCount(0)
+  await expect(shortAnswer.locator('.question-stem')).toContainText('Explain why.')
 
   const dialog = await openDialog(page)
-  const [testPage, keyPage] = await dialog.getByLabel('Export Preview').locator('.exam-page').all()
+  const [, testPage, keyPage] = await dialog.getByLabel('Export Preview').locator('.exam-page').all()
   await expect(testPage!).toContainText('Explain why.')
   await expect(testPage!).not.toContainText('Because whales breathe air.')
   await expect(keyPage!.locator('.answer-key-suggested')).toHaveText('Because whales breathe air.')

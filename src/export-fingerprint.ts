@@ -17,7 +17,7 @@
 // first differing line, and that line says what the document says.
 
 import {
-  numberLabelOf,
+  printedNumberLabelOf,
   printsNumberLine,
   type ChoiceGrid,
   type ExportDocument,
@@ -31,6 +31,10 @@ import {
 import { arrangementRange } from './export-preparation'
 import { paperBookAnswerLines } from './cover-templates/paper-book-answers'
 import type { ProseMirrorJSON } from './question-doc'
+import { MARGIN_SIDES, type MarginSide } from './page-margins'
+
+/** A page's margins in CSS px, every side. */
+export type PageMarginsPx = Record<MarginSide, number>
 
 /** One block of content, normalized. See `blockLine` for the vocabulary. */
 export type ContentLine = string
@@ -40,7 +44,8 @@ export type PageFingerprint = {
   /** US Letter in CSS px at 96dpi, the units the plan works in. */
   width: number
   height: number
-  margin: number
+  /** The page's own margins, every side. */
+  margins: PageMarginsPx
   header: ContentLine[]
   footer: ContentLine[]
   content: ContentLine[]
@@ -528,7 +533,7 @@ function planQuestion(item: QuestionItem, images: ImageOrdinals): ContentLine[] 
     ? [
         {
           kind: 'text',
-          text: `${[...item.question.marks, numberLabelOf(item.question)].join(' ')} `,
+          text: `${[...item.question.marks, printedNumberLabelOf(item.question)].join(' ')} `,
           marks: [],
         },
       ]
@@ -681,7 +686,7 @@ export function layoutFingerprint(
       number: page.furniture.pageNumber,
       width: plan.pageSize.width,
       height: plan.pageSize.height,
-      margin: plan.pageSize.margin,
+      margins: { ...plan.pageSize.margins },
       ...furnitureLines(page.furniture),
       content: [
         ...page.items.flatMap((item) => planItemLines(item, images)),
@@ -795,6 +800,19 @@ export function compareFingerprints(
         detail: 'page dimensions differ',
         expected: `${reference.width}x${reference.height}`,
         actual: `${candidate.width}x${candidate.height}`,
+      })
+    }
+    // The Exam's Page Margins are part of the sheet: a page cut with other
+    // margins holds its content in a different box.
+    const marginsOf = (page: PageFingerprint) =>
+      MARGIN_SIDES.map((side) => page.margins[side]).join(' ')
+    if (marginsOf(reference) !== marginsOf(candidate)) {
+      differences.push({
+        page: number,
+        what: 'page-size',
+        detail: 'page margins differ',
+        expected: marginsOf(reference),
+        actual: marginsOf(candidate),
       })
     }
     differences.push(
