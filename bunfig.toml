@@ -1,0 +1,3 @@
+# Root tests cover synchronization tooling. Each application runs its own suite.
+[test]
+root = "./scripts"

@@ -1,15 +1,15 @@
 # Test Parrot Package 0.1.0
 
-A **Test Parrot Package** carries one or more Question Bank Records and any number of [Exam Records](exam-record-0.1.0.md) that reference Questions in them. It travels in a [package zip](#the-package-zip) beside the pictures its records name: embedded in every Question Bank File and in every exported Exam PDF whose Content Selection includes the answer key, or downloaded on its own as `*.parrot.zip`. Importing it lets the teacher choose which banks and Exams to bring in. See ADR-0022 and ADR-0036.
+A **Test Parrot Package** carries one or more Question Bank Records and any number of [Exam Records](exam-record-0.4.0.md) that reference Questions in them. It travels in a [package zip](#the-package-zip) beside the pictures its records name: embedded in every Question Bank File and in every exported Exam PDF whose Content Selection includes the answer key, or downloaded on its own as `*.parrot.zip`. Importing it lets the teacher choose which banks and Exams to bring in. See ADR-0022 and ADR-0036.
 
 ## Published contract
 
 - Format: `test-parrot/package`
 - Version: `0.1.0`, versioned separately from the records it carries
 - Stable schema identifier: `https://testparrot.com/formats/package/0.1.0/schema.json`
-- Checked-in schema: [`/formats/package/0.1.0/schema.json`](../public/formats/package/0.1.0/schema.json)
-- [Canonical examples](../public/formats/package/0.1.0/examples/)
-- [Invalid counterexamples](../public/formats/package/0.1.0/invalid/), with the application error code each is rejected with in `manifest.json`
+- Checked-in schema: [`/formats/package/0.1.0/schema.json`](../apps/rewrite/public/formats/package/0.1.0/schema.json)
+- [Canonical examples](../apps/rewrite/public/formats/package/0.1.0/examples/)
+- [Invalid counterexamples](../apps/rewrite/public/formats/package/0.1.0/invalid/), with the application error code each is rejected with in `manifest.json`
 
 ## Envelope
 
