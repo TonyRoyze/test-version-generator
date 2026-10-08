@@ -9,9 +9,9 @@ The **Question Bank Record** is the authoritative, portable representation of on
 - Format: `test-parrot/question-bank`
 - Version: `0.1.0`
 - Stable schema identifier: `https://testparrot.com/formats/question-bank/0.1.0/schema.json`
-- Checked-in schema: [`/formats/question-bank/0.1.0/schema.json`](../public/formats/question-bank/0.1.0/schema.json)
-- [Canonical examples](../public/formats/question-bank/0.1.0/examples/)
-- [Invalid counterexamples](../public/formats/question-bank/0.1.0/invalid/)
+- Checked-in schema: [`/formats/question-bank/0.1.0/schema.json`](../apps/rewrite/public/formats/question-bank/0.1.0/schema.json)
+- [Canonical examples](../apps/rewrite/public/formats/question-bank/0.1.0/examples/)
+- [Invalid counterexamples](../apps/rewrite/public/formats/question-bank/0.1.0/invalid/)
 
 The schema is the machine-readable structural contract; this document supplies semantics that JSON Schema cannot express. Implementations must perform both structural and semantic validation.
 

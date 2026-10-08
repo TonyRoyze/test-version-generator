@@ -7,9 +7,9 @@ The **Exam Record** is the portable composition of one Exam: its name and, for e
 - Format: `test-parrot/exam`
 - Version: `0.1.0`, versioned separately from the Question Bank Record and the Test Parrot Package
 - Stable schema identifier: `https://testparrot.com/formats/exam/0.1.0/schema.json`
-- Checked-in schema: [`/formats/exam/0.1.0/schema.json`](../public/formats/exam/0.1.0/schema.json)
-- [Canonical examples](../public/formats/exam/0.1.0/examples/)
-- Invalid counterexamples live with the package, since an Exam Record is validated there: [`/formats/package/0.1.0/invalid/`](../public/formats/package/0.1.0/invalid/)
+- Checked-in schema: [`/formats/exam/0.1.0/schema.json`](../apps/rewrite/public/formats/exam/0.1.0/schema.json)
+- [Canonical examples](../apps/rewrite/public/formats/exam/0.1.0/examples/)
+- Invalid counterexamples live with the package, since an Exam Record is validated there: [`/formats/package/0.1.0/invalid/`](../apps/rewrite/public/formats/package/0.1.0/invalid/)
 
 The schema is the structural contract; this document supplies the rules JSON Schema cannot express. Implementations must perform both.
 

@@ -2,6 +2,19 @@
 
 A Vite + React app for authoring test questions — Multiple Choice, True/False, Matching, Short Answer and Multipart — in a Milkdown/Crepe rich-text editor.
 
+## Monorepo boundaries
+
+Implement features in `apps/rewrite`. `apps/legacy` is the unmodified upstream
+snapshot; import updates only through the root `upstream:*` scripts.
+Before importing upstream or porting a feature, read `docs/monorepo.md` and the
+relevant checklist in `docs/upstream/`. Record each port's decision, commit and
+validation. Never mark a feature ported merely because legacy was updated.
+
+The root `CONTEXT.md` and `docs/adr/` remain the active domain documentation.
+Documents inside `apps/legacy` are archived upstream material. Source paths in
+active domain docs are relative to `apps/rewrite` unless stated otherwise.
+Root package scripts run the rewrite by default; legacy checks are explicit.
+
 ## Agent skills
 
 ### Issue tracker

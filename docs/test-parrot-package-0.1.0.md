@@ -7,9 +7,9 @@ A **Test Parrot Package** carries one or more Question Bank Records and any numb
 - Format: `test-parrot/package`
 - Version: `0.1.0`, versioned separately from the records it carries
 - Stable schema identifier: `https://testparrot.com/formats/package/0.1.0/schema.json`
-- Checked-in schema: [`/formats/package/0.1.0/schema.json`](../public/formats/package/0.1.0/schema.json)
-- [Canonical examples](../public/formats/package/0.1.0/examples/)
-- [Invalid counterexamples](../public/formats/package/0.1.0/invalid/), with the application error code each is rejected with in `manifest.json`
+- Checked-in schema: [`/formats/package/0.1.0/schema.json`](../apps/rewrite/public/formats/package/0.1.0/schema.json)
+- [Canonical examples](../apps/rewrite/public/formats/package/0.1.0/examples/)
+- [Invalid counterexamples](../apps/rewrite/public/formats/package/0.1.0/invalid/), with the application error code each is rejected with in `manifest.json`
 
 ## Envelope
 

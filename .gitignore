@@ -17,3 +17,9 @@ export-artifacts
 
 # Local env overrides (e.g. `vercel env pull`)
 .env*.local
+
+# Disposable upstream review reports. Porting decisions live in docs/upstream/.
+.upstream-reviews/
+
+# Vite dependency cache during development.
+.vite/

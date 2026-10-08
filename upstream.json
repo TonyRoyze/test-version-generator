@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/EdTech-a-thon/test-version-generator.git",
+  "branch": "main",
+  "prefix": "apps/legacy",
+  "importedCommit": "f846119e5a8a7d4aaae7315ab41b5beba9a67c2e",
+  "rewriteSourceCommit": "9c26a18",
+  "rewriteUpstreamBaseline": "f846119e5a8a7d4aaae7315ab41b5beba9a67c2e"
+}

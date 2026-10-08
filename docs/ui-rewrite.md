@@ -1,6 +1,7 @@
 # Editing the UI
 
-The React + shadcn/ui rewrite lives on `rewrite/react-shadcn-ui`. The layouts,
+The React + shadcn/ui rewrite lives in `apps/rewrite` on `rewrite/react-shadcn-ui`.
+The source paths below are relative to that app directory. The layouts,
 warm paper palette, data model, and authoring/export workflows are retained.
 
 ## Where to make changes
@@ -27,12 +28,12 @@ editor and printed document typography.
 ## Local development
 
 ```sh
-bun install
-bun run dev --port 8010 --strictPort
+bun run install:rewrite
+bun run dev:rewrite
 ```
 
 `components.json` configures shadcn with the `@/` alias and Tailwind v4. Add
-components with `bunx --bun shadcn@latest add <component>`. Review overwrite
+components from `apps/rewrite` with `bunx --bun shadcn@latest add <component>`. Review overwrite
 prompts: some primitives have application-specific variants or portal support.
 Buttons default to `type="button"`; forms use an explicit submit type.
 
