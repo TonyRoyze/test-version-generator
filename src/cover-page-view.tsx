@@ -1,5 +1,10 @@
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { CSSProperties } from 'react'
-import { COVER_PAGE_TEMPLATE_BY_ID, DEFAULT_COVER_PAGE_TEMPLATE } from './cover-templates/templates'
+import {
+  COVER_PAGE_TEMPLATE_BY_ID,
+  DEFAULT_COVER_PAGE_TEMPLATE,
+} from './cover-templates/templates'
 import type { ExamCover } from './page-cover'
 
 export function CoverPageView({ cover, printedPageCount, disabled, onChange }: {
@@ -28,11 +33,11 @@ export function CoverDesignPage({
     <div className="cover-design-route">
       <header className="document-bar">
         <div className="document-identity">
-          <button type="button" className="editor-home-mark" aria-label="Test Parrot home" title="Home" onClick={() => { window.location.assign('/') }}>
+          <Button variant="plain" size="content" type="button" className="editor-home-mark" aria-label="Test Parrot home" title="Home" onClick={() => { window.location.assign('/') }}>
             <img className="app-logo" src="/logo.png" alt="" width={36} height={36} />
-          </button>
+          </Button>
           <div className="document-title-stack">
-            <input aria-label="Exam name" className="document-title" value={examTitle} readOnly />
+            <Input aria-label="Exam name" className="document-title" value={examTitle} readOnly />
             <nav className="document-menus" aria-label="Exam menus">
               <span className="document-menu-button">File</span>
               <span className="document-menu-button">Edit</span>
@@ -42,7 +47,7 @@ export function CoverDesignPage({
         </div>
         <div className="header-actions">
           <span className="cover-document-context">Cover page</span>
-          <button type="button" className="secondary-button" onClick={onBack}>Back to paper</button>
+          <Button variant="outline" type="button" className="secondary-button" onClick={onBack}>Back to paper</Button>
         </div>
       </header>
       <main className="exam-workspace" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}>

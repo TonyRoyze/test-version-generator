@@ -1,7 +1,21 @@
+import { Button } from '@/components/ui/button'
+import {
+  ChevronLeft,
+  ChevronRight,
+  EllipsisVertical,
+  FileImage,
+  FileJson,
+  FileText,
+  FolderOpen,
+  ImageIcon,
+  Library,
+  Trash2,
+} from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, EllipsisVertical, FileImage, FileJson, FileText, FolderOpen, ImageIcon, Library, Trash2 } from 'lucide-react'
 import { AppShell } from './app-shell'
+import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
 import type { PersistentStorageStatus } from './durable-storage'
+import { ImportError } from './import-error'
 import {
   WAITING_IMPORT_LIFETIME_MS,
   discardWaitingImport,
@@ -11,11 +25,9 @@ import {
   type ImportFileKind,
   type WaitingImport,
 } from './import-history'
-import { Link } from './site-chrome'
-import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
-import { SourceDocumentSteps } from './source-document-steps'
-import { ImportError } from './import-error'
 import { inspectUploadedFile, isRecordFile } from './question-bank-upload'
+import { Link } from './site-chrome'
+import { SourceDocumentSteps } from './source-document-steps'
 
 /**
  * The Imports section: every import this browser has started. Those still
@@ -133,7 +145,7 @@ function ImportCard({
         ? <a href={first.href} className="import-card-main" aria-label={`Open ${first.label}`}>{caption}</a>
         : <div className="import-card-main">{caption}</div>}
     {items.length > 0 && (
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="bank-card-menu import-card-menu"
         aria-label={`${entry.fileName} actions`}
@@ -144,7 +156,7 @@ function ImportCard({
         }}
       >
         <EllipsisVertical aria-hidden="true" />
-      </button>
+      </Button>
     )}
     {menu && (
       <ContextMenu
@@ -197,7 +209,7 @@ export function ImportsPage({
     <header className="collection-heading">
       <h1>Imports</h1>
       <div className="collection-actions">
-        <button type="button" className="primary-button" onClick={onImport}>Import</button>
+        <Button variant="default" type="button" className="primary-button" onClick={onImport}>Import</Button>
       </div>
     </header>
     {entries === null
@@ -288,22 +300,22 @@ function WaitingPreview({ waiting }: { waiting: WaitingImport }) {
           ? <span className="import-sheet-placeholder"><FileText aria-hidden="true" />{waiting.kind === 'word' ? 'Word document' : 'No preview'}</span>
           : <span className="import-sheet-placeholder" role="status">Drawing page {pageNumber}…</span>}
       {pages > 1 && <>
-        <button
+        <Button variant="plain" size="content"
           type="button"
           className="import-preview-turn"
           data-side="previous"
           aria-label="Previous page"
           disabled={pageNumber === 1}
           onClick={() => setPageNumber(pageNumber - 1)}
-        ><ChevronLeft aria-hidden="true" /></button>
-        <button
+        ><ChevronLeft aria-hidden="true" /></Button>
+        <Button variant="plain" size="content"
           type="button"
           className="import-preview-turn"
           data-side="next"
           aria-label="Next page"
           disabled={pageNumber === pages}
           onClick={() => setPageNumber(pageNumber + 1)}
-        ><ChevronRight aria-hidden="true" /></button>
+        ><ChevronRight aria-hidden="true" /></Button>
       </>}
     </div>
     {pages > 0 && <figcaption>

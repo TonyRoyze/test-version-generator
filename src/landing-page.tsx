@@ -1,6 +1,4 @@
-import { isSupabaseConfigured } from './supabase'
-import { useEffect } from 'react'
-import type { CSSProperties, ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
 import {
   ArrowRight,
   Camera,
@@ -15,7 +13,10 @@ import {
   ScanLine,
   Sparkles,
 } from 'lucide-react'
+import type { CSSProperties, ReactNode } from 'react'
+import { useEffect } from 'react'
 import { Footer, Link } from './site-chrome'
+import { isSupabaseConfigured } from './supabase'
 import { markWelcomed } from './welcomed'
 
 /**
@@ -277,12 +278,12 @@ export function OnboardingPage({
         </p>
 
         <div className="onboarding-choices">
-          <button type="button" className="onboarding-choice" onClick={onNewBank}>
+          <Button variant="plain" size="content" type="button" className="onboarding-choice" onClick={onNewBank}>
             <PencilLine aria-hidden="true" />
             <strong>Write it myself</strong>
             <span>Open an empty Question Bank and add questions in the editor, one at a time.</span>
             <em>New Question Bank</em>
-          </button>
+          </Button>
           <Link href="/get-started/convert" className="onboarding-choice">
             <Sparkles aria-hidden="true" />
             <strong>Convert what I already have</strong>
@@ -296,10 +297,10 @@ export function OnboardingPage({
 
         <p className="onboarding-skip">
           Or skip ahead —{' '}
-          <button type="button" className="onboarding-skip-button" onClick={onNewExam}>
+          <Button variant="plain" size="content" type="button" className="onboarding-skip-button" onClick={onNewExam}>
             <NotebookPen aria-hidden="true" />
             start with a blank Exam
-          </button>{' '}
+          </Button>{' '}
           and make a bank from inside the editor.
         </p>
       </main>

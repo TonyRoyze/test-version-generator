@@ -1,5 +1,7 @@
-import { useId, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { ClipboardPaste } from 'lucide-react'
+import { useId, useState } from 'react'
 import { SUPPORTED_SOURCES } from './question-formats/catalog'
 
 /** What an AI assistant converts, named first because most tests arrive as
@@ -37,7 +39,7 @@ export function TextOnlyChoices({ busy, onPaste }: {
         }}
       >
         <label htmlFor={textId}>Paste your questions</label>
-        <textarea
+        <Textarea
           id={textId}
           value={pasted}
           rows={10}
@@ -51,18 +53,18 @@ export function TextOnlyChoices({ busy, onPaste }: {
           format Test Parrot reads. Leave a blank line between questions.
         </p>
         <div className="import-paste-actions">
-          <button type="button" className="secondary-button" onClick={() => setPasting(false)}>Cancel</button>
-          <button type="submit" className="primary-button" disabled={busy || !pasted.trim()}>
+          <Button variant="outline" type="button" className="secondary-button" onClick={() => setPasting(false)}>Cancel</Button>
+          <Button variant="default" type="submit" className="primary-button" disabled={busy || !pasted.trim()}>
             Read my questions
-          </button>
+          </Button>
         </div>
       </form>
     ) : (
       <p className="convert-text-only">
         Only have it as text?{' '}
-        <button type="button" className="link-button" disabled={busy} onClick={() => setPasting(true)}>
+        <Button variant="plain" size="content" type="button" className="link-button" disabled={busy} onClick={() => setPasting(true)}>
           <ClipboardPaste aria-hidden="true" /> Paste your questions
-        </button>
+        </Button>
       </p>
     )
 }

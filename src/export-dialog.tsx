@@ -1,5 +1,9 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
-import { useModalScrollLock } from './use-modal-scroll-lock'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { ExportPreview } from './exam-page'
 import type { LayoutPlan } from './export-plan'
 import type {
@@ -14,6 +18,7 @@ import {
   versionCountError,
   versionNamesIn,
 } from './export-versions'
+import { useModalScrollLock } from './use-modal-scroll-lock'
 
 function progressMessage(progress: PreparationProgress): string {
   return progress.stage === 'planning'
@@ -59,22 +64,22 @@ function VersionLine({
         {names.map((name) => (
           <li key={name}>
             {included && (
-              <input
-                type="checkbox"
+              <Checkbox
+
                 aria-label={`Re-export ${name}`}
                 checked={included.includes(name)}
                 disabled={disabled}
-                onChange={(event) => onIncludedChange?.(name, event.target.checked)}
+                onCheckedChange={(checked) => onIncludedChange?.(name, (checked === true))}
               />
             )}
-            <button
+            <Button variant="plain" size="content"
               type="button"
               className="export-version-name"
               aria-current={current === name ? 'true' : undefined}
               onClick={() => onSnap(name)}
             >
               {name}
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
@@ -114,35 +119,29 @@ function ExportSettings({
     <>
       <fieldset className="export-field" disabled={locked}>
         <legend>Format</legend>
-        {(['pdf', 'docx'] as const).map((format) => (
-          <label key={format}>
-            <input
-              type="radio"
-              name={`${id}-format`}
-              value={format}
-              checked={configuration.format === format}
-              onChange={() => change({ format })}
-            />
-            {format.toUpperCase()}
-          </label>
-        ))}
+        <RadioGroup name={`${id}-format`} value={configuration.format} disabled={locked}
+          onValueChange={format => change({ format: format as ExportConfiguration['format'] })}>
+          {(['pdf', 'docx'] as const).map(format => <label key={format}>
+            <RadioGroupItem value={format} />{format.toUpperCase()}
+          </label>)}
+        </RadioGroup>
       </fieldset>
 
       <fieldset className="export-field" disabled={locked}>
         <legend>Content selection</legend>
         <label>
-          <input
-            type="checkbox"
+          <Checkbox
+
             checked={selection.test}
-            onChange={(event) => change({ selection: { ...selection, test: event.target.checked } })}
+            onCheckedChange={(checked) => change({ selection: { ...selection, test: (checked === true) } })}
           />
           Student test
         </label>
         <label>
-          <input
-            type="checkbox"
+          <Checkbox
+
             checked={selection.answerKey}
-            onChange={(event) => change({ selection: { ...selection, answerKey: event.target.checked } })}
+            onCheckedChange={(checked) => change({ selection: { ...selection, answerKey: (checked === true) } })}
           />
           Answer key
         </label>
@@ -151,10 +150,10 @@ function ExportSettings({
       {showCoverPageOption && <fieldset className="export-field" disabled={locked}>
         <legend>Cover page</legend>
         <label>
-          <input
-            type="checkbox"
+          <Checkbox
+
             checked={configuration.includeCoverPage !== false}
-            onChange={(event) => change({ includeCoverPage: event.target.checked })}
+            onCheckedChange={(checked) => change({ includeCoverPage: (checked === true) })}
           />
           Include cover page
         </label>
@@ -163,24 +162,24 @@ function ExportSettings({
       <fieldset className="export-field" disabled={locked} aria-describedby={`${id}-version-hint`}>
         <legend>Shuffled Versions</legend>
         <label>
-          <input
-            type="checkbox"
+          <Checkbox
+
             checked={shuffle.questions}
-            onChange={(event) => change({ shuffle: { ...shuffle, questions: event.target.checked } })}
+            onCheckedChange={(checked) => change({ shuffle: { ...shuffle, questions: (checked === true) } })}
           />
           Shuffle question order
         </label>
         <label>
-          <input
-            type="checkbox"
+          <Checkbox
+
             checked={shuffle.answers}
-            onChange={(event) => change({ shuffle: { ...shuffle, answers: event.target.checked } })}
+            onCheckedChange={(checked) => change({ shuffle: { ...shuffle, answers: (checked === true) } })}
           />
           Shuffle answer order
         </label>
         <label className="export-count">
           Versions
-          <input
+          <Input
             type="number"
             min={1}
             max={Math.max(1, maxVersions ?? versionCount)}
@@ -240,15 +239,12 @@ function ExportDialogFrame({
   const [progress, setProgress] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(initialError ?? null)
   const [current, setCurrent] = useState<string | null>(null)
-  const dialog = useRef<HTMLElement>(null)
+  const dialog = useRef<HTMLDivElement>(null)
   const preview = useRef<HTMLDivElement>(null)
   const id = useId()
   const names = versionNamesIn(previewPlans)
 
-  useEffect(() => {
-    const [first] = focusableWithin(dialog.current!)
-    first?.focus()
-  }, [])
+
 
   useModalScrollLock()
 
@@ -260,7 +256,7 @@ function ExportDialogFrame({
       return
     }
     // Restore a predictable in-dialog target after a recoverable failure.
-    if (error) {
+    if (error && dialog.current) {
       const [first] = focusableWithin(dialog.current!)
       first?.focus()
     }
@@ -299,49 +295,11 @@ function ExportDialogFrame({
   }
 
   return (
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onPointerDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        event.preventDefault()
-        close()
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.stopPropagation()
-          close()
-          return
-        }
-        if (event.key !== 'Tab' || !dialog.current) return
-        const focusable = focusableWithin(dialog.current)
-        const first = focusable[0]
-        const last = focusable.at(-1)
-        if (!first || !last) {
-          event.preventDefault()
-          dialog.current.focus()
-          return
-        }
-        const active = document.activeElement
-        if (active === dialog.current) {
-          event.preventDefault()
-          ;(event.shiftKey ? last : first).focus()
-        } else if (
-          event.shiftKey &&
-          (active === first || !dialog.current.contains(active))
-        ) {
-          event.preventDefault()
-          last.focus()
-        } else if (!event.shiftKey && active === last) {
-          event.preventDefault()
-          first.focus()
-        }
-      }}
-    >
-      <section
+    <>
+      <Modal title={title} onClose={close} busy={preparing}
         className="export-dialog export-dialog--publication"
-        role="dialog"
-        aria-modal="true"
+
+
         aria-labelledby={`${id}-title`}
         ref={dialog}
         tabIndex={-1}
@@ -400,25 +358,25 @@ function ExportDialogFrame({
               {error}
             </p>
           )}
-          <button
+          <Button variant="outline"
             type="button"
             className="secondary-button"
             disabled={preparing}
             onClick={close}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="default"
             type="button"
             className="primary-button"
             disabled={preparing || submitDisabled}
             onClick={() => void submit()}
           >
             {preparing ? 'Preparing…' : submitLabel}
-          </button>
+          </Button>
         </footer>
-      </section>
-    </div>
+      </Modal>
+    </>
   )
 }
 

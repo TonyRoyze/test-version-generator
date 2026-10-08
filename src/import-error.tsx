@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { Check, Copy } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { aiFixRequest } from './import-file-route'
 import { supportMailto } from './support-email'
 
@@ -30,14 +31,14 @@ export function ImportError({ message, aiMade = false }: {
         <strong>Made by an AI?</strong> Copy this error, paste it into the same chat and ask it
         to fix the file. Then drop the new file here.
       </span>
-      <button
+      <Button variant="outline"
         type="button"
         className="secondary-button"
         onClick={() => void navigator.clipboard.writeText(aiFixRequest(message)).then(() => setCopied(true))}
       >
         {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
         {copied ? 'Copied' : 'Copy error'}
-      </button>
+      </Button>
     </div>}
     <p className="import-error-help">
       Having trouble? <a href={supportMailto('Trouble importing into Test Parrot', { askForFile: true })}>Email us your file</a> and we’ll help.

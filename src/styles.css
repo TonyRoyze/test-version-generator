@@ -1,6 +1,40 @@
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "tailwindcss/utilities.css" layer(utilities);
+@import "tw-animate-css";
+
+/* shadcn's semantic palette follows the existing paper theme. */
+@theme inline {
+  --color-background: var(--paper-surface);
+  --color-foreground: var(--ui-foreground);
+  --color-card: var(--paper-surface);
+  --color-card-foreground: var(--ui-foreground);
+  --color-popover: var(--paper-surface);
+  --color-popover-foreground: var(--ui-foreground);
+  --color-primary: var(--paper-accent);
+  --color-primary-foreground: var(--paper-surface);
+  --color-secondary: var(--paper-surface-low);
+  --color-secondary-foreground: var(--paper-ink-soft);
+  --color-muted: var(--paper-surface-low);
+  --color-muted-foreground: var(--ui-muted-foreground);
+  --color-accent: var(--paper-accent-wash);
+  --color-accent-foreground: var(--paper-ink-soft);
+  --color-destructive: var(--paper-danger);
+  --color-border: var(--paper-outline);
+  --color-input: var(--paper-outline);
+  --color-ring: var(--paper-accent);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+/* Keep Tailwind Preflight away from the measured printable document and Crepe.
+   Only the component primitives get these reset defaults. */
+@layer base {
+  :where([data-slot]) { border-style: solid; border-width: 0; border-color: var(--paper-outline); }
+}
+
 
 @font-face {
   font-family: "CooperBold";
@@ -11,6 +45,9 @@
 }
 
 :root {
+  --radius: 8px;
+  --ui-foreground: #332a24;
+  --ui-muted-foreground: #866f5e;
   font-family: Arial, Helvetica, sans-serif; color: #332a24; background: var(--app-ground);
   /* The one palette. These are the values the Crepe editor theme is configured
      with further down, named here so the workspace around it agrees rather than
@@ -166,29 +203,7 @@ button { cursor: pointer; }
 .working-copy-badge:hover .working-copy-tip,
 .working-copy-badge-button:focus-visible + .working-copy-tip { visibility: visible; opacity: 1; }
 .working-copy-tip { width: min(280px, calc(100vw - 32px)); }
-.export-button, .primary-button, .secondary-button {
-  min-height: 36px; padding: 8px 14px; border: 1px solid #bda995; border-radius: 8px;
-  color: #4e3b2f; background: #f7eee3; font-weight: 600;
-}
-.export-button {
-  display: inline-flex; align-items: center; gap: 6px;
-  border-color: #9f5037; color: #fffaf3; background: #9f5037;
-}
-.export-button:hover { background: #87422e; }
-.export-button:disabled { opacity: 0.72; cursor: wait; }
-.secondary-button:hover { background: #ebddcd; }
-.primary-button { border-color: #9f5037; color: #fffaf3; background: #9f5037; }
-.primary-button:hover { background: #87422e; }
-.secondary-button:disabled, .primary-button:disabled { color: #a8988c; border-color: #d8c8b8; background: #f7eee3; cursor: not-allowed; }
-.secondary-button:disabled:hover, .primary-button:disabled:hover { background: #f7eee3; }
-.toolbar-icon-button {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; padding: 0; border: 1px solid transparent; border-radius: 8px;
-  color: #6e5b4d; background: transparent;
-}
-.toolbar-icon-button:hover:not(:disabled) { background: #f7eee3; }
-.toolbar-icon-button:disabled { color: #c5b8ac; cursor: not-allowed; }
-.toolbar-icon-button svg { width: 18px; height: 18px; stroke-width: 2; }
+
 
 /* The export dialog. One modal over the document, rather than a strip that
    pushes the page it is about out of the way. */
@@ -543,7 +558,6 @@ button { cursor: pointer; }
    `left`/`top` come from the component, which has already kept it inside the
    window. The width matches LIST_WIDTH in question-bank-pane.tsx. */
 .bank-filter-list {
-  position: fixed; z-index: 900;
   width: 190px; max-height: 260px; padding: 5px; overflow-y: auto;
   border: 1px solid #e0d3c2; border-radius: 8px; background: #fffdf8;
   box-shadow: 0 8px 24px rgb(91 68 47 / 18%);
@@ -558,12 +572,12 @@ button { cursor: pointer; }
   position: relative; display: inline-flex; align-items: center;
   color: #5b4839;
 }
-.bank-sort svg {
+.bank-sort > svg {
   position: absolute; left: 8px; width: 14px; height: 14px;
   pointer-events: none; stroke-width: 2;
 }
-.bank-sort select {
-  min-height: 30px; padding: 5px 25px 5px 27px;
+.bank-sort [data-slot="select-trigger"] {
+  min-height: 30px; padding: 5px 10px;
   border: 1px solid #ddcdb9; border-radius: 6px;
   color: inherit; background: #fffdf8; font-size: 13px;
 }
@@ -1019,6 +1033,7 @@ button { cursor: pointer; }
   white-space: pre-wrap; overflow-wrap: break-word; font: inherit;
 }
 .section-heading-input {
+  min-height: 0; field-sizing: fixed;
   grid-area: 1 / 1; width: 0; min-width: 100%; padding: 0; margin: 0;
   border: 0; border-radius: 0; resize: none; overflow: hidden;
   color: inherit; background: transparent; font: inherit; line-height: inherit;
@@ -1493,55 +1508,7 @@ button { cursor: pointer; }
 .question-handle:focus-visible { outline: 2px solid #9f5037; outline-offset: 1px; }
 .question-handle { cursor: pointer; }
 
-/* The context menu: shadcn/ui's ContextMenu in this app's palette. Fixed and
-   portalled to the body, since the sheet it is raised over clips its own
-   overflow; `left`/`top` come from the component, which has already flipped
-   and clamped them against the viewport. */
-.context-menu {
-  position: fixed; z-index: 200; min-width: 196px; max-height: 80vh; overflow: visible;
-  padding: 4px; border: 1px solid #e0d3c2; border-radius: 8px; background: #fffdf8;
-  box-shadow: 0 10px 30px rgb(55 42 33 / 18%), 0 2px 6px rgb(55 42 33 / 10%);
-  font-family: Arial, Helvetica, sans-serif; font-size: 13px;
-  animation: context-menu-in 90ms ease-out;
-}
-@keyframes context-menu-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: none; }
-}
-@media (prefers-reduced-motion: reduce) { .context-menu { animation: none; } }
-.context-menu-item {
-  display: flex; align-items: center; gap: 8px; width: 100%;
-  padding: 6px 8px; border: 0; border-radius: 5px;
-  color: #4e3b2f; background: transparent; font: inherit; text-align: left;
-}
-.context-menu-item:hover, .context-menu-item:focus { background: #f2e6d8; outline: none; }
-.context-menu-item:disabled { color: #b8aa9e; background: transparent; cursor: not-allowed; }
-/* Destructive rows read like every other row until the cursor is on them:
-   colouring the whole menu's odd one out at rest makes the menu look alarming
-   rather than the action. */
-.context-menu-item--destructive:hover, .context-menu-item--destructive:focus {
-  color: var(--paper-danger); background: var(--paper-danger-wash);
-}
-.context-menu-item--destructive:hover .context-menu-icon,
-.context-menu-item--destructive:focus .context-menu-icon { color: var(--paper-danger); }
-/* One leading slot for every row, whether it holds an action's icon or a radio
-   row's dot, so the labels line up down the whole menu. */
-.context-menu-icon {
-  flex: none; display: flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; color: #8b7868;
-}
-.context-menu-icon svg { width: 15px; height: 15px; stroke-width: 1.9; }
-.context-menu-format-icon {
-  flex: none; display: flex; align-items: center; justify-content: center;
-  width: 18px; height: 16px; color: #8b7868;
-}
-.context-menu-format-icon svg { width: 18px; height: 14px; stroke-width: 1.4; }
-/* A radio's picture of what choosing it looks like — a Question Style's
-   sketch — in place of its icon: wider than an icon, at its own 1:1 size so
-   its one-pixel lines stay crisp, and set against the label's first line. */
-/* A Question Style's sketch, drawn half as large again as its 32 by 24
-   viewBox: its label and two lines of description already make the row that
-   tall, so the sketch can use the room. Strokes stay a pixel wide. */
+/* Domain illustrations inside shadcn menu choices. */
 .context-menu-preview {
   flex: none; align-self: flex-start; display: flex;
   width: 48px; height: 36px; margin-top: 2px; color: #8b7868;
@@ -1549,48 +1516,7 @@ button { cursor: pointer; }
 .context-menu-preview svg { width: 48px; height: 36px; }
 .context-menu-preview svg path,
 .context-menu-preview svg circle { vector-effect: non-scaling-stroke; }
-.context-menu-item[aria-checked='true'] .context-menu-preview { color: #9f5037; }
-.context-menu-item-label { flex: 1; }
-/* A radio's line of description, under its label: what choosing it does. */
-.context-menu-item-description {
-  display: block; margin-top: 1px;
-  color: #8b7868; font-size: 12px; line-height: 1.35; white-space: normal;
-}
-/* What a submenu has chosen now, beside its label. */
-.context-menu-item-value { color: #8b7868; }
-.context-menu-radio-indicator {
-  flex: none; display: flex; align-items: center; justify-content: center;
-  width: 12px; height: 16px;
-}
-.context-menu-dot {
-  width: 6px; height: 6px; border-radius: 50%; background: #9f5037;
-}
-.context-menu-check { width: 13px; height: 13px; stroke-width: 2.4; color: #9f5037; }
-.context-menu-label {
-  padding: 7px 8px 3px; color: #8b7868;
-  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
-}
-.context-menu-separator { height: 1px; margin: 4px -1px; background: #eadfd0; }
-.context-menu-submenu { position: relative; }
-.context-menu-submenu-arrow { margin-left: auto; color: #8b7868; font-size: 18px; line-height: 1; }
-.context-submenu {
-  position: absolute; z-index: 61; top: -4px; left: calc(100% + 5px); min-width: 196px;
-  padding: 4px; border: 1px solid #e0d3c2; border-radius: 8px; background: #fffdf8;
-  box-shadow: 0 10px 30px rgb(55 42 33 / 18%), 0 2px 6px rgb(55 42 33 / 10%);
-}
-/* A submenu whose choices each say what they do is wide enough to say it in
-   a line or two. */
-.context-submenu:has(.context-menu-item-description) { min-width: 320px; }
-.context-menu[data-side='left'] .context-submenu {
-  right: calc(100% + 5px); left: auto;
-}
-/* The flyout floats clear of the menu, and the strip between them belongs to
-   neither row, so the pointer crossing it would leave the submenu's hit area.
-   This bridge is part of the flyout, so the crossing never leaves it. */
-.context-submenu::before {
-  content: ''; position: absolute; top: -1px; bottom: -1px; right: 100%; width: 10px;
-}
-.context-menu[data-side='left'] .context-submenu::before { right: auto; left: 100%; }
+[data-slot='dropdown-menu-radio-item'][aria-checked='true'] .context-menu-preview { color: #9f5037; }
 
 /* The Margins panel the Format menu opens: the menu's own card, staying open
    while the sheet behind it reflows. One row per field — its label, then the
@@ -1750,7 +1676,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
    moves the highlight; it never rewrites a value, because the spelling is the
    teacher's. */
 .front-matter-list {
-  position: absolute; z-index: 40; top: calc(100% - 2px); left: 120px; width: min(320px, 100%);
+  width: min(320px, calc(100vw - 32px));
   padding: 6px; border: 1px solid var(--paper-outline); border-radius: 8px;
   background: var(--paper-surface); box-shadow: 0 10px 28px rgb(91 68 47 / 20%);
 }
@@ -1766,7 +1692,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 }
 /* One highlight, wherever it was last moved by the pointer or the arrow keys,
    because Enter takes the row it is on. */
-.front-matter-option[data-active] { background: var(--paper-surface-low); }
+.front-matter-option[data-selected="true"] { background: var(--paper-surface-low); }
 .front-matter-option svg { width: 14px; height: 14px; stroke-width: 2.5; }
 .front-matter-option[data-chosen] svg:last-child { margin-left: auto; color: var(--paper-accent); }
 .front-matter-empty { margin: 0; padding: 7px; color: #8a7868; font-size: 13px; }
@@ -2246,7 +2172,10 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
   html[data-export-reference-print] .export-history-drawer,
   html[data-export-reference-print] .dialog-backdrop { display: none; }
   html[data-export-reference-print] body,
-  html[data-export-reference-print] :root { background: #fff; }
+  html[data-export-reference-print] :root {
+  --radius: 8px;
+  --ui-foreground: #332a24;
+  --ui-muted-foreground: #866f5e; background: #fff; }
   html[data-export-reference-print] .exam-workspace {
     min-height: 0; padding: 0; overflow: visible;
   }
@@ -2319,7 +2248,6 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 
 .breadcrumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
 .breadcrumbs li { display: flex; align-items: center; gap: 8px; color: #6e5b4d; }
-.breadcrumbs li + li::before { content: '/'; color: #b8a493; }
 .breadcrumbs a { color: #6e5b4d; text-decoration: none; }
 .breadcrumbs a:hover { color: var(--paper-accent); text-decoration: underline; text-underline-offset: 4px; }
 .breadcrumbs [aria-current='page'] { color: #332a24; font-weight: 700; }
@@ -2457,9 +2385,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 .bank-save-status { color: #6e5b4d; font-size: 13px; }
 .bank-name-error { margin: 6px 0 0 7px; }
 .dialog-save-error { flex: 1; margin: 0; color: var(--paper-danger); font-size: 13px; }
-.danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 12px; border: 1px solid var(--paper-danger); border-radius: 6px; color: #fff; background: var(--paper-danger); font: inherit; font-weight: 700; }
-.danger-button:disabled { opacity: 0.55; }
-.danger-button svg { width: 16px; height: 16px; }
+
 .question-delete-button { margin-right: auto; }
 .destructive-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); padding: 22px; overflow: auto; border: 1px solid var(--paper-danger-line); border-radius: 10px; background: #fffaf3; box-shadow: 0 16px 48px rgb(55 42 33 / 26%); }
 .destructive-dialog h2 { margin: 0 0 12px; }
@@ -2586,6 +2512,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
   font: inherit; letter-spacing: inherit;
 }
 .exam-title-input {
+  min-height: 0; field-sizing: fixed;
   grid-area: 1 / 1; width: 0; min-width: 100%; padding: 0; margin: 0;
   border: 0; border-radius: 0; resize: none; overflow: hidden;
   color: inherit; background: transparent; font: inherit; line-height: inherit; outline: none;

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
 import {
   ChevronLeft,
   ChevronRight,
@@ -10,15 +11,16 @@ import {
   TriangleAlert,
   Upload,
 } from 'lucide-react'
-import { usePopOver } from './pop-over-context'
-import type { RecentExam } from './exam-workspaces'
-import type { QuestionBankCollectionItem } from './resource-collections'
-import type { PageFurniture } from './export-plan'
-import { DocView } from './doc-view'
-import { PageHeaderContent } from './page-item-view'
-import { PAGE_GEOMETRY } from './exam-page'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { TopicBadge } from './badges'
 import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
+import { DocView } from './doc-view'
+import { PAGE_GEOMETRY } from './exam-page'
+import type { RecentExam } from './exam-workspaces'
+import type { PageFurniture } from './export-plan'
+import { PageHeaderContent } from './page-item-view'
+import { usePopOver } from './pop-over-context'
+import type { QuestionBankCollectionItem } from './resource-collections'
 
 /** How many Topics a Question Bank card shows before it counts the rest. */
 const SHOWN_TOPICS = 3
@@ -40,10 +42,10 @@ export function CreateFirstCard({
   onClick: () => void
 }) {
   return (
-    <button type="button" className="create-first" onClick={onClick}>
+    <Button variant="plain" size="content" type="button" className="create-first" onClick={onClick}>
       <span>{label}</span>
       <Plus aria-hidden="true" />
-    </button>
+    </Button>
   )
 }
 
@@ -64,14 +66,14 @@ export function NewResourceCard({
   onClick: () => void
 }) {
   return (
-    <button
+    <Button variant="plain" size="content"
       type="button"
       className={`new-resource-card new-resource-card--${shape}`}
       onClick={onClick}
     >
       <Plus aria-hidden="true" />
       <span>{label}</span>
-    </button>
+    </Button>
   )
 }
 
@@ -129,7 +131,7 @@ export function ResourceCarousel({
         <div className="shelf-actions">
           {scrollable && (
             <div className="carousel-arrows">
-              <button
+              <Button variant="plain" size="content"
                 type="button"
                 className="carousel-arrow"
                 aria-label={`Scroll ${label} backward`}
@@ -137,8 +139,8 @@ export function ResourceCarousel({
                 onClick={() => step(-1)}
               >
                 <ChevronLeft aria-hidden="true" />
-              </button>
-              <button
+              </Button>
+              <Button variant="plain" size="content"
                 type="button"
                 className="carousel-arrow"
                 aria-label={`Scroll ${label} forward`}
@@ -146,7 +148,7 @@ export function ResourceCarousel({
                 onClick={() => step(1)}
               >
                 <ChevronRight aria-hidden="true" />
-              </button>
+              </Button>
             </div>
           )}
           {actions}
@@ -206,8 +208,8 @@ export function ExamCard({
     pageNumber: 1,
   }
   return (
-    <article className="exam-card">
-      <button type="button" className="exam-card-main" onClick={() => onOpen(exam.id)}>
+    <Card asChild className="gap-0 py-0"><article className="exam-card">
+      <Button variant="plain" size="content" type="button" className="exam-card-main" onClick={() => onOpen(exam.id)}>
       <span className="sr-only">Open {exam.title}. </span>
       {/* Decorative: everything it says, the caption and the label above say in
           a form a screen reader can use, and six miniature pages would
@@ -246,8 +248,8 @@ export function ExamCard({
           )}
         </span>
       </div>
-      </button>
-      {onDelete && <button
+      </Button>
+      {onDelete && <Button variant="plain" size="content"
         type="button"
         className="bank-card-menu exam-card-menu"
         aria-label={`Actions for ${exam.title}`}
@@ -256,9 +258,9 @@ export function ExamCard({
           const rect = event.currentTarget.getBoundingClientRect()
           setMenu({ x: rect.right, y: rect.bottom + 4 })
         }}
-      ><EllipsisVertical aria-hidden="true" /></button>}
+      ><EllipsisVertical aria-hidden="true" /></Button>}
       {menu && <ContextMenu point={menu} side="left" items={menuItems} ariaLabel={`${exam.title} actions`} onClose={() => setMenu(null)} />}
-    </article>
+    </article></Card>
   )
 }
 
@@ -308,8 +310,8 @@ export function QuestionBankCard({
       : []),
   ]
   return (
-    <article className="resource-card question-bank-card">
-      <button
+    <Card asChild className="gap-0 py-0"><article className="resource-card question-bank-card">
+      <Button variant="plain" size="content"
         type="button"
         className="resource-card-main"
         onClick={() => onOpen(bank.id)}
@@ -341,8 +343,8 @@ export function QuestionBankCard({
         <time dateTime={bank.lastUpdatedAt}>
           {relativeTime('Updated', bank.lastUpdatedAt)}
         </time>
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="content"
         type="button"
         className="bank-card-menu"
         aria-label={`${bank.name} actions`}
@@ -355,7 +357,7 @@ export function QuestionBankCard({
         }}
       >
         <EllipsisVertical aria-hidden="true" />
-      </button>
+      </Button>
       {menu && (
         <ContextMenu
           point={menu}
@@ -365,6 +367,6 @@ export function QuestionBankCard({
           onClose={() => setMenu(null)}
         />
       )}
-    </article>
+    </article></Card>
   )
 }

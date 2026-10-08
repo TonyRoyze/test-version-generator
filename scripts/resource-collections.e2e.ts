@@ -80,10 +80,10 @@ test('Home empty state explains local storage without creating resources', async
   )
   await storage.click()
   await expect(
-    page.getByRole('button', { name: 'Create your first Exam' }),
+    page.getByRole('button', { name: 'New Exam' }),
   ).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Create your first Question Bank' }),
+    page.getByRole('button', { name: 'New Question Bank' }),
   ).toBeVisible()
 
   const counts = await page.evaluate(async () => {
@@ -109,7 +109,7 @@ test('Home provides keyboard-operable horizontal previews and full collections',
 
   const exams = page.getByRole('list', { name: 'Recent Exams' })
   const banks = page.getByRole('region', { name: 'Question Banks' })
-  await expect(exams.getByRole('listitem')).toHaveCount(6)
+  await expect(exams.getByRole('listitem')).toHaveCount(7)
   await expect(banks.locator('.question-bank-card')).toHaveCount(8)
   await expect(exams.getByText('Unsaved changes')).toBeVisible()
   await expect(banks.getByText('Used in 1 Exam')).toBeVisible()
@@ -272,7 +272,8 @@ test('Home reports a remembered persistent-storage denial', async ({
     })
   })
   await page.goto('/')
-  await expect(page.getByRole('status')).toContainText(
+  await page.getByRole('button', { name: /^Where your work is stored:/ }).click()
+  await expect(page.getByRole('region', { name: 'Where your work is stored' })).toContainText(
     'Persistent storage was denied',
   )
 })

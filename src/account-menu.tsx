@@ -1,23 +1,48 @@
-import { supabase } from './supabase'
-import { checkCloudSync, CloudConflict, reloadCloudAccount, syncAccount } from './cloud-account'
-import { getCloudSyncStatus, subscribeCloudSync, setCloudSyncStatus } from './cloud-sync-status'
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  CloudAlert,
+  CloudCheck,
+  CloudDownload,
+  CloudOff,
+  CloudUpload,
+  Download,
+  RefreshCw,
+  Settings,
+  Upload,
+  X,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
-import { createPortal } from 'react-dom'
-import { CloudOff, CloudCheck, CloudUpload, CloudDownload, CloudAlert, Download, RefreshCw, Settings, Upload, X } from 'lucide-react'
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
 import {
   accountBackupBlob,
+  AccountBackupError,
   accountBackupFileName,
   captureAccount,
   readAccountBackup,
   stageRestore,
-  AccountBackupError,
   type AccountManifest,
 } from './account-backup'
-import type { PersistentStorageStatus } from './durable-storage'
-import { useModalScrollLock } from './use-modal-scroll-lock'
-import { navigate } from './use-route'
 import './account-menu.css'
+import {
+  checkCloudSync,
+  CloudConflict,
+  reloadCloudAccount,
+  syncAccount,
+} from './cloud-account'
+import {
+  getCloudSyncStatus,
+  setCloudSyncStatus,
+  subscribeCloudSync,
+} from './cloud-sync-status'
+import type { PersistentStorageStatus } from './durable-storage'
+import { supabase } from './supabase'
+import { navigate } from './use-route'
 
 /**
  * Where the work lives, and the way to keep it. An icon in the top bar says
@@ -141,23 +166,13 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
     }
   }, [])
 
-  useEffect(() => {
-    if (!open) return
-    const onPointer = (event: PointerEvent) => {
-      if (!root.current?.contains(event.target as Node)) setOpen(false)
-    }
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
-    document.addEventListener('pointerdown', onPointer)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', onPointer)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [open])
+
 
   return (
     <div className="account-badge" ref={root}>
-      <button
+      <Popover open={open} onOpenChange={next => { setOpen(next); if (next) refresh.current?.() }}>
+      <PopoverTrigger asChild>
+      <Button variant="plain" size="content"
         type="button"
         className="storage-badge-button"
         data-status={status}
@@ -166,12 +181,11 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
         title={presentation.label}
         aria-expanded={open}
         aria-controls={panelId}
-        onClick={() => { setOpen((value) => !value); if (!open) refresh.current?.() }}
       >
         <SyncIcon aria-hidden="true" className={sync.state === 'syncing' || sync.state === 'checking' ? 'account-spin' : undefined} />
-      </button>
-      {open && (
-        <div className="account-panel" id={panelId} role="region" aria-label="Where your work is stored">
+      </Button>
+      </PopoverTrigger>
+        <PopoverContent align="end" className="account-panel" id={panelId} role="region" aria-label="Where your work is stored">
           <strong role="status">{sync.state === 'local' ? 'Your work is saved in your browser.' : presentation.label}</strong>
           <p>{presentation.detail}</p>
           {sync.detail && <p className="account-warning">{sync.detail}</p>}
@@ -183,21 +197,21 @@ export function AccountBadge({ status }: { status: PersistentStorageStatus }) {
             </p>
           )}
           <div className="account-actions">
-            <button type="button" className="primary-button account-action" disabled={syncing || !supabase} onClick={() => void syncNow()}>
+            <Button variant="default" type="button" className="primary-button account-action" disabled={syncing || !supabase} onClick={() => void syncNow()}>
               <RefreshCw aria-hidden="true" className={syncing ? 'account-spin' : undefined} />
               {syncing ? 'Syncing…' : 'Sync now'}
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               type="button"
               className="secondary-button account-action"
               onClick={() => { setOpen(false); navigate(SETTINGS_PATH) }}
             >
               <Settings aria-hidden="true" />
               Settings
-            </button>
+            </Button>
           </div>
-        </div>
-      )}
+        </PopoverContent>
+      </Popover>
     </div>
   )
 }
@@ -250,14 +264,14 @@ export function BackupSettings({ status }: { status: PersistentStorageStatus }) 
       )}
       {status === 'granted' && <p className="account-ok">Persistent browser storage is enabled.</p>}
       <div className="account-actions">
-        <button type="button" className="secondary-button account-action" onClick={backup} disabled={busy !== null}>
+        <Button variant="outline" type="button" className="secondary-button account-action" onClick={backup} disabled={busy !== null}>
           {busy === 'backup' ? <RefreshCw aria-hidden="true" className="account-spin" /> : <Download aria-hidden="true" />}
           {busy === 'backup' ? 'Preparing…' : 'Download backup'}
-        </button>
-        <button type="button" className="secondary-button account-action" onClick={() => fileInput.current?.click()} disabled={busy !== null}>
+        </Button>
+        <Button variant="outline" type="button" className="secondary-button account-action" onClick={() => fileInput.current?.click()} disabled={busy !== null}>
           <Upload aria-hidden="true" />
           {busy === 'restore' ? 'Reading…' : 'Restore…'}
-        </button>
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -281,68 +295,19 @@ export function BackupSettings({ status }: { status: PersistentStorageStatus }) 
 
 // ---------------------------------------------------------------------------
 
-function Modal({ title, onClose, children, className = '' }: {
+function AccountModal({ title, onClose, children, className = '' }: {
   title: string
   onClose: () => void
   children: ReactNode
   className?: string
 }) {
-  const titleId = useId()
-  const dialog = useRef<HTMLElement>(null)
-  useModalScrollLock()
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose }, [onClose])
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    const focusable = () => Array.from(dialog.current?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? [])
-    requestAnimationFrame(() => focusable()[0]?.focus())
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = focusable()
-      if (controls.length === 0) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      requestAnimationFrame(() => { if (previous?.isConnected) previous.focus() })
-    }
-  }, [])
-  return createPortal(
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
-    >
-      <section
-        ref={dialog}
-        className={`account-dialog ${className}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-        <header className="resource-picker-header">
-          <h2 id={titleId}>{title}</h2>
-          <button type="button" className="question-bank-action" aria-label="Close" onClick={onClose}><X /></button>
-        </header>
-        {children}
-      </section>
-    </div>,
-    document.body,
-  )
+  return <Modal title={title} onClose={onClose} className={`account-dialog ${className}`}>
+    <header className="resource-picker-header">
+      <h2>{title}</h2>
+      <Button variant="ghost" size="icon-sm" aria-label="Close" onClick={onClose}><X /></Button>
+    </header>
+    {children}
+  </Modal>
 }
 
 function RestoreDialog({ file, manifest, onClose }: {
@@ -376,7 +341,7 @@ function RestoreDialog({ file, manifest, onClose }: {
     }
   }
   return (
-    <Modal title="Restore this backup?" onClose={onClose}>
+    <AccountModal title="Restore this backup?" onClose={onClose}>
       <p className="account-dialog-copy">
         <strong>{file.name}</strong> was made {made}. Restoring replaces every Exam, Question Bank,
         Working Copy, and Export History in this browser with the ones in the backup, then reloads
@@ -384,14 +349,14 @@ function RestoreDialog({ file, manifest, onClose }: {
       </p>
       {error && <p className="account-warning" role="alert">{error}</p>}
       <div className="account-actions account-actions--end">
-        <button type="button" className="secondary-button account-action" disabled={busy !== null} onClick={() => void backupFirst()}>
+        <Button variant="outline" type="button" className="secondary-button account-action" disabled={busy !== null} onClick={() => void backupFirst()}>
           <Download aria-hidden="true" />
           {busy === 'backup' ? 'Preparing…' : 'Download current work first'}
-        </button>
-        <button type="button" className="primary-button" disabled={busy !== null} onClick={() => void restore()}>
+        </Button>
+        <Button variant="default" type="button" className="primary-button" disabled={busy !== null} onClick={() => void restore()}>
           {busy === 'restore' ? 'Restoring…' : 'Replace and reload'}
-        </button>
+        </Button>
       </div>
-    </Modal>
+    </AccountModal>
   )
 }

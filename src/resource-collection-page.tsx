@@ -1,13 +1,15 @@
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { useMemo, useState } from 'react'
-import type { RecentExam } from './exam-workspaces'
+import { AppShell } from './app-shell'
 import type { PersistentStorageStatus } from './durable-storage'
+import type { RecentExam } from './exam-workspaces'
 import { CreateFirstCard, ExamCard, QuestionBankCard } from './resource-cards'
 import {
   filterExamCollection,
   filterQuestionBankCollection,
   type QuestionBankCollectionItem,
 } from './resource-collections'
-import { AppShell } from './app-shell'
 
 export function ResourceCollectionPage({
   kind,
@@ -62,21 +64,21 @@ export function ResourceCollectionPage({
         <h1>{resourceName}</h1>
         <div className="collection-actions">
           {!isExams && onImportBank && (
-            <button type="button" className="secondary-button" onClick={onImportBank}>
+            <Button variant="outline" type="button" className="secondary-button" onClick={onImportBank}>
               Import
-            </button>
+            </Button>
           )}
           {create && (
-            <button type="button" className="primary-button" onClick={create}>
+            <Button variant="default" type="button" className="primary-button" onClick={create}>
               New
-            </button>
+            </Button>
           )}
         </div>
       </header>
       <div className="collection-filter">
         <label className="collection-search">
           <span className="sr-only">Search {resourceName}</span>
-          <input
+          <Input
             type="search"
             autoFocus
             placeholder={`Search ${resourceName}`}

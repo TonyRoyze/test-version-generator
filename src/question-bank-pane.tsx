@@ -1,3 +1,19 @@
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 // The Question Bank, beside the Working Copy.
 //
 // A compact, scannable table of the canonical questions a teacher has written,
@@ -18,23 +34,16 @@
 // Filter values and row selection are handed in rather than stored here. The
 // workspace may persist filters, but neither state enters authoring history.
 
+import { Check, CircleMinus, Pencil, Plus, Search, Upload } from 'lucide-react'
 import {
-  useCallback,
-  useEffect,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { createPortal } from 'react-dom'
-import { Check, CircleMinus, Pencil, Plus, Search, Upload } from 'lucide-react'
 import { DifficultyBadge, TopicBadge } from './badges'
 import type { MenuPoint } from './context-menu'
-import { QuestionBankOutline } from './question-bank-outline'
-import { QuestionReading } from './question-reading'
-import { readingOfQuestion } from './question-reading-content'
-import { stemPreview, type StemPreviewBadge } from './stem-preview'
 import {
   SECTION_LABELS,
   topicsOf,
@@ -42,11 +51,13 @@ import {
   type QuestionType,
 } from './exam'
 import type { QuestionBank } from './question-bank'
-import type { WorkspaceDrag } from './use-workspace-drag'
-import { DIFFICULTY_OPTIONS, SORT_OPTIONS, TYPE_OPTIONS, type FilterOption } from './question-bank-filter-options'
-import { CopyQuestionButton } from './question-copy-feedback'
-import { useQuestionCopy } from './use-question-copy'
-import { selectAllPaneProps, useSelectAll } from './use-select-all'
+import {
+  DIFFICULTY_OPTIONS,
+  SORT_OPTIONS,
+  TYPE_OPTIONS,
+  type FilterOption,
+} from './question-bank-filter-options'
+import { QuestionBankOutline } from './question-bank-outline'
 import {
   NO_FILTER,
   browseQuestionBank,
@@ -55,12 +66,13 @@ import {
   type QuestionBankFilter,
   type QuestionBankSort,
 } from './question-bank-view'
-
-/** The width the filter list is laid out at, and the gap it keeps from the
- *  window edge. Both are also in the stylesheet; they are here because the
- *  list is placed against the viewport rather than by the cascade. */
-const LIST_WIDTH = 190
-const MARGIN = 8
+import { CopyQuestionButton } from './question-copy-feedback'
+import { QuestionReading } from './question-reading'
+import { readingOfQuestion } from './question-reading-content'
+import { stemPreview, type StemPreviewBadge } from './stem-preview'
+import { useQuestionCopy } from './use-question-copy'
+import { selectAllPaneProps, useSelectAll } from './use-select-all'
+import type { WorkspaceDrag } from './use-workspace-drag'
 
 const BADGE_LABELS: Record<StemPreviewBadge, string> = {
   image: 'Image',
@@ -94,121 +106,28 @@ function FilterDropdown<T extends string>({
 }) {
   const [open, setOpen] = useState(false)
   const container = useRef<HTMLDivElement>(null)
-  const button = useRef<HTMLButtonElement>(null)
-  const list = useRef<HTMLDivElement>(null)
-  // Where the list sits, in viewport coordinates. The bank scrolls, so a list
-  // positioned within it is clipped by the pane it belongs to; anchoring it to
-  // the viewport is what lets a list longer than the bank is tall still be
-  // read. Measured when it opens, and again if the workspace moves under it.
-  const [anchor, setAnchor] = useState<{ left: number; top: number } | null>(null)
-
-  const placeList = useCallback(() => {
-    const bounds = button.current?.getBoundingClientRect()
-    if (!bounds) return
-    // The list stays over the bank it belongs to. Past the pane's right edge
-    // are the divider and the rendered sheet — a different surface, and a list
-    // spilling onto the paper reads as something printed on it.
-    const pane = container.current?.closest('.question-bank')?.getBoundingClientRect()
-    const limit = (pane?.right ?? window.innerWidth) - MARGIN
-    // Right-aligned to the button when a left-aligned list would run past that
-    // edge, which is the ordinary case for the filters at the pane's own end.
-    const wanted = bounds.left + LIST_WIDTH > limit ? bounds.right - LIST_WIDTH : bounds.left
-    setAnchor({
-      left: Math.max(MARGIN, Math.min(wanted, limit - LIST_WIDTH)),
-      top: bounds.bottom + 4,
-    })
-  }, [])
-
-  useEffect(() => {
-    if (!open) return
-    placeList()
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as Node
-      // The list is portalled out of this element, so "outside" means outside
-      // both halves of the control.
-      if (container.current?.contains(target) || list.current?.contains(target)) return
-      setOpen(false)
-    }
-    // A scroll or a resize moves the button out from under its own list.
-    const reposition = () => placeList()
-    document.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('resize', reposition)
-    window.addEventListener('scroll', reposition, true)
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('resize', reposition)
-      window.removeEventListener('scroll', reposition, true)
-    }
-  }, [open, placeList])
-
-  return (
-    <div
-      className="bank-filter"
-      ref={container}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !open) return
-        // Closing the list is the whole of what Escape means while it is open;
-        // the workspace listens for the same key to clear its selection.
-        event.stopPropagation()
-        setOpen(false)
-      }}
-    >
-      <button
-        ref={button}
-        type="button"
-        className="bank-filter-button"
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="true"
-        data-active={selected.length > 0 ? 'true' : undefined}
-        onClick={() => setOpen((current) => !current)}
-      >
-        {label}
-        {selected.length > 0 && <span className="bank-filter-count">{selected.length}</span>}
-      </button>
-      {/* Portalled to the body: the bank pane clips what overflows it, so a
-          list left inside is cut off at the pane's own edge — and in the Exam
-          editor it is painted under the divider and the sheet besides,
-          however high its `z-index` is. */}
-      {open && anchor && createPortal(
-        <div
-          className="bank-filter-list"
-          ref={list}
-          role="group"
-          aria-label={label}
-          style={{ left: anchor.left, top: anchor.top }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') return
-            event.stopPropagation()
-            setOpen(false)
-            button.current?.focus()
-          }}
-        >
-          {options.length === 0 ? (
-            <p className="bank-filter-empty">{emptyMessage}</p>
-          ) : (
-            options.map((option) => (
-              <label className="bank-filter-option" key={option.value}>
-                <input
-                  type="checkbox"
-                  checked={selected.includes(option.value)}
-                  onChange={(event) =>
-                    onChange(
-                      event.target.checked
-                        ? [...selected, option.value]
-                        : selected.filter((value) => value !== option.value),
-                    )
-                  }
-                />
-                {option.label}
-              </label>
-            ))
-          )}
-        </div>,
-        document.body,
-      )}
-    </div>
-  )
+  return <div className="bank-filter" ref={container}>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="plain" size="content" className="bank-filter-button" aria-label={label}
+          data-active={selected.length > 0 ? 'true' : undefined}>
+          {label}
+          {selected.length > 0 && <span className="bank-filter-count">{selected.length}</span>}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="bank-filter-list" align="start" role="group" aria-label={label}
+        collisionPadding={8} collisionBoundary={container.current?.closest('.question-bank') ?? undefined}
+        onEscapeKeyDown={event => event.stopPropagation()}>
+        {options.length === 0 ? <p className="bank-filter-empty">{emptyMessage}</p> : options.map(option => (
+          <label className="bank-filter-option" key={option.value}>
+            <Checkbox checked={selected.includes(option.value)} onCheckedChange={checked => onChange(checked === true
+              ? [...selected, option.value] : selected.filter(value => value !== option.value))} />
+            {option.label}
+          </label>
+        ))}
+      </PopoverContent>
+    </Popover>
+  </div>
 }
 
 export function QuestionBankPane({
@@ -413,7 +332,7 @@ export function QuestionBankPane({
       <div className="question-bank-filters">
         <div className="bank-search">
           <Search aria-hidden="true" />
-          <input
+          <Input
             type="search"
             aria-label="Search question stems"
             placeholder="Search questions"
@@ -449,21 +368,23 @@ export function QuestionBankPane({
         <label className="bank-sort">
           {/*<ArrowDownAZ aria-hidden="true" />*/}
           <span className="sr-only">Sort Questions</span>
-          <select
-            aria-label="Sort Questions"
+          <Select
             value={filter.sort ?? 'newest'}
-            onChange={(event) => onFilterChange({
+            onValueChange={(value) => onFilterChange({
               ...filter,
-              sort: event.target.value as QuestionBankSort,
+              sort: value as QuestionBankSort,
             })}
           >
+            <SelectTrigger aria-label="Sort Questions" size="sm"><SelectValue /></SelectTrigger>
+            <SelectContent position="popper" align="end"><SelectGroup>
             {SORT_OPTIONS.map((option) => (
-              <option value={option.value} key={option.value}>{option.label}</option>
+              <SelectItem value={option.value} key={option.value}>{option.label}</SelectItem>
             ))}
-          </select>
+            </SelectGroup></SelectContent>
+          </Select>
         </label>
         {onAddManyToWorkingCopy && (
-          <button
+          <Button variant="plain" size="content"
             type="button"
             className="bank-add-all"
             title={filtered ? 'Add all matching questions to the exam' : 'Add all questions to the exam'}
@@ -472,16 +393,16 @@ export function QuestionBankPane({
           >
             <Plus aria-hidden="true" />
             Add all
-          </button>
+          </Button>
         )}
         {filtered && (
-          <button
+          <Button variant="plain" size="content"
             type="button"
             className="bank-filter-clear"
             onClick={() => onFilterChange({ ...NO_FILTER, sort: filter.sort ?? 'newest' })}
           >
             Clear filters
-          </button>
+          </Button>
         )}
       </div>
   )
@@ -535,7 +456,7 @@ export function QuestionBankPane({
                         onCopy={copying.copy}
                         className="toolbar-icon-button question-bank-reading-copy"
                       />
-                      <button
+                      <Button variant="ghost" size="icon-sm"
                         type="button"
                         className="toolbar-icon-button question-bank-reading-edit"
                         aria-label={`Edit ${name}`}
@@ -546,7 +467,7 @@ export function QuestionBankPane({
                         }}
                       >
                         <Pencil aria-hidden="true" />
-                      </button>
+                      </Button>
                     </span>}
                   />
                 </li>
@@ -635,7 +556,7 @@ export function QuestionBankPane({
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
-                  <button
+                  <Button variant="ghost" size="icon-sm"
                     type="button"
                     className="question-bank-action"
                     aria-label={`Edit ${name}`}
@@ -643,7 +564,7 @@ export function QuestionBankPane({
                     onClick={() => onEdit(question.id)}
                   >
                     <Pencil />
-                  </button>
+                  </Button>
                   <CopyQuestionButton
                     question={question}
                     name={name}
@@ -659,7 +580,7 @@ export function QuestionBankPane({
                       under the cursor the tick becomes the minus that takes
                       the question back off the exam. */}
                   {inExamWorkingCopy && onRemoveFromWorkingCopy ? (
-                    <button
+                    <Button variant="ghost" size="icon-sm"
                       type="button"
                       className="question-bank-action question-bank-included"
                       aria-label={`Remove ${name} from the exam`}
@@ -668,9 +589,9 @@ export function QuestionBankPane({
                     >
                       <Check className="question-bank-included-resting" />
                       <CircleMinus className="question-bank-included-hover" />
-                    </button>
+                    </Button>
                   ) : onAddToWorkingCopy ? (
-                    <button
+                    <Button variant="ghost" size="icon-sm"
                       type="button"
                       className="question-bank-action"
                       aria-label={`Add ${name} to the exam`}
@@ -678,7 +599,7 @@ export function QuestionBankPane({
                       onClick={() => onAddToWorkingCopy(question.id)}
                     >
                       <Plus />
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               </li>
@@ -717,7 +638,7 @@ export function QuestionBankPane({
           {heading ?? <h2>Question Bank</h2>}
           <div className="question-bank-header-actions">
             {extraActions}
-            {onExport && <button
+            {onExport && <Button variant="plain" size="content"
               type="button"
               className={layout === 'page' ? 'secondary-button' : 'toolbar-icon-button'}
               aria-label="Export Question Bank"
@@ -729,8 +650,8 @@ export function QuestionBankPane({
             >
               <Upload aria-hidden="true" />
               {layout === 'page' && 'Export'}
-            </button>}
-            {onCreate && <button
+            </Button>}
+            {onCreate && <Button variant="plain" size="content"
               type="button"
               className={layout === 'page' ? 'primary-button' : 'toolbar-icon-button'}
               aria-label={layout === 'page' ? undefined : 'Add Question'}
@@ -745,7 +666,7 @@ export function QuestionBankPane({
             >
               <Plus aria-hidden="true" />
               {layout === 'page' && 'New question'}
-            </button>}
+            </Button>}
             {onExport && bank.questions.length === 0 && <span id="empty-bank-export-help" className="sr-only">At least one Question is required.</span>}
             {onExport && exportBlocked && <span id="editing-bank-export-help" className="sr-only">Save or cancel the open Question edit before exporting.</span>}
           </div>

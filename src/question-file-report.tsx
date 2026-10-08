@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 import { AlertTriangle, Info, XCircle } from 'lucide-react'
 import type { QuestionFileSummary } from './question-formats'
 import type { ImportIssue } from './question-formats/types'
@@ -35,9 +36,9 @@ export function QuestionFileReport({
         {leftOut > 0 && <> · <span className="question-file-report-left-out">{leftOut} left out</span></>}
       </p>
       {onConvertInstead && (
-        <button type="button" className="link-button" disabled={busy} onClick={onConvertInstead}>
+        <Button variant="plain" size="content" type="button" className="link-button" disabled={busy} onClick={onConvertInstead}>
           Convert it with your AI instead
-        </button>
+        </Button>
       )}
     </div>
     {reading.issues.length > 0 && (

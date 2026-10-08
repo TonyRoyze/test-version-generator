@@ -1,6 +1,18 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Crop, ImagePlus, Images, Trash2, Upload } from 'lucide-react'
+import {
+  useEffect,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import type { PendingImageOccurrence } from './pending-images'
+import {
+  namedPage,
+  usePictureChoice,
+  type PictureChoice,
+} from './picture-choice'
 import {
   cropChoice,
   hasPages,
@@ -12,12 +24,11 @@ import {
   tagChoice,
   tagPicture,
   uploadChoice,
-  type ResolvedPicture,
   type Resolutions,
+  type ResolvedPicture,
   type ResolvingSource,
 } from './resolved-pictures'
 import type { ImageTag, PageBox } from './source-document'
-import { namedPage, usePictureChoice, type PictureChoice } from './picture-choice'
 
 const SOURCE_FILE_TYPES = 'application/pdf,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,.docx'
 
@@ -69,7 +80,7 @@ export function TagChooser({
         {hasPages(source) && <h5>Page {number}</h5>}
         <div>
           {source.tags.filter((tag) => tag.page === number).map((tag) => (
-            <button
+            <Button variant="plain" size="content"
               key={tag.tag}
               type="button"
               aria-label={`Use IMG ${tag.tag}`}
@@ -78,7 +89,7 @@ export function TagChooser({
             >
               {thumbnails.get(tag.tag) ? <img src={thumbnails.get(tag.tag)} alt="" /> : <span className="resolve-image-thumb-loading" />}
               <span>IMG {tag.tag}</span>
-            </button>
+            </Button>
           ))}
         </div>
       </section>
@@ -137,9 +148,9 @@ export function PageCropper({
   const usable = box && box.right - box.left > 5 && box.bottom - box.top > 5
   return <div className="resolve-image-cropper" role="group" aria-label="Crop a picture from a page">
     <div className="resolve-image-cropper-bar">
-      <button type="button" className="secondary-button" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous page</button>
+      <Button variant="outline" type="button" className="secondary-button" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous page</Button>
       <span>Page {page} of {source.pageCount}</span>
-      <button type="button" className="secondary-button" disabled={page >= source.pageCount} onClick={() => setPage(page + 1)}>Next page</button>
+      <Button variant="outline" type="button" className="secondary-button" disabled={page >= source.pageCount} onClick={() => setPage(page + 1)}>Next page</Button>
     </div>
     <p className="resolve-image-note">Drag a box around the picture.</p>
     <div
@@ -167,9 +178,9 @@ export function PageCropper({
       />}
     </div>
     <div className="resolve-image-cropper-bar">
-      <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-      <button type="button" className="secondary-button" onClick={() => onCrop(page, { left: 0, top: 0, right: 1000, bottom: 1000 })}>Use the whole page</button>
-      <button type="button" className="primary-button" disabled={!usable} onClick={() => box && onCrop(page, box)}>Use this crop</button>
+      <Button variant="outline" type="button" className="secondary-button" onClick={onCancel}>Cancel</Button>
+      <Button variant="outline" type="button" className="secondary-button" onClick={() => onCrop(page, { left: 0, top: 0, right: 1000, bottom: 1000 })}>Use the whole page</Button>
+      <Button variant="default" type="button" className="primary-button" disabled={!usable} onClick={() => box && onCrop(page, box)}>Use this crop</Button>
     </div>
   </div>
 }
@@ -216,10 +227,10 @@ export function PictureChoices({
     <p className="resolve-image-status">{choice.working === occurrence.key ? 'Working…' : statusOf(occurrence, picture, source)}</p>
     {others.length > 0 && (
       <label className="resolve-image-share">
-        <input
-          type="checkbox"
+        <Checkbox
+
           checked={choice.shared(occurrence)}
-          onChange={(event) => choice.share(occurrence, event.target.checked)}
+          onCheckedChange={(checked) => choice.share(occurrence, (checked === true))}
         />
         <span>Change the {others.length === 1 ? 'other place' : `${others.length} other places`} that {others.length === 1 ? 'uses' : 'use'} {pendingName(occurrence.pending)} too</span>
       </label>
@@ -241,9 +252,9 @@ export function PictureChoices({
       </label>
     )}
     {source && tags > 0 && !chooserOpen && (
-      <button type="button" className="secondary-button" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>
+      <Button variant="outline" type="button" className="secondary-button" aria-expanded={choosing} onClick={() => setChoosing(!choosing)}>
         <Images aria-hidden="true" />{picture ? 'Choose another picture' : 'Choose a picture'}
-      </button>
+      </Button>
     )}
     {source && choosing && (
       <TagChooser
@@ -255,14 +266,14 @@ export function PictureChoices({
     )}
     <div className="resolve-image-actions">
       {source && hasPages(source) && (
-        <button
+        <Button variant="outline"
           type="button"
           className="secondary-button"
           aria-expanded={onCrop ? undefined : cropping}
           onClick={() => (onCrop ? onCrop() : setCropping(!cropping))}
         >
           <Crop aria-hidden="true" />Crop from a page
-        </button>
+        </Button>
       )}
       <label className="secondary-button resolve-image-upload">
         <Upload aria-hidden="true" />Upload a file
@@ -278,9 +289,9 @@ export function PictureChoices({
         />
       </label>
       {picture && (
-        <button type="button" className="secondary-button" onClick={() => choice.set(occurrence, null)}>
+        <Button variant="outline" type="button" className="secondary-button" onClick={() => choice.set(occurrence, null)}>
           <Trash2 aria-hidden="true" />Leave for later
-        </button>
+        </Button>
       )}
     </div>
     {cropping && source && !onCrop && (

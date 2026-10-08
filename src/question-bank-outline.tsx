@@ -1,3 +1,4 @@
+import { Button } from '@/components/ui/button'
 // The Question Bank page's left panel: the bank, outlined.
 //
 // Two ways into the same Questions. The Outline counts them by Question Type;
@@ -9,10 +10,23 @@
 // A bank has no order, so nothing here is numbered, and counts are always the
 // whole bank's — the outline describes the bank, not the current filter.
 
+import {
+  AlignLeft,
+  BookOpenText,
+  Library,
+  Link2,
+  ListChecks,
+  ToggleLeft,
+} from 'lucide-react'
 import type { ComponentType } from 'react'
-import { AlignLeft, BookOpenText, Library, Link2, ListChecks, ToggleLeft } from 'lucide-react'
 import { TopicSwatch } from './badges'
-import { SECTION_LABELS, SECTION_ORDER, topicsOf, type Question, type QuestionType } from './exam'
+import {
+  SECTION_LABELS,
+  SECTION_ORDER,
+  topicsOf,
+  type Question,
+  type QuestionType,
+} from './exam'
 import { topicOptions, type QuestionBankFilter } from './question-bank-view'
 
 const TYPE_ICONS: Record<QuestionType, ComponentType<{ 'aria-hidden'?: boolean }>> = {
@@ -45,7 +59,7 @@ export function QuestionBankOutline({
   return <nav className="bank-outline" aria-label="Question Bank outline">
     <section>
       <h3>Outline</h3>
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="bank-outline-row"
         aria-pressed={everything}
@@ -54,12 +68,12 @@ export function QuestionBankOutline({
         <Library aria-hidden />
         <span>All questions</span>
         <small>{questions.length}</small>
-      </button>
+      </Button>
       {SECTION_ORDER.map((type) => {
         const count = questions.filter((question) => question.type === type).length
         if (count === 0) return null
         const Icon = TYPE_ICONS[type]
-        return <button
+        return <Button variant="plain" size="content"
           type="button"
           className="bank-outline-row"
           key={type}
@@ -69,7 +83,7 @@ export function QuestionBankOutline({
           <Icon aria-hidden />
           <span>{SECTION_LABELS[type]}</span>
           <small>{count}</small>
-        </button>
+        </Button>
       })}
     </section>
     <section>
@@ -77,7 +91,7 @@ export function QuestionBankOutline({
       {topics.length === 0
         ? <p className="bank-outline-empty">No topics yet. Topics added to a Question are listed here.</p>
         : topics.map((topic) => (
-          <button
+          <Button variant="plain" size="content"
             type="button"
             className="bank-outline-row"
             key={topic}
@@ -89,7 +103,7 @@ export function QuestionBankOutline({
             <TopicSwatch topic={topic} />
             <span>{topic}</span>
             <small>{questions.filter((question) => topicsOf(question).includes(topic)).length}</small>
-          </button>
+          </Button>
         ))}
     </section>
   </nav>

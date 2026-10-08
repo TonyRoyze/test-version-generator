@@ -4,7 +4,7 @@
 .account-badge { position: relative; display: flex; }
 
 .account-panel {
-  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30; width: min(340px, calc(100vw - 32px));
+     z-index: 30; width: min(340px, calc(100vw - 32px));
   padding: 14px 15px; border: 1px solid #ddcdb9; border-radius: 10px; background: #fffaf3;
   box-shadow: 0 12px 32px rgb(58 42 30 / 18%); font-size: 13px; line-height: 1.5;
 }

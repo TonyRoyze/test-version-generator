@@ -1,69 +1,83 @@
-import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { createPortal } from 'react-dom'
-import { Milkdown, useEditor } from '@milkdown/react'
-import { Crepe } from '@milkdown/crepe'
+import { FrontMatterSelect } from '@/components/front-matter-select'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { size } from '@floating-ui/dom'
+import { Crepe } from '@milkdown/crepe'
 import { keymapRef } from '@milkdown/crepe/feature/toolbar'
-import type { Ctx } from '@milkdown/kit/ctx'
+import '@milkdown/crepe/theme/common/style.css'
+import '@milkdown/crepe/theme/frame.css'
 import { commandsCtx, editorViewCtx } from '@milkdown/kit/core'
+import type { Ctx } from '@milkdown/kit/ctx'
+import { blockConfig } from '@milkdown/kit/plugin/block'
+import { uploadConfig } from '@milkdown/kit/plugin/upload'
 import { clearTextInCurrentBlockCommand } from '@milkdown/kit/preset/commonmark'
 import { Node as ProseNode } from '@milkdown/kit/prose/model'
 import { TextSelection } from '@milkdown/kit/prose/state'
-import { blockConfig } from '@milkdown/kit/plugin/block'
-import { uploadConfig } from '@milkdown/kit/plugin/upload'
-import '@milkdown/crepe/theme/common/style.css'
-import '@milkdown/crepe/theme/frame.css'
+import { Milkdown, MilkdownProvider, useEditor } from '@milkdown/react'
 import {
-  keepMatching,
-  matchingAnswerSchema,
-  matchingAnswerView,
-  matchingKeymap,
-  matchingMode,
-  matchingPromptSchema,
-  matchingPromptView,
-  matchingSchema,
-  matchingView,
-  syncMatchingPicks,
-} from './matching'
-import {
-  keepFixedChoices,
-  multipleChoiceChoiceSchema,
-  multipleChoiceChoiceView,
-  multipleChoiceKeymap,
-  multipleChoiceMode,
-  multipleChoiceSchema,
-  multipleChoiceView,
-  uniqueChoiceIds,
-} from './multiple-choice'
-import {
-  isScriptActive,
-  scriptKeymap,
-  subscriptIcon,
-  subscriptSchema,
-  superscriptIcon,
-  superscriptSchema,
-  toggleScript,
-} from './script-marks'
-import { leftArrowInputRule, rightArrowInputRule } from './text-arrows'
-import {
-  insertSideBySide,
-  keepSideBySidesInStems,
-  sideBySidePanelSchema,
-  sideBySideIcon,
-  sideBySidePanelView,
-  sideBySideSchema,
-  sideBySideView,
-} from './side-by-side'
+  AlignLeft,
+  BookOpenText,
+  Captions,
+  Check,
+  CircleDot,
+  Crop,
+  FileType2,
+  FolderOpen,
+  Gauge,
+  Heading,
+  History,
+  Import,
+  Library,
+  Link2,
+  ListChecks,
+  ListOrdered,
+  Pencil,
+  PictureInPicture2,
+  Plus,
+  Redo2,
+  RefreshCw,
+  Save,
+  SaveAll,
+  Tags,
+  ToggleLeft,
+  Trash2,
+  TriangleAlert,
+  Type as TypeIcon,
+  Undo2,
+  X,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
 import {
-  cleanDocument,
-  explanationDocumentOf,
-  explanationTextOf,
-  suggestedAnswerDocumentOf,
-  withSuggestedAnswer,
-  withoutSuggestedAnswer,
-} from './question-doc'
-import type { ProseMirrorJSON } from './question-doc'
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
+import { createPortal } from 'react-dom'
+import { AppShell } from './app-shell'
+import { DifficultyBadge, TopicBadge } from './badges'
+import { BankFileDropTarget } from './bank-file-drop'
+import { ContextMenu, type MenuPoint } from './context-menu'
+import { ConvertPage } from './convert-page'
+import { CoverDesignPage } from './cover-page-view'
+import { CoverTemplatesPage } from './cover-templates-page'
+import {
+  COVER_PAGE_TEMPLATES,
+  DEFAULT_COVER_PAGE_TEMPLATE,
+  type CoverPageTemplate,
+} from './cover-templates/templates'
+import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
+import {
+  persistentStorageStatus,
+  requestPersistentStorage,
+  type PersistentStorageStatus,
+} from './durable-storage'
+import type { Difficulty, Question, QuestionType, SectionTarget } from './exam'
 import {
   DIFFICULTIES,
   DIFFICULTY_LABELS,
@@ -73,20 +87,16 @@ import {
   topicsOf,
   withTopicAdded,
 } from './exam'
-import type { Difficulty, Question, QuestionType, SectionTarget } from './exam'
-import { DifficultyBadge, TopicBadge } from './badges'
-import { bankQuestionById } from './question-bank'
-import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import { ExamPage } from './exam-page'
-import { CoverDesignPage } from './cover-page-view'
-import { DEFAULT_EXAM_COVER } from './page-cover'
-import { CoverTemplatesPage } from './cover-templates-page'
-import { COVER_PAGE_TEMPLATES, DEFAULT_COVER_PAGE_TEMPLATE, type CoverPageTemplate } from './cover-templates/templates'
-import { QuestionBankPane } from './question-bank-pane'
-import { NO_FILTER, topicOptions, type QuestionBankFilter } from './question-bank-view'
-import { useSelection } from './use-selection'
-import { useWorkspaceDrag } from './use-workspace-drag'
-import { WorkspaceSplit } from './workspace-split'
+import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
+import type {
+  ExamWorkspaceService,
+  QuestionDeletionImpact,
+  QuestionUsage,
+  RecentExam,
+} from './exam-workspaces'
+import { ExportDialog, ReExportDialog } from './export-dialog'
+import { ExportHistoryDrawer } from './export-history'
 import {
   DEFAULT_EXPORT_CONFIGURATION,
   PicturesNeededError,
@@ -100,99 +110,30 @@ import {
   type PreparationProgress,
   type PreparedExport,
 } from './export-preparation'
-import { ExportDialog, ReExportDialog } from './export-dialog'
-import { DEFAULT_VERSION_COUNT, maxVersionCount, NO_SHUFFLE, seededRandom } from './export-versions'
-import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
-import { ownDocumentMedia, saveImage } from './local-images'
-import { configurePastedImages, settlePendingMedia } from './pasted-images'
 import {
-  RESOLVE_IMAGE_EVENT,
-  configurePendingImages,
-  pendingImageBlockView,
-  pendingInlineImageView,
-  type ResolveImageRequest,
-} from './pending-image-view'
-import { ResolveImagesDialog } from './resolve-images-dialog'
-import { configurePictures, pictureKeys, PICTURE_MENU_EVENT, type PictureMenuRequest } from './picture-view'
-import { storedPicture } from './resolved-pictures'
-import { pendingImagesOfQuestions, withStoredPictures, type PendingImageResolution, type StoredPicture } from './pending-images'
-import {
-  AlignLeft,
-  BookOpenText,
-  Captions,
-  Check,
-  CircleDot,
-  Crop,
-  FileType2,
-  FolderOpen,
-  Gauge,
-  Heading,
-  Import,
-  History,
-  Library,
-  ListChecks,
-  ListOrdered,
-  ToggleLeft,
-  Link2,
-  Pencil,
-  PictureInPicture2,
-  Plus,
-  Redo2,
-  RefreshCw,
-  Save,
-  SaveAll,
-  Tags,
-  Trash2,
-  TriangleAlert,
-  Type as TypeIcon,
-  Undo2,
-  X,
-} from 'lucide-react'
-import { ContextMenu, type MenuPoint } from './context-menu'
-import { MarginsPanel } from './margins-panel'
-import { usePopOver } from './pop-over-context'
-import {
-  DEFAULT_HEADING_SIZE,
-  DEFAULT_TEXT_SIZE,
-  HEADING_SIZES,
-  HEADING_SIZE_LABELS,
-  TEXT_SIZES,
-} from './section-headings'
-import {
-  DEFAULT_QUESTION_STYLE,
-  QUESTION_STYLES,
-  QUESTION_STYLE_LABELS,
-} from './question-style'
-import { BEFORE_NAVIGATE_EVENT, navigate, replaceRoute, useLocationSearch, useRoute } from './use-route'
-import { Footer } from './site-chrome'
-import { HomePage } from './home-page'
-import { LandingPage, OnboardingPage } from './landing-page'
-import { ConvertPage } from './convert-page'
-import { hasBeenWelcomed } from './welcomed'
-import type { ExamWorkspaceService, QuestionDeletionImpact, QuestionUsage, RecentExam } from './exam-workspaces'
-import {
-  type QuestionBankResource,
-  type QuestionBankSummary,
-  type QuestionBankTabsWorkspace,
-  type BankWorkspaceContext,
-  closeBankTab,
-  openBankTab,
-  type QuestionBankWorkspaceService,
-} from './question-bank-workspaces'
-import {
-  ExportHistoryDrawer,
-} from './export-history'
-import { AppShell } from './app-shell'
-import { AboutPage, PrivacyPage } from './site-pages'
-import { SettingsPage } from './settings-page'
-import { persistentStorageStatus, requestPersistentStorage, type PersistentStorageStatus } from './durable-storage'
-import { ResourceCollectionPage } from './resource-collection-page'
-import { BankFileDropTarget } from './bank-file-drop'
-import { ImportsPage, WaitingImportPage } from './imports-page'
-import { questionBankCollection, type QuestionBankCollectionItem } from './resource-collections'
-import { QuestionBankExportDialog } from './question-bank-export-dialog'
-import { QuestionBankImportDialog } from './question-bank-import-dialog'
+  DEFAULT_VERSION_COUNT,
+  NO_SHUFFLE,
+  maxVersionCount,
+  seededRandom,
+} from './export-versions'
 import { MarginsIcon, QuestionStylePreview } from './format-icons'
+import { HomePage } from './home-page'
+import { ImportsPage, WaitingImportPage } from './imports-page'
+import { LandingPage, OnboardingPage } from './landing-page'
+import { ownDocumentMedia, saveImage } from './local-images'
+import { MarginsPanel } from './margins-panel'
+import {
+  keepMatching,
+  matchingAnswerSchema,
+  matchingAnswerView,
+  matchingKeymap,
+  matchingMode,
+  matchingPromptSchema,
+  matchingPromptView,
+  matchingSchema,
+  matchingView,
+  syncMatchingPicks,
+} from './matching'
 import {
   keepMultipartParts,
   multipartMode,
@@ -204,11 +145,122 @@ import {
   multipartPartsView,
 } from './multipart'
 import {
+  keepFixedChoices,
+  multipleChoiceChoiceSchema,
+  multipleChoiceChoiceView,
+  multipleChoiceKeymap,
+  multipleChoiceMode,
+  multipleChoiceSchema,
+  multipleChoiceView,
+  uniqueChoiceIds,
+} from './multiple-choice'
+import { DEFAULT_EXAM_COVER } from './page-cover'
+import { configurePastedImages, settlePendingMedia } from './pasted-images'
+import {
+  RESOLVE_IMAGE_EVENT,
+  configurePendingImages,
+  pendingImageBlockView,
+  pendingInlineImageView,
+  type ResolveImageRequest,
+} from './pending-image-view'
+import {
+  pendingImagesOfQuestions,
+  withStoredPictures,
+  type PendingImageResolution,
+  type StoredPicture,
+} from './pending-images'
+import {
+  PICTURE_MENU_EVENT,
+  configurePictures,
+  pictureKeys,
+  type PictureMenuRequest,
+} from './picture-view'
+import { usePopOver } from './pop-over-context'
+import { bankQuestionById } from './question-bank'
+import { QuestionBankExportDialog } from './question-bank-export-dialog'
+import { QuestionBankImportDialog } from './question-bank-import-dialog'
+import { QuestionBankPane } from './question-bank-pane'
+import {
+  NO_FILTER,
+  topicOptions,
+  type QuestionBankFilter,
+} from './question-bank-view'
+import {
+  closeBankTab,
+  openBankTab,
+  type BankWorkspaceContext,
+  type QuestionBankResource,
+  type QuestionBankSummary,
+  type QuestionBankTabsWorkspace,
+  type QuestionBankWorkspaceService,
+} from './question-bank-workspaces'
+import type { ProseMirrorJSON } from './question-doc'
+import {
+  cleanDocument,
+  explanationDocumentOf,
+  explanationTextOf,
+  suggestedAnswerDocumentOf,
+  withSuggestedAnswer,
+  withoutSuggestedAnswer,
+} from './question-doc'
+import {
+  DEFAULT_QUESTION_STYLE,
+  QUESTION_STYLES,
+  QUESTION_STYLE_LABELS,
+} from './question-style'
+import { ResolveImagesDialog } from './resolve-images-dialog'
+import { storedPicture } from './resolved-pictures'
+import { ResourceCollectionPage } from './resource-collection-page'
+import {
+  questionBankCollection,
+  type QuestionBankCollectionItem,
+} from './resource-collections'
+import {
+  isScriptActive,
+  scriptKeymap,
+  subscriptIcon,
+  subscriptSchema,
+  superscriptIcon,
+  superscriptSchema,
+  toggleScript,
+} from './script-marks'
+import {
+  DEFAULT_HEADING_SIZE,
+  DEFAULT_TEXT_SIZE,
+  HEADING_SIZES,
+  HEADING_SIZE_LABELS,
+  TEXT_SIZES,
+} from './section-headings'
+import { SettingsPage } from './settings-page'
+import {
+  insertSideBySide,
+  keepSideBySidesInStems,
+  sideBySideIcon,
+  sideBySidePanelSchema,
+  sideBySidePanelView,
+  sideBySideSchema,
+  sideBySideView,
+} from './side-by-side'
+import { Footer } from './site-chrome'
+import { AboutPage, PrivacyPage } from './site-pages'
+import {
   keepSuggestedAnswer,
   suggestedAnswerMode,
   suggestedAnswerSchema,
   suggestedAnswerView,
 } from './suggested-answer'
+import { leftArrowInputRule, rightArrowInputRule } from './text-arrows'
+import {
+  BEFORE_NAVIGATE_EVENT,
+  navigate,
+  replaceRoute,
+  useLocationSearch,
+  useRoute,
+} from './use-route'
+import { useSelection } from './use-selection'
+import { useWorkspaceDrag } from './use-workspace-drag'
+import { hasBeenWelcomed } from './welcomed'
+import { WorkspaceSplit } from './workspace-split'
 
 /** The mark each Question Section goes by, so a type reads the same wherever
  *  it is named — the picker that chooses one, and the dialog that states it. */
@@ -253,212 +305,6 @@ const DOCUMENT_MENU_LABELS: Record<DocumentMenuKind, string> = {
  * something Enter does behind the highlight's back, so typing "mol" and
  * pressing Enter reaches the "Mole Ratio" that is already there.
  */
-function FrontMatterSelect({
-  icon,
-  label,
-  options,
-  selected,
-  multiple,
-  onChange,
-  onCreate,
-  renderValue,
-}: {
-  icon: ReactNode
-  label: string
-  /** What can be chosen, in the order it should be offered. */
-  options: readonly { value: string; label: string }[]
-  selected: readonly string[]
-  multiple: boolean
-  onChange: (values: string[]) => void
-  /** Given the trimmed text typed, when it names nothing already on offer. */
-  onCreate?: (value: string) => void
-  /** How one chosen value is drawn, on the field and in the list. */
-  renderValue: (value: string) => ReactNode
-}) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
-  // Which row Enter would take. Reset to the top whenever the list changes
-  // underneath it, so the highlight is always on a row that is still there.
-  const [active, setActive] = useState(0)
-  const field = useRef<HTMLDivElement>(null)
-  const trigger = useRef<HTMLButtonElement>(null)
-  const search = useRef<HTMLInputElement>(null)
-
-  // Closing takes the focus back to the field, because the box that had it is
-  // about to be unmounted: left where it fell, focus lands on the document
-  // body and the dialog behind stops hearing Escape at all.
-  const close = () => {
-    setOpen(false)
-    trigger.current?.focus()
-  }
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (event: PointerEvent) => {
-      if (!field.current?.contains(event.target as Node)) setOpen(false)
-    }
-    document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
-  }, [open])
-
-  const trimmed = query.trim()
-  const needle = trimmed.toLowerCase()
-  const matching = options.filter((option) =>
-    option.label.toLowerCase().includes(needle),
-  )
-  // Offered when what has been typed is not already a value, compared exactly.
-  // Filtering is case-insensitive because that is what searching means, but two
-  // spellings of one subject are two Topics: only the teacher knows whether
-  // they mean the same thing, so a near-miss is offered as a new one.
-  const creatable =
-    onCreate !== undefined
-    && trimmed.length > 0
-    && !options.some((option) => option.label === trimmed)
-
-  // Every row Enter or an arrow key can land on, in the order they are drawn.
-  // Writing a new Topic is the last of them rather than a separate gesture.
-  const rows: (
-    | { kind: 'choose'; value: string }
-    | { kind: 'create' }
-  )[] = [
-    ...matching.map((option) => ({ kind: 'choose' as const, value: option.value })),
-    ...(creatable ? [{ kind: 'create' as const }] : []),
-  ]
-  const activeRow = Math.min(active, Math.max(rows.length - 1, 0))
-
-  const choose = (value: string) => {
-    if (!multiple) {
-      // Choosing what is already chosen clears the field: one value, and the
-      // way to have none of it is to take back the one you picked.
-      onChange(selected.includes(value) ? [] : [value])
-      close()
-    } else {
-      onChange(
-        selected.includes(value)
-          ? selected.filter((item) => item !== value)
-          : [...selected, value],
-      )
-      // The row that was clicked is about to be re-rendered under a cleared
-      // query; keeping the typing where the typing happens is what lets a
-      // teacher name three Topics without reaching for the mouse in between.
-      search.current?.focus()
-    }
-    setQuery('')
-  }
-
-  const create = () => {
-    if (!creatable) return
-    onCreate?.(trimmed)
-    setQuery('')
-    if (multiple) search.current?.focus()
-    else close()
-  }
-
-  const commit = (row: (typeof rows)[number] | undefined) => {
-    if (!row) return
-    if (row.kind === 'create') create()
-    else choose(row.value)
-  }
-
-  return (
-    <div
-      className="front-matter-field"
-      ref={field}
-      onKeyDown={(event) => {
-        if (event.key !== 'Escape' || !open) return
-        // The dialog behind listens for the same key to close itself.
-        event.stopPropagation()
-        close()
-      }}
-    >
-      <span className="front-matter-label">
-        {icon}
-        {label}
-      </span>
-      <button
-        type="button"
-        className="front-matter-value"
-        ref={trigger}
-        aria-label={label}
-        aria-expanded={open}
-        aria-haspopup="true"
-        onClick={() => setOpen((current) => !current)}
-      >
-        {selected.length === 0 ? (
-          <span className="front-matter-blank">Empty</span>
-        ) : (
-          selected.map((value) => (
-            <Fragment key={value}>{renderValue(value)}</Fragment>
-          ))
-        )}
-      </button>
-      {open && (
-        <div className="front-matter-list" role="group" aria-label={label}>
-          <input
-            className="front-matter-search"
-            ref={search}
-            autoFocus
-            aria-label={`Filter ${label}`}
-            placeholder={onCreate ? `Search or add a ${label.replace(/s$/, '')}` : 'Search'}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value)
-              setActive(0)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-                event.preventDefault()
-                if (rows.length === 0) return
-                const step = event.key === 'ArrowDown' ? 1 : -1
-                setActive((current) => {
-                  const from = Math.min(current, rows.length - 1)
-                  return (from + step + rows.length) % rows.length
-                })
-                return
-              }
-              if (event.key !== 'Enter') return
-              event.preventDefault()
-              commit(rows[activeRow])
-            }}
-          />
-          <div className="front-matter-options">
-            {rows.map((row, index) =>
-              row.kind === 'choose' ? (
-                <button
-                  type="button"
-                  className="front-matter-option"
-                  key={row.value}
-                  data-active={index === activeRow ? 'true' : undefined}
-                  data-chosen={selected.includes(row.value) ? 'true' : undefined}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={() => choose(row.value)}
-                >
-                  {renderValue(row.value)}
-                  {selected.includes(row.value) && <Check />}
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  className="front-matter-option"
-                  key="create"
-                  data-active={index === activeRow ? 'true' : undefined}
-                  onMouseEnter={() => setActive(index)}
-                  onClick={create}
-                >
-                  <Plus />
-                  Add {renderValue(trimmed)}
-                </button>
-              ),
-            )}
-            {rows.length === 0 && (
-              <p className="front-matter-empty">Nothing to choose</p>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
 
 function CrepeQuestion({
   value,
@@ -720,40 +566,23 @@ function QuestionDialog({
   const [topics, setTopics] = useState<readonly string[]>(topicsOf(question))
   const latestDoc = useRef(doc)
   const readEditorDocument = useRef<(() => ProseMirrorJSON) | null>(null)
-  const dialog = useRef<HTMLElement>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
-  /** A “picture needed” block's Resolve, waiting for a picture. */
   const [resolving, setResolving] = useState<ResolveImageRequest | null>(null)
-  useEffect(() => {
-    const element = dialog.current
-    const onResolve = (event: Event) => setResolving((event as CustomEvent<ResolveImageRequest>).detail)
-    element?.addEventListener(RESOLVE_IMAGE_EVENT, onResolve)
-    return () => element?.removeEventListener(RESOLVE_IMAGE_EVENT, onResolve)
-  }, [])
-  /** A picture's right-click menu. */
   const [pictureMenu, setPictureMenu] = useState<PictureMenuRequest | null>(null)
-  useEffect(() => {
-    const element = dialog.current
+  // Dialog content mounts in a portal after the parent. Bind when its DOM node
+  // exists so picture actions work on the first opening too.
+  const bindDialog = useCallback((element: HTMLDivElement | null) => {
+    if (!element) return
+    const onResolve = (event: Event) => setResolving((event as CustomEvent<ResolveImageRequest>).detail)
     const onMenu = (event: Event) => setPictureMenu((event as CustomEvent<PictureMenuRequest>).detail)
-    element?.addEventListener(PICTURE_MENU_EVENT, onMenu)
-    return () => element?.removeEventListener(PICTURE_MENU_EVENT, onMenu)
-  }, [])
-
-  // Escape that lands on nothing: a click on a bare patch of the dialog, or a
-  // popup closing under the focus it held, leaves focus on the document body,
-  // and a key pressed there never reaches the dialog's own handler. Anything
-  // inside the dialog is left to that handler, so a Crepe menu still gets to
-  // consume the key first.
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
-      if (dialog.current?.contains(event.target as Node)) return
-      onCancel()
+    element.addEventListener(RESOLVE_IMAGE_EVENT, onResolve)
+    element.addEventListener(PICTURE_MENU_EVENT, onMenu)
+    return () => {
+      element.removeEventListener(RESOLVE_IMAGE_EVENT, onResolve)
+      element.removeEventListener(PICTURE_MENU_EVENT, onMenu)
     }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onCancel])
+  }, [])
 
   const saveQuestion = async () => {
     if (saving) return
@@ -800,22 +629,8 @@ function QuestionDialog({
   }
 
   return (
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onPointerDown={(event) => {
-        if (event.target === event.currentTarget) onCancel()
-      }}
-      onKeyDown={(event) => {
-        // Bubble phase: a Crepe menu/tooltip that consumes Escape to close
-        // itself stops propagation first, so the dialog only closes when
-        // nothing inside handled the key.
-        if (event.key === 'Escape') {
-          event.stopPropagation()
-          onCancel()
-        }
-      }}
-      onKeyDownCapture={(event) => {
+    <>
+      <Modal title={"Question editor"} onClose={onCancel} busy={saving} onKeyDownCapture={(event) => {
         if (
           event.key === 'Enter'
           && (event.ctrlKey || event.metaKey)
@@ -826,12 +641,10 @@ function QuestionDialog({
           void saveQuestion()
         }
       }}
-    >
-      <section
         className="question-dialog"
-        ref={dialog}
-        role="dialog"
-        aria-modal="true"
+        ref={bindDialog}
+
+
         aria-label="Question editor"
       >
         {resolving && <ResolveImagesDialog
@@ -922,6 +735,7 @@ function QuestionDialog({
           />
         </div>
         <div className="dialog-editor">
+          <MilkdownProvider>
           <CrepeQuestion
             value={doc}
             answerBlock={type === 'open' ? 'Suggested Answer' : type === 'multiple-choice' || type === 'true-false' ? 'Explanation' : false}
@@ -935,22 +749,23 @@ function QuestionDialog({
               latestDoc.current = next
             }}
           />
+          </MilkdownProvider>
         </div>
         <footer className="dialog-actions">
-          {!isNew && onDelete && <button type="button" className="danger-button question-delete-button" onClick={onDelete}><Trash2 />Delete Question</button>}
+          {!isNew && onDelete && <Button variant="destructive" type="button" className="danger-button question-delete-button" onClick={onDelete}><Trash2 />Delete Question</Button>}
           {saveError && <p className="dialog-save-error" role="alert">{saveError}</p>}
-          <button type="button" className="secondary-button" onClick={onCancel}>Cancel</button>
-          <button
+          <Button variant="outline" type="button" className="secondary-button" onClick={onCancel}>Cancel</Button>
+          <Button variant="default"
             type="button"
             className="primary-button"
             disabled={saving}
             onClick={() => void saveQuestion()}
           >
             {saving ? 'Saving…' : 'Save question'}
-          </button>
+          </Button>
         </footer>
-      </section>
-    </div>
+      </Modal>
+    </>
   )
 }
 
@@ -963,52 +778,28 @@ function DestructiveConfirmation({ label, title, children, confirmLabel, onCance
   onConfirm: () => Promise<void>
 }) {
   const titleId = useId()
-  const dialog = useRef<HTMLElement>(null)
+  const dialog = useRef<HTMLDivElement>(null)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    requestAnimationFrame(() => dialog.current?.querySelector<HTMLElement>('button')?.focus())
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !deleting) onCancel()
-      if (event.key !== 'Tab') return
-      const controls = Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') ?? [])
-      if (controls.length === 0) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault(); last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault(); first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      requestAnimationFrame(() => { if (previous?.isConnected) previous.focus() })
-    }
-  }, [deleting, onCancel])
-  return createPortal(<div className="dialog-backdrop" role="presentation" onKeyDown={(event) => {
-    event.stopPropagation()
-    if (event.key === 'Escape' && !deleting) onCancel()
-  }}>
-    <section ref={dialog} className="destructive-dialog" role="dialog" aria-modal="true" aria-label={label} aria-labelledby={titleId}>
+
+  return createPortal(<>
+    <Modal title={label} onClose={onCancel} busy={deleting} ref={dialog} className="destructive-dialog"   aria-label={label} aria-labelledby={titleId}>
       <h2 id={titleId}>{title}</h2>
       {children}
       {error && <p className="dialog-save-error" role="alert">{error}</p>}
       <footer className="destructive-dialog-actions">
-        <button type="button" className="secondary-button" disabled={deleting} onClick={onCancel}>Cancel</button>
-        <button type="button" className="danger-button" disabled={deleting} onClick={() => {
+        <Button variant="outline" type="button" className="secondary-button" disabled={deleting} onClick={onCancel}>Cancel</Button>
+        <Button variant="destructive" type="button" className="danger-button" disabled={deleting} onClick={() => {
           setDeleting(true)
           setError(null)
           void onConfirm().catch((reason) => {
             setError(reason instanceof Error ? reason.message : 'Nothing was deleted. Please try again.')
             setDeleting(false)
           })
-        }}>{deleting ? 'Deleting…' : confirmLabel}</button>
+        }}>{deleting ? 'Deleting…' : confirmLabel}</Button>
       </footer>
-    </section>
-  </div>, document.body)
+    </Modal>
+  </>, document.body)
 }
 
 function QuestionDeletionConfirmation({ usage, onCancel, onConfirm }: {
@@ -1088,68 +879,32 @@ function ResourcePicker({
   onClose: () => void
 }) {
   const titleId = useId()
-  const dialog = useRef<HTMLElement>(null)
-  const chosen = useRef(false)
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose }, [onClose])
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    const focusable = () => Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled)') ?? [])
-    requestAnimationFrame(() => focusable()[0]?.focus())
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = focusable()
-      if (controls.length === 0) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      if (!chosen.current) {
-        requestAnimationFrame(() => { if (previous?.isConnected) previous.focus() })
-      }
-    }
-  }, [])
+  const dialog = useRef<HTMLDivElement>(null)
 
-  return createPortal(<div className="dialog-backdrop" role="presentation" onMouseDown={(event) => {
-    if (event.target === event.currentTarget) onClose()
-  }}>
-    <section
+
+  return createPortal(<>
+    <Modal title={title} onClose={onClose}
       ref={dialog}
       className="resource-picker"
-      role="dialog"
-      aria-modal="true"
+
+
       aria-labelledby={titleId}
     >
       <header className="resource-picker-header">
         <h2 id={titleId}>{title}</h2>
-        <button type="button" className="question-bank-action" aria-label={closeLabel} onClick={onClose}><X /></button>
+        <Button variant="ghost" size="icon-sm" type="button" className="question-bank-action" aria-label={closeLabel} onClick={onClose}><X /></Button>
       </header>
       {resources.length === 0 ? <p>{emptyMessage}</p> :
         <div className="resource-picker-list">
-          {resources.map((resource) => <button key={resource.id} type="button" onClick={() => {
-            chosen.current = true
+          {resources.map((resource) => <Button variant="plain" size="content" key={resource.id} type="button" onClick={() => {
             onChoose(resource.id)
           }}>
             <strong>{resource.name}</strong>
             <span>{resource.questionCount} {resource.questionCount === 1 ? 'Question' : 'Questions'}</span>
-          </button>)}
+          </Button>)}
         </div>}
-    </section>
-  </div>, document.body)
+    </Modal>
+  </>, document.body)
 }
 
 /**
@@ -1485,7 +1240,7 @@ function QuestionBankTabsPane({
           const bank = resources[id]
           if (!bank) return null
           return <div className="bank-tab" key={id} data-active={id === workspace.activeBankId ? 'true' : undefined}>
-            <button
+            <Button variant="plain" size="content"
               type="button"
               role="tab"
               data-bank-id={id}
@@ -1505,26 +1260,26 @@ function QuestionBankTabsPane({
                   document.querySelector<HTMLElement>(`[role="tab"][data-bank-id="${CSS.escape(nextId)}"]`)?.focus(),
                 ))
               }}
-            >{bank.name}</button>
-            <button
+            >{bank.name}</Button>
+            <Button variant="plain" size="content"
               type="button"
               aria-label={`Close ${bank.name}`}
               onClick={() => void close(id)}
-            ><X /></button>
+            ><X /></Button>
           </div>
         })}
       </div>
       {/* Where Chrome keeps it: a plus at the end of the strip, next to the
           tab that was opened last. With no tabs, the empty state below offers
           the same action with a full label instead. */}
-      {workspace.openBankIds.length > 0 && <button
+      {workspace.openBankIds.length > 0 && <Button variant="plain" size="content"
         type="button"
         className="open-bank-button"
         aria-label="Open Question Bank"
         title="Open Question Bank"
         disabled={!hydrated}
         onClick={() => void openPicker()}
-      ><Plus /></button>}
+      ><Plus /></Button>}
     </div>
     {active ? <QuestionBankWorkspace
       key={active.id}
@@ -1581,30 +1336,30 @@ function QuestionBankTabsPane({
       <div className="bank-get-started">
         <p className="bank-get-started-title">Get started</p>
         <div className="bank-get-started-actions">
-          <button
+          <Button variant="plain" size="content"
             type="button"
             disabled={!hydrated || creatingBank}
             onClick={() => void openPicker()}
           >
             <FolderOpen aria-hidden="true" />
             <span>Open Question Bank</span>
-          </button>
-          <button
+          </Button>
+          <Button variant="plain" size="content"
             type="button"
             disabled={!hydrated || creatingBank}
             onClick={() => void createBank()}
           >
             <Plus aria-hidden="true" />
             <span>{creatingBank ? 'Creating…' : 'New Question Bank'}</span>
-          </button>
-          {onImportBank && <button
+          </Button>
+          {onImportBank && <Button variant="plain" size="content"
             type="button"
             disabled={!hydrated || creatingBank}
             onClick={() => onImportBank()}
           >
             <Import aria-hidden="true" />
             <span>Import Question Bank</span>
-          </button>}
+          </Button>}
         </div>
         <p className="bank-get-started-hint">Or drop a Question Bank file anywhere here.</p>
       </div>
@@ -1636,9 +1391,9 @@ function BankPageFacts({
   const count = bank.questions.length
   const facts: ReactNode[] = [`${count} ${count === 1 ? 'question' : 'questions'}`]
   if (picturesNeeded > 0) {
-    facts.push(<button type="button" className="link-button bank-page-pictures-needed" aria-haspopup="dialog" onClick={onResolvePictures}>
+    facts.push(<Button variant="plain" size="content" type="button" className="link-button bank-page-pictures-needed" aria-haspopup="dialog" onClick={onResolvePictures}>
       {picturesNeeded} {picturesNeeded === 1 ? 'picture' : 'pictures'} needed
-    </button>)
+    </Button>)
   }
   if (bank.author?.trim()) facts.push(`By ${bank.author.trim()}`)
   if (bank.license?.name.trim()) {
@@ -1750,7 +1505,7 @@ function QuestionBankPage({
         // the name is the one way into changing any of it.
         heading={<div className="bank-page-heading">
           <div className="bank-page-title-row">
-            <input
+            <Input
               aria-label="Question Bank name"
               className="bank-page-title"
               value={name}
@@ -1761,7 +1516,7 @@ function QuestionBankPage({
                 if (event.key === 'Enter') event.currentTarget.blur()
               }}
             />
-            <button
+            <Button variant="ghost" size="icon-sm"
               type="button"
               className="toolbar-icon-button bank-page-details-button"
               aria-label="Edit Question Bank details"
@@ -1770,7 +1525,7 @@ function QuestionBankPage({
               onClick={() => setEditingDetails(true)}
             >
               <Pencil aria-hidden="true" />
-            </button>
+            </Button>
           </div>
           <BankPageFacts
             bank={bank}
@@ -1780,7 +1535,7 @@ function QuestionBankPage({
           {nameError && <p className="home-error bank-name-error" role="alert">{nameError}</p>}
         </div>}
         extraActions={<>
-          {popOver.supported && <button
+          {popOver.supported && <Button variant="outline"
             type="button"
             className="secondary-button"
             title="Keep this Question Bank on top of other windows, to copy Questions from"
@@ -1788,11 +1543,11 @@ function QuestionBankPage({
           >
             <PictureInPicture2 aria-hidden="true" />
             Pop-over
-          </button>}
-          <button type="button" className="secondary-button" aria-haspopup="dialog" onClick={() => onImportInto(bank.id)}>
+          </Button>}
+          <Button variant="outline" type="button" className="secondary-button" aria-haspopup="dialog" onClick={() => onImportInto(bank.id)}>
             <Import aria-hidden="true" />
             Import
-          </button>
+          </Button>
         </>}
         service={bankWorkspaces}
         filter={filter}
@@ -1807,17 +1562,17 @@ function QuestionBankPage({
       onClose={() => setResolvingPictures(false)}
       onResolve={resolvePictures}
     />}
-    {editingDetails && <div className="dialog-backdrop" role="presentation">
-      <section className="question-bank-details-dialog" role="dialog" aria-modal="true" aria-labelledby="bank-details-title">
+    {editingDetails && <>
+      <Modal title={"Question Bank details"} onClose={() => setEditingDetails(false)} busy={detailsBusy} className="question-bank-details-dialog"   aria-labelledby="bank-details-title">
         <h2 id="bank-details-title">Question Bank details</h2>
         <p>Only details you enter are included when this Question Bank is shared.</p>
-        <label>Description<textarea value={details.description} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, description: event.target.value })} /></label>
-        <label>Declared author<input value={details.author} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, author: event.target.value })} /></label>
-        <label>License name<input value={details.licenseName} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, licenseName: event.target.value })} /></label>
-        <label>License URL<input type="url" value={details.licenseUrl} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, licenseUrl: event.target.value })} /></label>
+        <label>Description<Textarea value={details.description} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, description: event.target.value })} /></label>
+        <label>Declared author<Input value={details.author} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, author: event.target.value })} /></label>
+        <label>License name<Input value={details.licenseName} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, licenseName: event.target.value })} /></label>
+        <label>License URL<Input type="url" value={details.licenseUrl} disabled={detailsBusy} onChange={(event) => setDetails({ ...details, licenseUrl: event.target.value })} /></label>
         <div className="dialog-actions">
-          <button type="button" className="secondary-button" disabled={detailsBusy} onClick={() => setEditingDetails(false)}>Cancel</button>
-          <button type="button" className="primary-button" disabled={detailsBusy} onClick={() => {
+          <Button variant="outline" type="button" className="secondary-button" disabled={detailsBusy} onClick={() => setEditingDetails(false)}>Cancel</Button>
+          <Button variant="default" type="button" className="primary-button" disabled={detailsBusy} onClick={() => {
             setDetailsBusy(true)
             setNameError(null)
             void bankWorkspaces.commit(bank.id, {
@@ -1833,10 +1588,10 @@ function QuestionBankPage({
             }).catch((error: unknown) => {
               setNameError(error instanceof Error ? error.message : 'Question Bank details could not be saved.')
             }).finally(() => setDetailsBusy(false))
-          }}>{detailsBusy ? 'Saving…' : 'Save details'}</button>
+          }}>{detailsBusy ? 'Saving…' : 'Save details'}</Button>
         </div>
-      </section>
-    </div>}
+      </Modal>
+    </>}
   </AppShell>
 }
 
@@ -1859,9 +1614,9 @@ function WorkingCopyStatus({ dirty, backupStatus }: {
   const { Icon, label, detail } = WORKING_COPY_STATES[state]
   return (
     <div className="working-copy-badge" data-state={state}>
-      <button type="button" className="working-copy-badge-button" aria-label={label} aria-describedby="working-copy-tip">
+      <Button variant="plain" size="content" type="button" className="working-copy-badge-button" aria-label={label} aria-describedby="working-copy-tip">
         <Icon aria-hidden="true" />
-      </button>
+      </Button>
       {/* The words are still here for anyone who needs them: on hover, on
           focus, and — because this is what changed — announced. */}
       <div className="storage-tip working-copy-tip" id="working-copy-tip" role="tooltip">
@@ -2339,7 +2094,7 @@ function ExamEditor({
       <div className="editor-shell">
       <header className="document-bar">
         <div className="document-identity">
-          <button
+          <Button variant="plain" size="content"
             type="button"
             className="editor-home-mark"
             aria-label="Test Parrot home"
@@ -2347,9 +2102,9 @@ function ExamEditor({
             onClick={onHome}
           >
             <img className="app-logo" src="/logo.png" alt="" width={36} height={36} />
-          </button>
+          </Button>
           <div className="document-title-stack">
-            <input
+            <Input
               aria-label="Exam name"
               className="document-title"
               value={state.workingCopy.title}
@@ -2359,7 +2114,7 @@ function ExamEditor({
             />
             <nav className="document-menus" aria-label="Exam menus">
               {DOCUMENT_MENUS.map((kind) => (
-                <button
+                <Button variant="plain" size="content"
                   key={kind}
                   type="button"
                   className="document-menu-button"
@@ -2373,14 +2128,14 @@ function ExamEditor({
                   }}
                 >
                   {DOCUMENT_MENU_LABELS[kind]}
-                </button>
+                </Button>
               ))}
             </nav>
           </div>
         </div>
         <div className="header-actions">
           <div className="document-edit-actions" aria-label="Editing actions">
-            <button
+            <Button variant="ghost" size="icon-sm"
               type="button"
               className="toolbar-icon-button"
               aria-label="Undo"
@@ -2391,8 +2146,8 @@ function ExamEditor({
               }}
             >
               <Undo2 />
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost" size="icon-sm"
               type="button"
               className="toolbar-icon-button"
               aria-label="Redo"
@@ -2403,7 +2158,7 @@ function ExamEditor({
               }}
             >
               <Redo2 />
-            </button>
+            </Button>
           </div>
           {/* A mark, not a sentence. It changes on every keystroke, and four
               different sentences in a flex row that wraps means the whole bar
@@ -2411,7 +2166,7 @@ function ExamEditor({
               still there — in the tooltip, and announced to a screen reader —
               but the slot it lives in never changes size. */}
           <WorkingCopyStatus dirty={state.dirty} backupStatus={backupStatus} />
-          <button
+          <Button variant="ghost" size="icon-sm"
             ref={historyButton}
             type="button"
             className="toolbar-icon-button"
@@ -2422,8 +2177,8 @@ function ExamEditor({
             onClick={() => setHistoryOpen((open) => !open)}
           >
             <History aria-hidden="true" />
-          </button>
-          <button
+          </Button>
+          <Button variant="default"
             type="button"
             className="primary-button"
             aria-label="Save"
@@ -2431,8 +2186,8 @@ function ExamEditor({
             onClick={() => void store.save()}
           >
             Save
-          </button>
-          <button
+          </Button>
+          <Button variant="outline"
             ref={exportButton}
             type="button"
             className="secondary-button"
@@ -2442,7 +2197,7 @@ function ExamEditor({
             onClick={() => openExport()}
           >
             Export
-          </button>
+          </Button>
         </div>
       </header>
 
@@ -2858,14 +2613,14 @@ function ExamEditor({
       {storageNotice && (
         <div className="storage-notice" role="status" aria-live="polite">
           <p>{storageNotice}</p>
-          <button
+          <Button variant="ghost" size="icon-sm"
             type="button"
             className="toolbar-icon-button"
             aria-label="Dismiss storage notice"
             onClick={() => setStorageNotice(null)}
           >
             ×
-          </button>
+          </Button>
         </div>
       )}
 
@@ -3234,7 +2989,7 @@ export default function App({
     if (!editorStore) return <>
       <main className="cover-design-empty">
         <h1>Open an exam to design its cover</h1>
-        <button type="button" onClick={() => navigate('/exams')}>Choose an exam</button>
+        <Button variant="plain" size="content" type="button" onClick={() => navigate('/exams')}>Choose an exam</Button>
       </main>
     </>
     const exam = editorStore.selectedExam().exam

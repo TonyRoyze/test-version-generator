@@ -43,15 +43,15 @@ async function openExam(page: Page) {
   await expect(page.locator('.exam-question[data-question-id]')).toHaveCount(1)
 }
 
-const heading = (page: Page) => page.getByRole('textbox', { name: 'Multiple Choice heading' })
-const directions = (page: Page) => page.getByRole('textbox', { name: 'Multiple Choice directions' })
+const heading = (page: Page) => page.getByRole('textbox', { name: 'Section heading' })
+const directions = (page: Page) => page.getByRole('textbox', { name: 'Section directions' })
 
 /** What the Export Preview prints for the test's first section. */
 async function previewSection(page: Page) {
   await page.getByRole('button', { name: 'Export', exact: true }).click()
   const preview = page.getByRole('dialog', { name: 'Export' }).getByLabel('Export Preview')
   await expect(preview).toBeVisible()
-  return preview.locator('.exam-page').first().locator('.exam-section')
+  return preview.locator('.exam-page').filter({ has: page.locator('.exam-section') }).first().locator('.exam-section')
 }
 
 test('a heading and its directions are reworded where they print, and the output says the same', async ({ page }) => {

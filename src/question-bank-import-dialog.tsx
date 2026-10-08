@@ -1,5 +1,74 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { ChevronRight, FileText, ImageIcon, Library, UploadCloud, type LucideIcon } from 'lucide-react'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  ChevronRight,
+  FileText,
+  ImageIcon,
+  Library,
+  UploadCloud,
+  type LucideIcon,
+} from 'lucide-react'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
+import { TopicBadge } from './badges'
+import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
+import type { Question } from './exam'
+import { ExportPreview } from './exam-page'
+import type { LayoutPlan } from './export-plan'
+import { SupportedSources, TextOnlyChoices } from './import-choices'
+import { ImportError } from './import-error'
+import { bestWaitingImport } from './import-file-route'
+import {
+  discardWaitingImport,
+  readWaitingImport,
+  type ImportFileKind,
+  type WaitingImport,
+} from './import-history'
+import {
+  deniedBanksOf,
+  hasAllowedItems,
+  importCounts,
+  importSentence,
+  initialSelection,
+  setBankAllowed,
+  setBankTarget,
+  setExamAllowed,
+  type ImportSelection,
+} from './import-selection'
+import { isLocked } from './locked-answers'
+import type {
+  ImportProposal,
+  ProposedBank,
+  ProposedExam,
+} from './package-import'
+import {
+  checkAgainstSourceDocument,
+  pendingImagesOf,
+  pendingKeyOf,
+  withPendingKeys,
+  type PendingImageOccurrence,
+  type PendingImageResolution,
+  type SourceDocumentCheck,
+} from './pending-images'
+import { namedPage, usePictureChoice } from './picture-choice'
+import { PictureSlotContext, type PictureSlot } from './picture-slot'
 import {
   RECORD_PART_TYPE_LABELS,
   RECORD_TYPE_LABELS,
@@ -10,43 +79,21 @@ import {
   type QuestionBankRecordQuestion,
   type SemanticDocument,
 } from './question-bank-export'
-import { TopicBadge } from './badges'
-import type { Question } from './exam'
+import {
+  needsConversion as fileNeedsConversion,
+  inspectQuestionFile,
+  inspectUploadedFile,
+  isRecordFile,
+} from './question-bank-upload'
+import {
+  pendingImageOf,
+  plainTextOf,
+  type ProseMirrorJSON,
+} from './question-doc'
+import { QuestionFileReport } from './question-file-report'
 import { QuestionReading } from './question-reading'
 import type { QuestionReadingContent } from './question-reading-content'
-import { pendingImageOf, plainTextOf, type ProseMirrorJSON } from './question-doc'
-import { isLocked } from './locked-answers'
-import type { ImportProposal, ProposedBank, ProposedExam } from './package-import'
-import {
-  deniedBanksOf,
-  hasAllowedItems,
-  importSentence,
-  importCounts,
-  initialSelection,
-  setBankAllowed,
-  setBankTarget,
-  setExamAllowed,
-  type ImportSelection,
-} from './import-selection'
-import type { LayoutPlan } from './export-plan'
-import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
-import { ExportPreview } from './exam-page'
-import { ImportError } from './import-error'
-import { inspectQuestionFile, inspectUploadedFile, isRecordFile, needsConversion as fileNeedsConversion } from './question-bank-upload'
-import { QuestionFileReport } from './question-file-report'
-import { supportMailto } from './support-email'
-import { SupportedSources, TextOnlyChoices } from './import-choices'
-import {
-  checkAgainstSourceDocument,
-  pendingImagesOf,
-  pendingKeyOf,
-  withPendingKeys,
-  type PendingImageOccurrence,
-  type PendingImageResolution,
-  type SourceDocumentCheck,
-} from './pending-images'
 import { PageCropper, PictureChoices } from './resolve-images'
-import { namedPage, usePictureChoice } from './picture-choice'
 import {
   carriedResolutions,
   cropChoice,
@@ -56,15 +103,18 @@ import {
   placeName,
   prefilledPictures,
   resolutionOf,
-  type ResolvedPicture,
   type Resolutions,
+  type ResolvedPicture,
   type ResolvingSource,
 } from './resolved-pictures'
-import { PictureSlotContext, type PictureSlot } from './picture-slot'
-import { discardWaitingImport, readWaitingImport, type ImportFileKind, type WaitingImport } from './import-history'
-import { bestWaitingImport } from './import-file-route'
 import { SourceDocumentSteps } from './source-document-steps'
-import { TEST_FILE_TYPES, kindOfFile, readSourceDocument, startWaitingImport } from './source-file'
+import {
+  TEST_FILE_TYPES,
+  kindOfFile,
+  readSourceDocument,
+  startWaitingImport,
+} from './source-file'
+import { supportMailto } from './support-email'
 import { useModalScrollLock } from './use-modal-scroll-lock'
 
 function formatBytes(bytes: number): string {
@@ -420,11 +470,11 @@ function TabLink({
   onShow: () => void
 }) {
   const { Icon } = KINDS[kind]
-  return <button type="button" className="bank-import-link" data-kind={kind} onClick={onShow}>
+  return <Button variant="plain" size="content" type="button" className="bank-import-link" data-kind={kind} onClick={onShow}>
     <Icon aria-hidden="true" />
     <span>{name}</span>
     {detail && <small>{detail}</small>}
-  </button>
+  </Button>
 }
 
 /**
@@ -523,7 +573,7 @@ export function QuestionBankImportDialog({
 }) {
   const titleId = useId()
   const listId = useId()
-  const dialog = useRef<HTMLElement>(null)
+  const dialog = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const [proposal, setProposal] = useState<ImportProposal | null>(null)
   const [selection, setSelection] = useState<ImportSelection | null>(null)
@@ -565,8 +615,6 @@ export function QuestionBankImportDialog({
    *  paired with a waiting import. Used for this import only, never kept. */
   const [suppliedSource, setSuppliedSource] = useState<ResolvingSource | null>(null)
   const busy = phase !== 'choose'
-  const busyRef = useRef(busy)
-  busyRef.current = busy
   const backOutRef = useRef<() => boolean>(() => false)
   backOutRef.current = () => {
     if (cropping) setCropping(false)
@@ -583,42 +631,7 @@ export function QuestionBankImportDialog({
   }, [loadBanks])
 
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    requestAnimationFrame(() => input.current?.focus())
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busyRef.current) {
-        event.preventDefault()
-        // A picture's choices close before the dialog does.
-        if (backOutRef.current()) return
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = Array.from(
-        dialog.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled):not([tabindex="-1"]), input:not(:disabled), select:not(:disabled)',
-        ) ?? [],
-      )
-      if (!controls.length) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', keydown)
-    return () => {
-      document.removeEventListener('keydown', keydown)
-      requestAnimationFrame(() => {
-        if (previous?.isConnected) previous.focus()
-      })
-    }
-  }, [onClose])
+
 
   useEffect(() => {
     if (error && phase === 'choose') input.current?.focus()
@@ -971,14 +984,14 @@ export function QuestionBankImportDialog({
         {items.map((item) => {
           const selected = focus !== null && focusKey(item.focus) === focusKey(focus)
           return <li key={focusKey(item.focus)} data-selected={selected ? 'true' : undefined} data-allowed={item.allowed ? 'true' : 'false'}>
-            <input
-              type="checkbox"
+            <Checkbox
+
               checked={item.allowed}
               disabled={busy}
               aria-label={`Import ${item.name}`}
-              onChange={(event) => item.onAllow(event.target.checked)}
+              onCheckedChange={(checked) => item.onAllow((checked === true))}
             />
-            <button
+            <Button variant="plain" size="content"
               id={entryId(item.focus)}
               type="button"
               className="bank-import-entry"
@@ -988,7 +1001,7 @@ export function QuestionBankImportDialog({
             >
               <span>{item.name}</span>
               <small>{item.detail}</small>
-            </button>
+            </Button>
           </li>
         })}
       </ul>
@@ -996,8 +1009,8 @@ export function QuestionBankImportDialog({
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section
+    <>
+      <Modal title={"Import"} onClose={onClose} onOpenAutoFocus={event => { event.preventDefault(); input.current?.focus() }} busy={busy} onEscapeKeyDown={event => { event.stopPropagation(); if (busy || backOutRef.current()) event.preventDefault() }}
         ref={dialog}
         className={[
           'bank-import-dialog',
@@ -1005,8 +1018,8 @@ export function QuestionBankImportDialog({
         ]
           .filter(Boolean)
           .join(' ')}
-        role="dialog"
-        aria-modal="true"
+
+
         aria-labelledby={titleId}
         aria-busy={busy}
       >
@@ -1095,13 +1108,13 @@ export function QuestionBankImportDialog({
             </p>
             <span className="bank-import-assist-actions">
               {resolvingSource && occurrences.some(({ key }) => !resolutions.has(key)) && (
-                <button type="button" className="secondary-button" disabled={busy || filling} onClick={() => fill(resolvingSource)}>
+                <Button variant="outline" type="button" className="secondary-button" disabled={busy || filling} onClick={() => fill(resolvingSource)}>
                   Use its pictures anyway
-                </button>
+                </Button>
               )}
-              <button type="button" className="secondary-button" disabled={busy} onClick={chooseAnother}>
+              <Button variant="outline" type="button" className="secondary-button" disabled={busy} onClick={chooseAnother}>
                 Choose another file
-              </button>
+              </Button>
             </span>
           </div>
         )}
@@ -1242,9 +1255,9 @@ export function QuestionBankImportDialog({
                   described={false}
                   onSourceFile={(file) => void supplySource(file)}
                 />
-                <button type="button" className="primary-button bank-import-picture-done" onClick={() => { setPicked(null); setCropping(false) }}>
+                <Button variant="default" type="button" className="primary-button bank-import-picture-done" onClick={() => { setPicked(null); setCropping(false) }}>
                   Done
-                </button>
+                </Button>
               </aside>
             )}
 
@@ -1285,16 +1298,16 @@ export function QuestionBankImportDialog({
                     about the bank, so it comes after everything that is. */}
                 {chosen.allowed && <fieldset className="bank-import-target" disabled={busy}>
                   <legend>Import settings</legend>
+                  <RadioGroup name={`target-${bank.id}`} value={chosen.target.kind} disabled={busy}
+                    onValueChange={kind => {
+                      if (kind === 'new') setSelection(setBankTarget(selection, bank.id, { kind: 'new', name: targetName }))
+                      else if (fallbackExisting) setSelection(setBankTarget(selection, bank.id, { kind: 'existing', bankId: fallbackExisting }))
+                    }}>
                   <label>
-                    <input
-                      type="radio"
-                      name={`target-${bank.id}`}
-                      checked={chosen.target.kind === 'new'}
-                      onChange={() => setSelection(setBankTarget(selection, bank.id, { kind: 'new', name: targetName }))}
-                    />
+                    <RadioGroupItem value="new" />
                     <span>Create new question bank</span>
                   </label>
-                  {chosen.target.kind === 'new' && <input
+                  {chosen.target.kind === 'new' && <Input
                     className="bank-import-target-name"
                     aria-label={`New Question Bank name for ${name}`}
                     value={targetName}
@@ -1304,28 +1317,24 @@ export function QuestionBankImportDialog({
                     }}
                   />}
                   <label>
-                    <input
-                      type="radio"
-                      name={`target-${bank.id}`}
-                      checked={chosen.target.kind === 'existing'}
-                      disabled={!fallbackExisting}
-                      onChange={() => fallbackExisting && setSelection(setBankTarget(selection, bank.id, { kind: 'existing', bankId: fallbackExisting }))}
-                    />
+                    <RadioGroupItem value="existing" disabled={!fallbackExisting} />
                     <span>Add to an existing one</span>
                   </label>
-                  {chosen.target.kind === 'existing' && <select
-                    className="bank-import-target-bank"
-                    aria-label={`Existing Question Bank for ${name}`}
+                  {chosen.target.kind === 'existing' && <Select disabled={busy}
                     value={chosen.target.bankId}
-                    onChange={(event) => setSelection(setBankTarget(selection, bank.id, { kind: 'existing', bankId: event.target.value }))}
+                    onValueChange={value => setSelection(setBankTarget(selection, bank.id, { kind: 'existing', bankId: value }))}
                   >
+                    <SelectTrigger className="bank-import-target-bank" aria-label={`Existing Question Bank for ${name}`}><SelectValue /></SelectTrigger>
+                    <SelectContent position="popper"><SelectGroup>
                     {!existingBanks.some(({ id }) => id === (chosen.target as { bankId: string }).bankId) && (
-                      <option value={chosen.target.bankId}>This Question Bank</option>
+                      <SelectItem value={chosen.target.bankId}>This Question Bank</SelectItem>
                     )}
                     {existingBanks.map((existing) => (
-                      <option key={existing.id} value={existing.id}>{existing.name}</option>
+                      <SelectItem key={existing.id} value={existing.id}>{existing.name}</SelectItem>
                     ))}
-                  </select>}
+                    </SelectGroup></SelectContent>
+                  </Select>}
+                  </RadioGroup>
                 </fieldset>}
               </aside>
             })()}
@@ -1391,16 +1400,16 @@ export function QuestionBankImportDialog({
               )}
             </p>
           )}
-          <button
+          <Button variant="outline"
             type="button"
             className="secondary-button"
             disabled={busy}
             onClick={onClose}
           >
             {waiting && !proposal ? 'Close' : 'Cancel'}
-          </button>
+          </Button>
           {proposal && selection && (
-            <button
+            <Button variant="default"
               type="button"
               className="primary-button"
               disabled={busy || !importable || filling}
@@ -1408,10 +1417,10 @@ export function QuestionBankImportDialog({
               onClick={() => void confirm()}
             >
               {phase === 'saving' ? 'Importing…' : mismatch ? 'Import anyway' : 'Import'}
-            </button>
+            </Button>
           )}
         </footer>
-      </section>
-    </div>
+      </Modal>
+    </>
   )
 }

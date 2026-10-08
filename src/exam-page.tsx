@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 // The exam page: what the teacher looks at, and what the printer prints.
 //
 // This is the print Export Adapter: everything on it comes from the Layout Plan
@@ -16,84 +18,6 @@
 // `pages` is state rather than a value computed during render: see
 // `usePaginatedExam`.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode, type RefObject } from 'react'
-import {
-  AnswerKeyEntry,
-  AnswerKeyHeading,
-  AnswerKeySection,
-  PageHeaderContent,
-  PageItemMeasureView,
-  QuestionContent,
-  SectionHeadingContent,
-  WorkSpaceView,
-  type IdentityLineEditor,
-} from './page-item-view'
-import { headerLineOf, type HeaderLine } from './page-header'
-import type { ExamCover } from './page-cover'
-import { CoverPageView } from './cover-page-view'
-import { PaperBookFurniture } from './cover-templates/paper-book'
-import { paperBookAnswersOf } from './cover-templates/paper-book-answers'
-import {
-  LABEL_KINDS,
-  LABEL_BRACKET_LABELS,
-  LABEL_KIND_LABELS,
-  LABEL_SEQUENCE_LABELS,
-  labelStyleOf,
-  offeredBrackets,
-  offeredStyles,
-  type LabelKind,
-  type LabelStyle,
-} from './number-style'
-import { pageContentStyle } from './export-typography'
-import { pageGeometry } from './page-geometry'
-import {
-  US_LETTER,
-  maxWorkSpaceHeight,
-  numberLabelOf,
-  planExport,
-  rowsOfPlanned,
-  unmeasured,
-  type ExportContentSelection,
-  type LayoutPlan,
-  type PageHeader,
-  type PlannedPage,
-  type PageItem,
-  type QuestionItem,
-  type SectionHeadingItem,
-  type PlannedPart,
-  type PlannedQuestion,
-  type PlannedWorkSpace,
-  wordBankLayoutOf,
-} from './export-plan'
-import {
-  DEFAULT_COLUMNS,
-  columnsOf,
-  hasWorkSpace,
-  laidWorkSpaceHeight,
-  rowsIn,
-  storedWorkSpaceHeight,
-  takesWorkSpace,
-  WORK_SPACE_LINE_PITCH,
-  moveToNewSection,
-  questionsInSection,
-  sectionsOf,
-  splitSection,
-  workSpaceOf,
-  type ColumnSetting,
-  type WordBankLayout,
-  type SectionPlacement,
-  type Exam,
-  type Arrangement,
-  type WorkSpace,
-} from './exam'
-import type { Selection } from './use-selection'
-import { selectAllPaneProps, useSelectAll } from './use-select-all'
-import { answerVisibilityNote } from './hidden-answers'
-import { shownIncorrectChoices, shownIncorrectMenuOf, type ShownIncorrectMenu } from './question-menu'
-import type { SectionHeadingChange } from './section-headings'
-import { sectionHeadingStyles } from './export-typography'
-import type { WorkspaceDrag } from './use-workspace-drag'
-import { dropStateOf, type QuestionDropState } from './workspace-drag'
 import {
   AlignJustify,
   ArrowDown,
@@ -105,21 +29,114 @@ import {
   Columns2,
   Copy,
   Ellipsis,
-  EyeOff,
   EllipsisVertical,
+  EyeOff,
   FoldVertical,
+  Heading,
   ListRestart,
   Pencil,
   PencilLine,
-  Heading,
   Rows2,
   SeparatorHorizontal,
   Shuffle,
   SquareDashed,
   X,
 } from 'lucide-react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type PointerEvent as ReactPointerEvent,
+  type RefObject,
+} from 'react'
 import { ColumnLayoutIcon } from './column-layout-icon'
+import {
+  ContextMenu,
+  type MenuItem,
+  type MenuPoint,
+  type MenuSide,
+} from './context-menu'
+import { CoverPageView } from './cover-page-view'
+import { PaperBookFurniture } from './cover-templates/paper-book'
+import { paperBookAnswersOf } from './cover-templates/paper-book-answers'
+import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
+import {
+  DEFAULT_COLUMNS,
+  WORK_SPACE_LINE_PITCH,
+  columnsOf,
+  hasWorkSpace,
+  laidWorkSpaceHeight,
+  moveToNewSection,
+  questionsInSection,
+  rowsIn,
+  sectionsOf,
+  splitSection,
+  storedWorkSpaceHeight,
+  takesWorkSpace,
+  workSpaceOf,
+  type Arrangement,
+  type ColumnSetting,
+  type Exam,
+  type SectionPlacement,
+  type WordBankLayout,
+  type WorkSpace,
+} from './exam'
+import {
+  US_LETTER,
+  maxWorkSpaceHeight,
+  numberLabelOf,
+  planExport,
+  rowsOfPlanned,
+  unmeasured,
+  wordBankLayoutOf,
+  type ExportContentSelection,
+  type LayoutPlan,
+  type PageHeader,
+  type PageItem,
+  type PlannedPage,
+  type PlannedPart,
+  type PlannedQuestion,
+  type PlannedWorkSpace,
+  type QuestionItem,
+  type SectionHeadingItem,
+} from './export-plan'
+import { pageContentStyle, sectionHeadingStyles } from './export-typography'
 import { InsertSectionAboveIcon } from './format-icons'
+import { answerVisibilityNote } from './hidden-answers'
+import {
+  LABEL_BRACKET_LABELS,
+  LABEL_KINDS,
+  LABEL_KIND_LABELS,
+  LABEL_SEQUENCE_LABELS,
+  labelStyleOf,
+  offeredBrackets,
+  offeredStyles,
+  type LabelKind,
+  type LabelStyle,
+} from './number-style'
+import type { ExamCover } from './page-cover'
+import { pageGeometry } from './page-geometry'
+import { headerLineOf, type HeaderLine } from './page-header'
+import {
+  AnswerKeyEntry,
+  AnswerKeyHeading,
+  AnswerKeySection,
+  PageHeaderContent,
+  PageItemMeasureView,
+  QuestionContent,
+  SectionHeadingContent,
+  WorkSpaceView,
+  type IdentityLineEditor,
+} from './page-item-view'
+import {
+  shownIncorrectChoices,
+  shownIncorrectMenuOf,
+  type ShownIncorrectMenu,
+} from './question-menu'
 import {
   NEW_SECTION_BAND,
   SECTION_RULE_OFFSET,
@@ -128,13 +145,11 @@ import {
   sheetBands,
   type SectionBand,
 } from './section-bands'
-import {
-  ContextMenu,
-  type MenuItem,
-  type MenuPoint,
-  type MenuSide,
-} from './context-menu'
-import { domMeasure, imageSourcesOfDocuments } from './dom-measure'
+import type { SectionHeadingChange } from './section-headings'
+import { selectAllPaneProps, useSelectAll } from './use-select-all'
+import type { Selection } from './use-selection'
+import type { WorkspaceDrag } from './use-workspace-drag'
+import { dropStateOf, type QuestionDropState } from './workspace-drag'
 
 /** Every question id across every page, in on-page (number) order. */
 function orderedQuestionIds(pages: readonly PlannedPage[]): string[] {
@@ -581,7 +596,7 @@ function QuestionHandles({
       onClick={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="question-handle menu-handle"
         aria-haspopup="menu"
@@ -596,7 +611,7 @@ function QuestionHandles({
         }}
       >
         <EllipsisVertical />
-      </button>
+      </Button>
     </aside>
   )
 }
@@ -1057,7 +1072,7 @@ function SectionHeadingField({
   }, [autoFocus])
   return (
     <span className="section-heading-field" data-value={value || placeholder}>
-      <textarea
+      <Textarea
         ref={field}
         aria-label={label}
         className="section-heading-input"
@@ -1217,7 +1232,7 @@ function SectionRail({
       onPointerLeave={() => onHover(false)}
     >
       {hidden && (
-        <button
+        <Button variant="plain" size="content"
           type="button"
           className="question-handle"
           aria-label="Add a section heading"
@@ -1226,9 +1241,9 @@ function SectionRail({
           onClick={onRevealTitle}
         >
           <Heading aria-hidden="true" />
-        </button>
+        </Button>
       )}
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="question-handle"
         aria-label="Move section up"
@@ -1237,8 +1252,8 @@ function SectionRail({
         onClick={() => controls.onMove(-1)}
       >
         <ArrowUp aria-hidden="true" />
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="content"
         type="button"
         className="question-handle"
         aria-label="Move section down"
@@ -1247,8 +1262,8 @@ function SectionRail({
         onClick={() => controls.onMove(1)}
       >
         <ArrowDown aria-hidden="true" />
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="content"
         type="button"
         className="question-handle"
         aria-label="Delete section"
@@ -1257,8 +1272,8 @@ function SectionRail({
         onClick={controls.onDelete}
       >
         <X aria-hidden="true" />
-      </button>
-      <button
+      </Button>
+      <Button variant="plain" size="content"
         type="button"
         className="question-handle"
         aria-label="More section actions"
@@ -1275,7 +1290,7 @@ function SectionRail({
         }}
       >
         <Ellipsis aria-hidden="true" />
-      </button>
+      </Button>
     </div>
   )
 }

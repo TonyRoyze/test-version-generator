@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
-import type { PendingImageOccurrence, PendingImageResolution } from './pending-images'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import { useRef, useState } from 'react'
+import type {
+  PendingImageOccurrence,
+  PendingImageResolution,
+} from './pending-images'
 import { ResolveImages } from './resolve-images'
-import { prefilledPictures, resolutionOf, type Resolutions, type ResolvingSource } from './resolved-pictures'
+import {
+  prefilledPictures,
+  resolutionOf,
+  type Resolutions,
+  type ResolvingSource,
+} from './resolved-pictures'
 
 /**
  * Resolve Images reopened after an import, for Pending Images that remain.
@@ -24,10 +34,8 @@ export function ResolveImagesDialog({
   const [filling, setFilling] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const dialog = useRef<HTMLElement>(null)
-  useEffect(() => {
-    requestAnimationFrame(() => dialog.current?.querySelector<HTMLElement>('input, button')?.focus())
-  }, [])
+  const dialog = useRef<HTMLDivElement>(null)
+
 
   const supply = async (file: File) => {
     setError(null)
@@ -58,18 +66,8 @@ export function ResolveImagesDialog({
   }
 
   return (
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onKeyDown={(event) => {
-        // Escape closes this dialog only, not the editor beneath it.
-        if (event.key === 'Escape') {
-          event.stopPropagation()
-          if (!saving) onClose()
-        }
-      }}
-    >
-      <section ref={dialog} className="bank-import-dialog bank-import-dialog--resolve resolve-images-dialog" role="dialog" aria-modal="true" aria-label="Resolve Images">
+    <>
+      <Modal title={"Resolve Images"} onClose={onClose} busy={saving} ref={dialog} className="bank-import-dialog bank-import-dialog--resolve resolve-images-dialog"   aria-label="Resolve Images">
         {error && <p className="home-error" role="alert">{error}</p>}
         <div className="bank-import-resolve">
           <ResolveImages
@@ -82,12 +80,12 @@ export function ResolveImagesDialog({
           />
         </div>
         <footer className="dialog-actions">
-          <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Cancel</button>
-          <button type="button" className="primary-button" disabled={saving || filling || chosen.size === 0} onClick={() => void done()}>
+          <Button variant="outline" type="button" className="secondary-button" disabled={saving} onClick={onClose}>Cancel</Button>
+          <Button variant="default" type="button" className="primary-button" disabled={saving || filling || chosen.size === 0} onClick={() => void done()}>
             {saving ? 'Saving…' : 'Use these pictures'}
-          </button>
+          </Button>
         </footer>
-      </section>
-    </div>
+      </Modal>
+    </>
   )
 }

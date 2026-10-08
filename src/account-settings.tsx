@@ -1,14 +1,24 @@
-import { LockKeyhole } from 'lucide-react'
-import { HeroArt, LandingHeader } from './landing-page'
-import { Footer, Link } from './site-chrome'
-import './login-page.css'
-import { useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import type { User } from '@supabase/supabase-js'
-import { supabase, initialAuthAction, authCallbackError } from './supabase'
-import { CloudConflict, cloudStartupError, canImportBrowserWork, reloadCloudAccount, syncAccount, snapshotHasWork, type CloudHead } from './cloud-account'
+import { LockKeyhole } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { accountBackupBlob, captureAccount } from './account-backup'
-import { LOCAL_STORAGE_NAME } from './storage-schema'
 import './account-menu.css'
+import {
+  canImportBrowserWork,
+  CloudConflict,
+  cloudStartupError,
+  reloadCloudAccount,
+  snapshotHasWork,
+  syncAccount,
+  type CloudHead,
+} from './cloud-account'
+import { HeroArt, LandingHeader } from './landing-page'
+import './login-page.css'
+import { Footer, Link } from './site-chrome'
+import { LOCAL_STORAGE_NAME } from './storage-schema'
+import { authCallbackError, initialAuthAction, supabase } from './supabase'
 
 function messageOf(error: unknown) {
   return error instanceof Error ? error.message : 'The request failed. Please try again.'
@@ -86,37 +96,37 @@ export function AccountSettings({ passwordSetup = false, standalone = false }: {
         <p>Signed in as <strong>{user.email}</strong></p>
         <p>Work is saved in this browser as you edit. Use Sync now before switching devices to save Exams, Question Banks, Working Copies, images, and Export History to your private cloud account.</p>
         <div className="account-actions">
-          <button className="primary-button" disabled={busy} onClick={() => void sync()}>{busy ? 'Working…' : 'Sync now'}</button>
-          <button className="secondary-button" disabled={busy} onClick={() => { setMode('password'); setPassword(''); setConfirmation('') }}>Change password</button>
-          <button className="secondary-button" disabled={busy} onClick={() => void run(async () => {
+          <Button variant="default" className="primary-button" disabled={busy} onClick={() => void sync()}>{busy ? 'Working…' : 'Sync now'}</Button>
+          <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => { setMode('password'); setPassword(''); setConfirmation('') }}>Change password</Button>
+          <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => void run(async () => {
             const { error } = await supabase!.auth.signOut({ scope: 'local' })
             if (error) throw error
             window.location.replace('/settings')
-          })}>Sign out</button>
+          })}>Sign out</Button>
         </div>
         <p style={{ marginTop: '10px' }}>Signing out keeps this account's local work on this device. Sync first to make it available elsewhere.</p>
         {canImport && <div>
           <p>This browser has work from before login. Import it into this empty account, then sync to upload it. The original browser copy is retained.</p>
-          <button className="secondary-button" disabled={busy} onClick={() => reloadCloudAccount(user.id, 'import-local')}>Import existing browser work</button>
+          <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => reloadCloudAccount(user.id, 'import-local')}>Import existing browser work</Button>
         </div>}
         {conflict && <div role="alert" className="cloud-conflict">
           <h3>Another device has saved changes</h3>
           <p>Both copies are preserved. Download a backup before replacing either copy. Changes are not merged automatically.</p>
           <div className="account-actions">
-            <button className="secondary-button" disabled={busy} onClick={() => void download()}>Download this device’s copy</button>
-            <button className="secondary-button" disabled={busy} onClick={() => reloadCloudAccount(user.id, 'download')}>Replace this device with cloud copy</button>
-            <button className="secondary-button" disabled={busy} onClick={() => void sync(conflict)}>Replace cloud with this device’s copy</button>
+            <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => void download()}>Download this device’s copy</Button>
+            <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => reloadCloudAccount(user.id, 'download')}>Replace this device with cloud copy</Button>
+            <Button variant="outline" className="secondary-button" disabled={busy} onClick={() => void sync(conflict)}>Replace cloud with this device’s copy</Button>
           </div>
         </div>}
       </> : <form className="account-login" onSubmit={event => { event.preventDefault(); void authenticate() }}>
         <p>{mode === 'password' ? 'Choose a password for your account.' : mode === 'reset' ? 'Enter your account email to request a password-reset link.' : 'Sign in with your invited account to access your private workspace.'}</p>
-        {mode !== 'password' && <label>Email<input type="email" name="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} disabled={busy} /></label>}
-        {mode !== 'reset' && <label>{mode === 'password' ? 'New password' : 'Password'}<input type="password" name="password" autoComplete={mode === 'password' ? 'new-password' : 'current-password'} required minLength={mode === 'password' ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} /></label>}
-        {mode === 'password' && <label>Confirm password<input type="password" name="confirmation" autoComplete="new-password" required minLength={8} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} /></label>}
+        {mode !== 'password' && <label>Email<Input type="email" name="email" autoComplete="username" required value={email} onChange={event => setEmail(event.target.value)} disabled={busy} /></label>}
+        {mode !== 'reset' && <label>{mode === 'password' ? 'New password' : 'Password'}<Input type="password" name="password" autoComplete={mode === 'password' ? 'new-password' : 'current-password'} required minLength={mode === 'password' ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} /></label>}
+        {mode === 'password' && <label>Confirm password<Input type="password" name="confirmation" autoComplete="new-password" required minLength={8} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} /></label>}
         <div className="account-actions">
-          <button className="primary-button" disabled={busy}>{busy ? 'Working…' : mode === 'reset' ? 'Send reset link' : mode === 'password' ? 'Save password' : 'Sign in'}</button>
-          {mode !== 'password' && <button type="button" className="secondary-button" disabled={busy} onClick={() => { setMode(mode === 'reset' ? 'login' : 'reset'); setError(''); setNotice('') }}>{mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}</button>}
-          {mode === 'password' && !passwordSetup && <button type="button" className="secondary-button" disabled={busy} onClick={() => setMode('login')}>Cancel</button>}
+          <Button variant="default" className="primary-button" disabled={busy}>{busy ? 'Working…' : mode === 'reset' ? 'Send reset link' : mode === 'password' ? 'Save password' : 'Sign in'}</Button>
+          {mode !== 'password' && <Button variant="outline" type="button" className="secondary-button" disabled={busy} onClick={() => { setMode(mode === 'reset' ? 'login' : 'reset'); setError(''); setNotice('') }}>{mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}</Button>}
+          {mode === 'password' && !passwordSetup && <Button variant="outline" type="button" className="secondary-button" disabled={busy} onClick={() => setMode('login')}>Cancel</Button>}
         </div>
       </form>}
     {notice && <p role="status" className="account-ok">{notice}</p>}

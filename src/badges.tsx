@@ -1,11 +1,12 @@
+import { Badge } from '@/components/ui/badge'
 // The coloured marks a question's classification wears: its Difficulty and its
 // Topics. One module, because the popup that sets them and the Question Bank
 // row that shows them must agree — a Topic that is one colour in the front
 // matter and another in the bank would read as two Topics.
 
 import { SignalHigh, SignalLow, SignalMedium, Tag } from 'lucide-react'
-import { DIFFICULTY_LABELS, type Difficulty } from './exam'
 import type { ReactNode } from 'react'
+import { DIFFICULTY_LABELS, type Difficulty } from './exam'
 import { topicTint } from './topic-tint'
 
 /** Difficulty is ordered, so it is drawn as a rising signal rather than three
@@ -19,10 +20,10 @@ const DIFFICULTY_ICONS: Record<Difficulty, ReactNode> = {
 
 export function DifficultyBadge({ difficulty }: { difficulty: Difficulty }) {
   return (
-    <span className="badge badge-difficulty" data-difficulty={difficulty}>
+    <Badge variant="outline" className="badge badge-difficulty" data-difficulty={difficulty}>
       {DIFFICULTY_ICONS[difficulty]}
       {DIFFICULTY_LABELS[difficulty]}
-    </span>
+    </Badge>
   )
 }
 
@@ -38,8 +39,8 @@ export function TopicSwatch({ topic }: { topic: string }) {
 
 export function TopicBadge({ topic }: { topic: string }) {
   return (
-    <span className="badge badge-topic" data-tint={topicTint(topic)}>
+    <Badge variant="outline" className="badge badge-topic" data-tint={topicTint(topic)}>
       {topic}
-    </span>
+    </Badge>
   )
 }

@@ -1,25 +1,25 @@
-import { SignedOutApp } from './signed-out-app'
-import { supabase, initialAuthAction } from './supabase'
-import { LoginPage } from './account-settings'
-import { selectAccountStorage, STORAGE_NAME } from './storage-schema'
-import { prepareCloudAccount } from './cloud-account'
+import { Button } from '@/components/ui/button'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MilkdownProvider } from '@milkdown/react'
+import { applyStagedRestore } from './account-backup'
+import { LoginPage } from './account-settings'
 import App from './App'
-import { loadExamStore } from './exam-store'
+import { prepareCloudAccount } from './cloud-account'
 import { domMeasure } from './dom-measure'
+import { persistentStorageStatus } from './durable-storage'
+import { loadExamStore } from './exam-store'
 import { createExamWorkspaceService } from './exam-workspaces'
+import { expireWaitingImports } from './import-history'
+import { PopOverProvider } from './question-bank-pop-over'
 import {
   createQuestionBankWorkspaceService,
   type QuestionBankResource,
 } from './question-bank-workspaces'
-import { persistentStorageStatus } from './durable-storage'
 import { questionBankCollection } from './resource-collections'
-import { applyStagedRestore } from './account-backup'
-import { expireWaitingImports } from './import-history'
-import { PopOverProvider } from './question-bank-pop-over'
+import { SignedOutApp } from './signed-out-app'
+import { selectAccountStorage, STORAGE_NAME } from './storage-schema'
 import './styles.css'
+import { initialAuthAction, supabase } from './supabase'
 
 const root = createRoot(document.getElementById('root')!)
 
@@ -58,7 +58,7 @@ async function start() {
       }).catch(reject)
     })
     if (!acquired) {
-      root.render(<main className="site-prose login-page"><h1>Account open in another tab</h1><p>Close the other tab, then reload to edit this account here.</p><button onClick={() => window.location.reload()}>Reload</button></main>)
+      root.render(<main className="site-prose login-page"><h1>Account open in another tab</h1><p>Close the other tab, then reload to edit this account here.</p><Button variant="plain" size="content" onClick={() => window.location.reload()}>Reload</Button></main>)
       return
     }
     window.addEventListener('pagehide', () => release(), { once: true })
@@ -133,8 +133,8 @@ async function start() {
     persistentStorageStatus(),
   ])
   const collection = await questionBankCollection(banks, bankWorkspaces, workspaces)
-  root.render(<StrictMode><MilkdownProvider><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></MilkdownProvider></StrictMode>)
+  root.render(<StrictMode><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></StrictMode>)
 }
 void start().catch(error => {
-  root.render(<main className="site-prose login-page"><h1>Could not open your workspace</h1><p role="alert">{error instanceof Error ? error.message : 'Please try again.'}</p><button onClick={() => window.location.reload()}>Retry</button><button onClick={() => void supabase?.auth.signOut({ scope: 'local' }).then(() => window.location.reload())}>Sign out</button></main>)
+  root.render(<main className="site-prose login-page"><h1>Could not open your workspace</h1><p role="alert">{error instanceof Error ? error.message : 'Please try again.'}</p><Button variant="plain" size="content" onClick={() => window.location.reload()}>Retry</Button><Button variant="plain" size="content" onClick={() => void supabase?.auth.signOut({ scope: 'local' }).then(() => window.location.reload())}>Sign out</Button></main>)
 })

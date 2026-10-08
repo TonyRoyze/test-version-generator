@@ -1,5 +1,13 @@
+import { Button } from '@/components/ui/button'
+import {
+  Check,
+  ChevronDown,
+  Download,
+  FileText,
+  ImageIcon,
+  UploadCloud,
+} from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { Check, ChevronDown, Download, FileText, ImageIcon, UploadCloud } from 'lucide-react'
 import extractInstructions from 'virtual:extract-instructions'
 import { fillImageTags } from './image-tag-list'
 import type { WaitingImport } from './import-history'
@@ -46,7 +54,7 @@ function StepButton({
   /** Set for a step that opens a menu: whether it is open. */
   expanded?: boolean
 }) {
-  return <button
+  return <Button variant="plain" size="content"
     type="button"
     className="source-step"
     aria-label={title}
@@ -61,7 +69,7 @@ function StepButton({
       <span>{text}</span>
     </span>
     <span className="source-step-icon" aria-hidden="true">{icon}</span>
-  </button>
+  </Button>
 }
 
 export function SourceDocumentSteps({
@@ -222,9 +230,9 @@ export function SourceDocumentSteps({
         />
         {choosing && <div ref={menu} className="source-step-menu" role="menu" aria-label="Open an AI assistant">
           {ASSISTANTS.map((assistant) => (
-            <button key={assistant.id} type="button" role="menuitem" onClick={() => open(assistant)}>
+            <Button variant="plain" size="content" key={assistant.id} type="button" role="menuitem" onClick={() => open(assistant)}>
               {assistant.name}
-            </button>
+            </Button>
           ))}
         </div>}
       </li>
@@ -265,7 +273,7 @@ export function SourceDocumentSteps({
       <a href={supportMailto('A file type for Test Parrot to convert', { askForFile: true })}>Email us your file</a>.
     </p>
     {onStartOver && <p className="source-steps-foot">
-      <button type="button" className="link-button" disabled={busy} onClick={onStartOver}>Start over with another file</button>
+      <Button variant="plain" size="content" type="button" className="link-button" disabled={busy} onClick={onStartOver}>Start over with another file</Button>
     </p>}
   </section>
 }

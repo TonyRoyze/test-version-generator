@@ -1,8 +1,9 @@
+import { Button } from '@/components/ui/button'
 // The Copy action beside Edit, and what it says once it has run: a tick for
 // a moment, or why it did not. The Question Bank Pop-over's cards say the
 // same through `useQuestionCopy`.
 
-import { CircleAlert, Copy, Check } from 'lucide-react'
+import { Check, CircleAlert, Copy } from 'lucide-react'
 import type { Question } from './exam'
 import { COPY_FAILED_MESSAGE, type CopyState } from './use-question-copy'
 
@@ -21,7 +22,7 @@ export function CopyQuestionButton({
   className: string
 }) {
   const label = state === 'copied' ? 'Copied' : state === 'failed' ? COPY_FAILED_MESSAGE : `Copy ${name}`
-  return <button
+  return <Button variant="plain" size="content"
     type="button"
     className={className}
     aria-label={label}
@@ -34,5 +35,5 @@ export function CopyQuestionButton({
   >
     {state === 'copied' ? <Check aria-hidden="true" /> : state === 'failed' ? <CircleAlert aria-hidden="true" /> : <Copy aria-hidden="true" />}
     <span className="sr-only" role="status">{state === 'idle' ? '' : label}</span>
-  </button>
+  </Button>
 }

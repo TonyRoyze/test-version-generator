@@ -1,4 +1,13 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import { DocView } from './doc-view'
 import {
   RECORD_PART_TYPE_LABELS,
@@ -59,7 +68,7 @@ export function QuestionBankExportDialog({
   onClose: () => void
 }) {
   const titleId = useId()
-  const dialog = useRef<HTMLElement>(null)
+  const dialog = useRef<HTMLDivElement>(null)
   const [prepared, setPrepared] = useState<PreparedQuestionBankExport | null>(
     null,
   )
@@ -89,42 +98,7 @@ export function QuestionBankExportDialog({
     }
   }, [bank])
 
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    requestAnimationFrame(() =>
-      dialog.current?.querySelector<HTMLElement>('button')?.focus(),
-    )
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !exportingRef.current) {
-        event.preventDefault()
-        onClose()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = Array.from(
-        dialog.current?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled)',
-        ) ?? [],
-      )
-      if (controls.length === 0) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', keydown)
-    return () => {
-      document.removeEventListener('keydown', keydown)
-      requestAnimationFrame(() => {
-        if (previous?.isConnected) previous.focus()
-      })
-    }
-  }, [onClose])
+
 
   const download = async () => {
     if (!prepared || exporting) return
@@ -162,12 +136,12 @@ export function QuestionBankExportDialog({
   }
 
   return (
-    <div className="dialog-backdrop" role="presentation">
-      <section
+    <>
+      <Modal title={"Export Question Bank"} onClose={onClose} busy={exporting}
         ref={dialog}
         className="question-bank-export-dialog"
-        role="dialog"
-        aria-modal="true"
+
+
         aria-labelledby={titleId}
         aria-busy={!prepared && !error ? true : exporting}
       >
@@ -201,25 +175,25 @@ export function QuestionBankExportDialog({
           </div>
         )}
         <footer className="dialog-actions">
-          <button
+          <Button variant="outline"
             type="button"
             className="secondary-button"
             disabled={exporting}
             onClick={onClose}
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="default"
             type="button"
             className="primary-button"
             disabled={!prepared || exporting}
             onClick={() => void download()}
           >
             {exporting ? 'Creating PDF…' : 'Download PDF'}
-          </button>
+          </Button>
         </footer>
-      </section>
-    </div>
+      </Modal>
+    </>
   )
 }
 
@@ -305,10 +279,10 @@ function BankFilePreview({ record }: { record: QuestionBankRecord }) {
         <ul>
           {outline.sections.map((section) => (
             <li key={section.type}>
-              <button type="button" className="question-bank-file-type" onClick={() => jump(sectionKey(section.type))}>
+              <Button variant="plain" size="content" type="button" className="question-bank-file-type" onClick={() => jump(sectionKey(section.type))}>
                 <span>{RECORD_TYPE_LABELS[section.type]}</span>
                 <span>{section.count.toLocaleString()}</span>
-              </button>
+              </Button>
               <TopicBubbles section={section} onJump={jump} />
             </li>
           ))}
@@ -360,7 +334,7 @@ function TopicBubbles({ section, onJump }: { section: OutlineSection; onJump: (k
   return (
     <div className="question-bank-file-bubbles">
       {section.groups.map((group) => (
-        <button
+        <Button variant="plain" size="content"
           key={group.topic ?? ''}
           type="button"
           className={group.topic === null ? 'badge' : 'badge badge-topic'}
@@ -369,7 +343,7 @@ function TopicBubbles({ section, onJump }: { section: OutlineSection; onJump: (k
         >
           {group.topic ?? NO_TOPIC_LABEL}
           <strong>{group.questions.length.toLocaleString()}</strong>
-        </button>
+        </Button>
       ))}
     </div>
   )

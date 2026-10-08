@@ -18,7 +18,7 @@ const field = (page: Page, label: string) =>
 
 /** The box inside an open front-matter row. */
 const search = (page: Page, label: string) =>
-  dialog(page).getByRole('textbox', { name: `Filter ${label}` })
+  page.getByRole('combobox', { name: `Filter ${label}` })
 
 /** The bank's New question, and the Question Section it asks for. */
 async function newQuestion(page: Page, type = 'Multiple choice') {
@@ -30,6 +30,7 @@ async function newQuestion(page: Page, type = 'Multiple choice') {
 test('a question is classified and saved with its Difficulty and Topics', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page)
   await page.keyboard.type('Which gas do plants take in?')
 
@@ -38,7 +39,7 @@ test('a question is classified and saved with its Difficulty and Topics', async 
   await expect(field(page, 'Topics')).toContainText('Empty')
 
   await field(page, 'Difficulty').click()
-  await page.getByRole('button', { name: 'Hard', exact: true }).click()
+  await page.getByRole('option', { name: 'Hard', exact: true }).click()
   // Single-select: choosing closes the row, and the value is on it.
   await expect(search(page, 'Difficulty')).toHaveCount(0)
   await expect(field(page, 'Difficulty')).toContainText('Hard')
@@ -65,6 +66,7 @@ test('a question is classified and saved with its Difficulty and Topics', async 
 test('typing filters the Topics on offer, and writes one that is not there', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
 
   // A first question puts two Topics into the bank for a second one to reuse.
   await newQuestion(page)
@@ -81,9 +83,9 @@ test('typing filters the Topics on offer, and writes one that is not there', asy
   await field(page, 'Topics').click()
 
   // What the bank already knows is offered, and typing narrows it.
-  await expect(dialog(page).getByRole('button', { name: 'Cell division' })).toBeVisible()
+  await expect(page.getByRole('option', { name: 'Cell division' })).toBeVisible()
   await search(page, 'Topics').fill('mito')
-  await expect(dialog(page).getByRole('button', { name: 'Cell division' })).toHaveCount(0)
+  await expect(page.getByRole('option', { name: 'Cell division' })).toHaveCount(0)
   // Enter takes the Topic the typing found, rather than writing a second one
   // spelled the way it was typed: part of a name is how a name is reached.
   await search(page, 'Topics').press('Enter')
@@ -104,6 +106,7 @@ test('typing filters the Topics on offer, and writes one that is not there', asy
 test('an unclassified question still saves, stem and all', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
 
   // Nothing chosen anywhere: the permissive save behaviour is unchanged by
   // Difficulty and Topics being available.
@@ -116,7 +119,8 @@ test('an unclassified question still saves, stem and all', async ({ page }) => {
 
 test('a Short Answer question authors and restores its Suggested Answer inline', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('button', { name: /^(New Exam|Create your first Exam)$/ }).first().click()
+  await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page, 'Short answer')
 
   const editor = dialog(page).locator('.ProseMirror')
@@ -137,6 +141,7 @@ test('a Short Answer question authors and restores its Suggested Answer inline',
 test('a question is created as a Short Answer question, and stays one', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page, 'Short answer')
 
   // The type is stated rather than offered: it was settled at creation.
@@ -151,6 +156,7 @@ test('a question is created as a Short Answer question, and stays one', async ({
 test('Escape closes the front matter first, and then the popup', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page)
 
   // Escape belongs to the open row while there is one, and to the popup after.
@@ -165,7 +171,7 @@ test('Escape closes the front matter first, and then the popup', async ({ page }
   // The same after a value has been chosen, which closes the row on its own.
   await newQuestion(page)
   await field(page, 'Difficulty').click()
-  await page.getByRole('button', { name: 'Hard', exact: true }).click()
+  await page.getByRole('option', { name: 'Hard', exact: true }).click()
   await page.keyboard.press('Escape')
   await expect(dialog(page)).toBeHidden()
 })
@@ -173,6 +179,7 @@ test('Escape closes the front matter first, and then the popup', async ({ page }
 test('the type is stated in the front matter, above the question it classifies', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page, 'Short answer')
 
   // Front matter, not header chrome: the type is the first thing the question
@@ -185,20 +192,22 @@ test('the type is stated in the front matter, above the question it classifies',
 test('choosing a Difficulty again clears it, which is what a Clear button was for', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page)
 
   await field(page, 'Difficulty').click()
-  await page.getByRole('button', { name: 'Medium', exact: true }).click()
+  await page.getByRole('option', { name: 'Medium', exact: true }).click()
   await expect(field(page, 'Difficulty')).toContainText('Medium')
 
   await field(page, 'Difficulty').click()
-  await page.getByRole('button', { name: 'Medium', exact: true }).click()
+  await page.getByRole('option', { name: 'Medium', exact: true }).click()
   await expect(field(page, 'Difficulty')).toContainText('Empty')
 })
 
 test('Escape leaves the Topics list without leaving the popup', async ({ page }) => {
   await page.goto('/')
   await page.getByRole('button', { name: 'New Exam' }).first().click()
+  await page.getByRole('button', { name: 'New Question Bank', exact: true }).click()
   await newQuestion(page)
 
   await field(page, 'Topics').click()

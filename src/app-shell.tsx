@@ -1,7 +1,26 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { Modal } from '@/components/modal'
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb'
+import { Button } from '@/components/ui/button'
+import {
+  CircleQuestionMark,
+  FileText,
+  House,
+  Import,
+  Library,
+  PanelsTopLeft,
+  Settings,
+  X,
+} from 'lucide-react'
 import type { ReactNode } from 'react'
+import { Fragment, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { CircleQuestionMark, FileText, House, Import, Library, PanelsTopLeft, Settings, X } from 'lucide-react'
 import { AccountBadge, SETTINGS_PATH } from './account-menu'
 import type { PersistentStorageStatus } from './durable-storage'
 import { Footer, Link } from './site-chrome'
@@ -32,61 +51,27 @@ const NAV = [
  */
 function HelpDialog({ onClose }: { onClose: () => void }) {
   const titleId = useId()
-  const dialog = useRef<HTMLElement>(null)
-  const onCloseRef = useRef(onClose)
-  useEffect(() => { onCloseRef.current = onClose }, [onClose])
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null
-    const focusable = () => Array.from(dialog.current?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? [])
-    requestAnimationFrame(() => focusable()[0]?.focus())
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        onCloseRef.current()
-        return
-      }
-      if (event.key !== 'Tab') return
-      const controls = focusable()
-      if (controls.length === 0) return
-      const first = controls[0]!
-      const last = controls.at(-1)!
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      requestAnimationFrame(() => { if (previous?.isConnected) previous.focus() })
-    }
-  }, [])
+  const dialog = useRef<HTMLDivElement>(null)
+
   return createPortal(
-    <div
-      className="dialog-backdrop"
-      role="presentation"
-      onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}
-    >
-      <section
+    <>
+      <Modal title={"Need a hand?"} onClose={onClose}
         ref={dialog}
         className="help-dialog"
-        role="dialog"
-        aria-modal="true"
+
+
         aria-labelledby={titleId}
       >
         <header className="resource-picker-header">
           <h2 id={titleId}>Need a hand?</h2>
-          <button type="button" className="question-bank-action" aria-label="Close help" onClick={onClose}><X /></button>
+          <Button variant="ghost" size="icon-sm" type="button" className="question-bank-action" aria-label="Close help" onClick={onClose}><X /></Button>
         </header>
         <p>
           If you’re running into trouble or have suggestions, email us at{' '}
           <a href={`mailto:${SUPPORT_EMAIL}?subject=Test%20Parrot`}>{SUPPORT_EMAIL}</a>.
         </p>
-      </section>
-    </div>,
+      </Modal>
+    </>,
     document.body,
   )
 }
@@ -95,7 +80,7 @@ function HelpButton() {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="help-button"
         aria-label="Help"
@@ -103,7 +88,7 @@ function HelpButton() {
         onClick={() => setOpen(true)}
       >
         <CircleQuestionMark aria-hidden="true" />
-      </button>
+      </Button>
       {open && <HelpDialog onClose={() => setOpen(false)} />}
     </>
   )
@@ -159,24 +144,18 @@ export function AppShell({
       </aside>
       <div className="app-frame">
         <header className="app-topbar">
-          <nav aria-label="Breadcrumb">
-            <ol className="breadcrumbs">
-              {crumbs.map((crumb, index) => {
-                const last = index === crumbs.length - 1
-                return (
-                  <li key={crumb.label}>
-                    {crumb.href && !last ? (
-                      <Link href={crumb.href}>{crumb.label}</Link>
-                    ) : (
-                      <span {...(last ? { 'aria-current': 'page' as const } : {})}>
-                        {crumb.label}
-                      </span>
-                    )}
-                  </li>
-                )
-              })}
-            </ol>
-          </nav>
+          <Breadcrumb aria-label="Breadcrumb">
+            <BreadcrumbList className="breadcrumbs">
+              {crumbs.map((crumb, index) => <Fragment key={crumb.label}>
+                {index > 0 && <BreadcrumbSeparator>/</BreadcrumbSeparator>}
+                <BreadcrumbItem>
+                  {crumb.href && index !== crumbs.length - 1
+                    ? <BreadcrumbLink asChild><Link href={crumb.href}>{crumb.label}</Link></BreadcrumbLink>
+                    : <BreadcrumbPage>{crumb.label}</BreadcrumbPage>}
+                </BreadcrumbItem>
+              </Fragment>)}
+            </BreadcrumbList>
+          </Breadcrumb>
           <div className="app-topbar-actions">
             {actions}
             <AccountBadge status={persistentStorage} />

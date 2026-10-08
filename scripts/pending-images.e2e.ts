@@ -90,7 +90,9 @@ test('a converted test gets its pictures from the teacher’s own PDF', async ({
   const pictureIn = (question: string) => preview.getByRole('button', { name: new RegExp(`^${question}: `) })
   await expect(pictureIn('Question 1')).toHaveAccessibleName('Question 1: IMG 1 from unit-test.pdf. Change picture')
   await expect(pictureIn('Question 1')).toContainText('Detected image · IMG 1')
-  await expect(pictureIn('Question 1').locator('img')).toHaveAttribute('src', /^data:image\/png;base64,/)
+  const busPicture = pictureIn('Question 1').getByRole('img', { name: 'Bus routes, 2020' })
+  await expect(busPicture).toBeVisible()
+  await expect.poll(() => busPicture.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
   await expect(pictureIn('Question 3')).toContainText('Detected image · IMG 2')
   await expect(pictureIn('Question 4')).toHaveAccessibleName('Question 4: picture needed. Change picture')
   await expect(pictureIn('Question 4').getByRole('img', { name: 'Picture needed: page 2' })).toBeVisible()
@@ -139,7 +141,7 @@ test('a converted test gets its pictures from the teacher’s own PDF', async ({
   await page.goto('/imports')
   await expect(page.getByRole('region', { name: 'Pending' })).toHaveCount(0)
   const importedRow = page.getByRole('region', { name: 'History' }).getByRole('listitem', { name: 'unit-test.pdf' })
-  await expect(importedRow).toContainText('Imported')
+  await expect(importedRow).toBeVisible()
   await expect(importedRow).toContainText('5 Questions')
   await expect(importedRow).toContainText('1 picture still needed')
   await importedRow.getByRole('button', { name: 'unit-test.pdf actions' }).click()
@@ -207,6 +209,6 @@ test('a converted test gets its pictures from the teacher’s own PDF', async ({
 
   // With its last picture added, the import needs nothing more.
   await page.goto('/imports')
-  await expect(page.getByRole('listitem', { name: 'unit-test.pdf' })).toContainText('Imported')
+  await expect(page.getByRole('region', { name: 'History' }).getByRole('listitem', { name: 'unit-test.pdf' })).toBeVisible()
   await expect(page.getByRole('listitem', { name: 'unit-test.pdf' })).not.toContainText('still needed')
 })

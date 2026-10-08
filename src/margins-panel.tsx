@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 // The Exam's Page Margins, set from the Format menu (ADR-0039).
 //
 // Shaped like a design tool's inspector: one number field sets all four sides
@@ -15,15 +17,22 @@
 // press outside it.
 
 import {
+  PanelBottom,
+  PanelLeft,
+  PanelRight,
+  PanelTop,
+  SquareDashed,
+  X,
+} from 'lucide-react'
+import {
   useEffect,
   useLayoutEffect,
   useRef,
   useState,
-  type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type PointerEvent as ReactPointerEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { PanelBottom, PanelLeft, PanelRight, PanelTop, SquareDashed, X } from 'lucide-react'
 import type { MenuPoint } from './context-menu'
 import { MarginsIcon } from './format-icons'
 import {
@@ -38,7 +47,13 @@ import {
   type MarginSide,
   type PageMargins,
 } from './page-margins'
-import { scrubRaw, scrubValue, startsScrub, steppedValue, type ScrubRange } from './scrub-number'
+import {
+  scrubRaw,
+  scrubValue,
+  startsScrub,
+  steppedValue,
+  type ScrubRange,
+} from './scrub-number'
 
 const SIDE_ICONS: Record<MarginSide, ReactNode> = {
   top: <PanelTop />,
@@ -177,7 +192,7 @@ function MarginControl({
       </span>
       <span className="margins-field">
         <span className="margins-row-icon" aria-hidden="true" {...scrubHandlers}>{icon}</span>
-        <input
+        <Input
           ref={input}
           type="text"
           inputMode="decimal"
@@ -279,14 +294,14 @@ export function MarginsPanel({
           <MarginsIcon className="margins-panel-icon" />
           Margins
         </span>
-        <button
+        <Button variant="plain" size="content"
           type="button"
           className="margins-panel-close"
           aria-label="Close margins"
           onClick={onClose}
         >
           <X aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       <div className="margins-combined">
         <MarginControl
@@ -299,7 +314,7 @@ export function MarginsPanel({
           disabled={disabled}
           onChange={(inches, continuing) => onChange(MARGIN_SIDES, inches, continuing)}
         />
-        <button
+        <Button variant="plain" size="content"
           type="button"
           className="margins-expand"
           aria-label="Set each side"
@@ -309,7 +324,7 @@ export function MarginsPanel({
           onClick={() => setExpanded((open) => !open)}
         >
           <SquareDashed aria-hidden="true" />
-        </button>
+        </Button>
       </div>
       {expanded && (
         <div className="margins-sides" role="group" aria-label="Each side">

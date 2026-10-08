@@ -1,18 +1,45 @@
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 // One Question in the Question Bank Pop-over: drawn small, laid out as it will
 // land in the document — its answer columns, where its Word Bank goes, the
 // lines a written answer is left — with the controls that change that layout
 // for this copy only (ADR-0030). A Multipart question shows its shared stem and
 // then each Part, each with its own layout; the Question travels whole.
 
-import { useLayoutEffect, useRef, type DragEvent, type MouseEvent, type ReactNode } from 'react'
-import { ColumnLayoutIcon } from './column-layout-icon'
+import {
+  useLayoutEffect,
+  useRef,
+  useState,
+  type DragEvent,
+  type MouseEvent,
+  type ReactNode,
+} from 'react'
 import { DifficultyBadge } from './badges'
+import { ColumnLayoutIcon } from './column-layout-icon'
 import { DocView } from './doc-view'
-import { SECTION_LABELS, choicesOf, partsOf, promptsOf, type ColumnSetting, type Question } from './exam'
+import {
+  SECTION_LABELS,
+  choicesOf,
+  partsOf,
+  promptsOf,
+  type ColumnSetting,
+  type Question,
+} from './exam'
 import { layOutColumns } from './export-plan'
 import { bankLetter } from './matching'
+import {
+  defaultWordBank,
+  type CopyFormat,
+  type CopyPartFormat,
+} from './question-copy'
 import { stemNodesOf, type ProseMirrorJSON } from './question-doc'
-import { defaultWordBank, type CopyFormat, type CopyPartFormat } from './question-copy'
 
 const childrenOf = (node: ProseMirrorJSON): ProseMirrorJSON[] =>
   Array.isArray(node.content) ? (node.content as ProseMirrorJSON[]) : []
@@ -44,22 +71,20 @@ function FormatSelect<T extends string | number>({
   options: readonly { value: T; label: string }[]
   onChange: (value: T) => void
 }) {
-  return <select
-    className="pop-over-format"
-    aria-label={label}
-    title={label}
-    value={String(value)}
-    draggable={false}
-    onClick={(event) => event.stopPropagation()}
-    onPointerDown={(event) => event.stopPropagation()}
-    onKeyDown={(event) => event.stopPropagation()}
-    onChange={(event) => {
-      const chosen = options.find((option) => String(option.value) === event.target.value)
-      if (chosen) onChange(chosen.value)
-    }}
-  >
-    {options.map((option) => <option key={String(option.value)} value={String(option.value)}>{option.label}</option>)}
-  </select>
+  const trigger = useRef<HTMLButtonElement>(null)
+  const [open, setOpen] = useState(false)
+  return <Select open={open} onOpenChange={setOpen} value={String(value)} onValueChange={next => {
+    const chosen = options.find(option => String(option.value) === next)
+    if (chosen) onChange(chosen.value)
+  }}>
+    <SelectTrigger ref={trigger} size="sm" className="pop-over-format" aria-label={label} title={label} draggable={false}
+      onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()} onKeyDown={event => event.stopPropagation()}>
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent container={trigger.current?.ownerDocument.body} position="popper">
+      <SelectGroup>{options.map(option => <SelectItem key={String(option.value)} value={String(option.value)}>{option.label}</SelectItem>)}</SelectGroup>
+    </SelectContent>
+  </Select>
 }
 
 /** Lettered answers in the columns chosen, filled down each column. */
@@ -97,26 +122,19 @@ function ColumnToggle({
   value: ColumnSetting
   onChange: (value: ColumnSetting) => void
 }) {
-  return <span
+  return <ToggleGroup type="single" value={String(value)}
+    onValueChange={next => { if (next) onChange(Number(next) as ColumnSetting) }}
     className="pop-over-columns"
     role="radiogroup"
     aria-label={label}
-    onClick={(event) => event.stopPropagation()}
-    onPointerDown={(event) => event.stopPropagation()}
+    onClick={event => event.stopPropagation()}
+    onPointerDown={event => event.stopPropagation()}
   >
-    {COLUMN_OPTIONS.map(({ value: columns, label: name }) => (
-      <button
-        key={columns}
-        type="button"
-        role="radio"
-        aria-checked={value === columns}
-        aria-label={name}
-        title={name}
-        draggable={false}
-        onClick={() => onChange(columns)}
-      ><ColumnLayoutIcon columns={columns} withDataAttribute={false} /></button>
-    ))}
-  </span>
+    {COLUMN_OPTIONS.map(({ value: columns, label: name }) => <ToggleGroupItem key={columns} value={String(columns)}
+      role="radio" aria-checked={value === columns} aria-label={name} title={name} draggable={false}>
+      <ColumnLayoutIcon columns={columns} withDataAttribute={false} />
+    </ToggleGroupItem>)}
+  </ToggleGroup>
 }
 
 /** One half of a card, cut off after a few lines and faded only when it is:

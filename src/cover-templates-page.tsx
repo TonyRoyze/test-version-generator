@@ -1,12 +1,14 @@
-import './cover-templates-page.css'
-import { useState } from 'react'
+import { Modal } from '@/components/modal'
+import { Button } from '@/components/ui/button'
 import type { CSSProperties } from 'react'
+import { useState } from 'react'
 import { AppShell } from './app-shell'
-import type { PersistentStorageStatus } from './durable-storage'
-import type { RecentExam } from './exam-workspaces'
+import { PrebuiltCover } from './cover-template-preview'
+import './cover-templates-page.css'
 import type { CoverPageTemplate } from './cover-templates/templates'
 import { COVER_PAGE_TEMPLATES } from './cover-templates/templates'
-import { PrebuiltCover } from './cover-template-preview'
+import type { PersistentStorageStatus } from './durable-storage'
+import type { RecentExam } from './exam-workspaces'
 import { PrebuiltExamPaper } from './prebuilt-exam-paper'
 
 export { COVER_PAGE_TEMPLATES } from './cover-templates/templates'
@@ -52,37 +54,33 @@ export function CoverTemplatesPage({
                 <p>{template.description}</p>
               </div>
               <div className="cover-template-actions">
-                <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(template)}>Preview design</button>
-                <button type="button" className="secondary-button" onClick={() => setTemplateToApply(template)}>Use template</button>
+                <Button variant="outline" type="button" className="secondary-button" onClick={() => setPreviewTemplate(template)}>Preview design</Button>
+                <Button variant="outline" type="button" className="secondary-button" onClick={() => setTemplateToApply(template)}>Use template</Button>
               </div>
             </article>
           ))}
         </div>
       </section>
       {previewTemplate && (
-        <div className="cover-template-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewTemplate(null) }}>
-          <section className="cover-template-design-dialog" role="dialog" aria-modal="true" aria-labelledby="cover-template-preview-heading">
+        <Modal title={`${previewTemplate.name} design`} onClose={() => setPreviewTemplate(null)} className="cover-template-design-dialog" aria-labelledby="cover-template-preview-heading">
             <div className="cover-template-design-heading">
               <h2 id="cover-template-preview-heading">{previewTemplate.name} design</h2>
-              <button type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>Close preview</button>
+              <Button variant="outline" type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>Close preview</Button>
             </div>
             <div className="cover-template-design-pages">
               <div><h3>Cover</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltCover template={previewTemplate} /></article></div></div>
               <div><h3>Exam paper</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltExamPaper template={previewTemplate} /></article></div></div>
             </div>
-          </section>
-        </div>
+          </Modal>
       )}
       {templateToApply && (
-        <div className="cover-template-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setTemplateToApply(null) }}>
-          <section className="cover-template-dialog" role="dialog" aria-modal="true" aria-labelledby="apply-cover-template-heading">
-            <button type="button" className="cover-template-dialog-close" aria-label="Close" onClick={() => setTemplateToApply(null)}>×</button>
+        <Modal title={`Use ${templateToApply.name}`} onClose={() => setTemplateToApply(null)} className="cover-template-dialog" aria-labelledby="apply-cover-template-heading">
+            <Button variant="plain" size="content" type="button" className="cover-template-dialog-close" aria-label="Close" onClick={() => setTemplateToApply(null)}>×</Button>
             <h2 id="apply-cover-template-heading">Use {templateToApply.name}</h2>
             <p>Choose an exam to update, or create a new exam with this cover.</p>
-            {exams.length > 0 && <div className="cover-template-exam-list">{exams.map((exam) => <button type="button" key={exam.id} onClick={() => onApply(exam.id, templateToApply)}>{exam.title}</button>)}</div>}
-            <button type="button" className="primary-button" onClick={() => onApply(null, templateToApply)}>New Exam with this template</button>
-          </section>
-        </div>
+            {exams.length > 0 && <div className="cover-template-exam-list">{exams.map((exam) => <Button variant="plain" size="content" type="button" key={exam.id} onClick={() => onApply(exam.id, templateToApply)}>{exam.title}</Button>)}</div>}
+            <Button variant="default" type="button" className="primary-button" onClick={() => onApply(null, templateToApply)}>New Exam with this template</Button>
+          </Modal>
       )}
     </AppShell>
   )

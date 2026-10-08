@@ -1,3 +1,7 @@
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 // The Question Bank Pop-over: a compact, read-only view of Question Banks that
 // stays on top of the document a teacher is writing. Questions are selected as
 // in the Exam editor's bank pane — a click, Shift for a range, Cmd for one more
@@ -9,6 +13,16 @@
 // document load — the window closes with the document that opened it.
 
 import {
+  Check,
+  ChevronDown,
+  Copy,
+  Plus,
+  Search,
+  Settings,
+  SlidersHorizontal,
+  X,
+} from 'lucide-react'
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -18,23 +32,15 @@ import {
   type ReactNode,
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown, Copy, Plus, Search, Settings, SlidersHorizontal, X } from 'lucide-react'
-import type { Question } from './exam'
-import type { ProseMirrorJSON } from './question-doc'
-import { stemPreview } from './stem-preview'
-import { PopOverCard } from './pop-over-card'
 import { setCopyMathMode, useCopyMathMode } from './copy-settings'
-import { useSelection } from './use-selection'
-import {
-  copyBlocksOf,
-  copyContentOf,
-  copyQuestions,
-  prepareCopyMedia,
-  type CopyFormat,
-  type CopyMathMode,
-} from './question-copy'
-import { DIFFICULTY_OPTIONS, SORT_OPTIONS, TYPE_OPTIONS } from './question-bank-filter-options'
+import type { Question } from './exam'
+import { PopOverCard } from './pop-over-card'
 import { PopOverContext } from './pop-over-context'
+import {
+  DIFFICULTY_OPTIONS,
+  SORT_OPTIONS,
+  TYPE_OPTIONS,
+} from './question-bank-filter-options'
 import {
   NO_FILTER,
   browseQuestionBank,
@@ -51,6 +57,17 @@ import {
   type QuestionBankTabsWorkspace,
   type QuestionBankWorkspaceService,
 } from './question-bank-workspaces'
+import {
+  copyBlocksOf,
+  copyContentOf,
+  copyQuestions,
+  prepareCopyMedia,
+  type CopyFormat,
+  type CopyMathMode,
+} from './question-copy'
+import type { ProseMirrorJSON } from './question-doc'
+import { stemPreview } from './stem-preview'
+import { useSelection } from './use-selection'
 
 /** Chrome's Document Picture-in-Picture, which not every browser offers. */
 type DocumentPictureInPicture = {
@@ -284,7 +301,7 @@ function QuestionBankPopOver({
           if (!bank) return null
           const selected = id === workspace.activeBankId && picker === null
           return <div className="pop-over-tab" key={id} data-active={selected ? 'true' : undefined}>
-            <button
+            <Button variant="plain" size="content"
               type="button"
               role="tab"
               aria-selected={selected}
@@ -293,19 +310,19 @@ function QuestionBankPopOver({
                 setPicker(null)
                 commit(openBankTab(workspace, id))
               }}
-            >{bank.name}</button>
-            <button type="button" aria-label={`Close ${bank.name}`} onClick={() => close(id)}><X /></button>
+            >{bank.name}</Button>
+            <Button variant="plain" size="content" type="button" aria-label={`Close ${bank.name}`} onClick={() => close(id)}><X /></Button>
           </div>
         })}
       </div>
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="pop-over-add"
         aria-label="Open Question Bank"
         title="Open Question Bank"
         aria-pressed={picker !== null}
         onClick={() => void (picker ? setPicker(null) : openPicker())}
-      ><Plus /></button>
+      ><Plus /></Button>
       <CopySettings />
     </div>
     {showingPicker
@@ -349,13 +366,13 @@ function BankPicker({
       : <ul>
           {banks.map((bank) => (
             <li key={bank.id}>
-              <button type="button" onClick={() => onChoose(bank.id)}>
+              <Button variant="plain" size="content" type="button" onClick={() => onChoose(bank.id)}>
                 <span>{bank.name}</span>
                 <small>
                   {bank.questionCount} {bank.questionCount === 1 ? 'Question' : 'Questions'}
                   {openIds.includes(bank.id) && ' · open'}
                 </small>
-              </button>
+              </Button>
             </li>
           ))}
         </ul>}
@@ -406,7 +423,7 @@ function FilterChip({
     }
   }, [open])
   return <div className="pop-over-chip" ref={chip}>
-    <button
+    <Button variant="plain" size="content"
       type="button"
       aria-expanded={open}
       aria-haspopup="true"
@@ -416,7 +433,7 @@ function FilterChip({
       {label}
       {summary && <>: <strong>{summary}</strong></>}
       <ChevronDown aria-hidden="true" />
-    </button>
+    </Button>
     {open && <div className="pop-over-chip-menu" role="group" aria-label={label} data-align={alignEnd ? 'end' : undefined}>
       {children(() => setOpen(false))}
     </div>}
@@ -439,10 +456,10 @@ function ChoiceChip<T extends string>({
   return <FilterChip label={label} summary={chipSummary(labels)}>
     {() => options.map((option) => (
       <label key={option.value} className="pop-over-chip-option">
-        <input
-          type="checkbox"
+        <Checkbox
+
           checked={selected.includes(option.value)}
-          onChange={(event) => onChange(event.target.checked
+          onCheckedChange={(checked) => onChange((checked === true)
             ? [...selected, option.value]
             : selected.filter((value) => value !== option.value))}
         />
@@ -482,29 +499,26 @@ function CopySettings() {
     }
   }, [open])
   return <div className="pop-over-settings" ref={container}>
-    <button
+    <Button variant="plain" size="content"
       type="button"
       className="pop-over-add"
       aria-label="Copy settings"
       title="Copy settings"
       aria-expanded={open}
       onClick={() => setOpen((current) => !current)}
-    ><Settings /></button>
+    ><Settings /></Button>
     {open && <div className="pop-over-settings-menu" role="group" aria-label="Copy settings">
       <h2>Copy settings</h2>
       <fieldset>
         <legend>Mathematics</legend>
+        <RadioGroup name="copy-math" value={mode} onValueChange={value => setCopyMathMode(value as typeof mode)}>
         {MATH_MODES.map((option) => (
           <label key={option.value}>
-            <input
-              type="radio"
-              name="copy-math"
-              checked={mode === option.value}
-              onChange={() => setCopyMathMode(option.value)}
-            />
+            <RadioGroupItem value={option.value} />
             <span><strong>{option.label}</strong><small>{option.detail}</small></span>
           </label>
         ))}
+        </RadioGroup>
       </fieldset>
     </div>}
   </div>
@@ -621,7 +635,7 @@ function PopOverBank({
     <div className="pop-over-controls">
       <div className="bank-search">
         <Search aria-hidden="true" />
-        <input
+        <Input
           type="search"
           aria-label="Search question stems"
           placeholder="Search questions"
@@ -629,7 +643,7 @@ function PopOverBank({
           onChange={(event) => onFilterChange({ ...filter, search: event.target.value })}
         />
       </div>
-      <button
+      <Button variant="plain" size="content"
         type="button"
         className="pop-over-filters-button"
         aria-expanded={filtersOpen}
@@ -639,7 +653,7 @@ function PopOverBank({
         <SlidersHorizontal aria-hidden="true" />
         Filters
         {activeFilters > 0 && <span className="bank-filter-count">{activeFilters}</span>}
-      </button>
+      </Button>
     </div>
     {filtersOpen && <div className="pop-over-filters">
       <ChoiceChip
@@ -666,7 +680,7 @@ function PopOverBank({
         summary={SORT_OPTIONS.find((option) => option.value === (filter.sort ?? 'newest'))?.label}
       >
         {(close) => SORT_OPTIONS.map((option) => (
-          <button
+          <Button variant="plain" size="content"
             key={option.value}
             type="button"
             className="pop-over-chip-option"
@@ -678,14 +692,14 @@ function PopOverBank({
           >
             <Check aria-hidden="true" />
             {option.label}
-          </button>
+          </Button>
         ))}
       </FilterChip>
-      {isFilterActive(filter) && <button
+      {isFilterActive(filter) && <Button variant="plain" size="content"
         type="button"
         className="bank-filter-clear"
         onClick={() => onFilterChange({ ...NO_FILTER, sort: filter.sort ?? 'newest' })}
-      >Clear</button>}
+      >Clear</Button>}
     </div>}
     {questions.length === 0
       ? <p className="pop-over-empty">
@@ -717,8 +731,8 @@ function PopOverBank({
       {selectedCount > 0
         ? <>
             <span>{describe(selectedCount)} selected</span>
-            <button type="button" className="pop-over-footer-copy" onClick={copySelection}><Copy aria-hidden="true" />Copy</button>
-            <button type="button" className="bank-filter-clear" onClick={selection.clear}>Clear</button>
+            <Button variant="plain" size="content" type="button" className="pop-over-footer-copy" onClick={copySelection}><Copy aria-hidden="true" />Copy</Button>
+            <Button variant="plain" size="content" type="button" className="bank-filter-clear" onClick={selection.clear}>Clear</Button>
           </>
         : <span className="pop-over-footer-hint">Select Questions, then drag them into your document.</span>}
       <span className="sr-only" role="status">{announcement ?? ''}</span>

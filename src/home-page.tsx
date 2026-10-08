@@ -1,9 +1,16 @@
-import type { RecentExam } from './exam-workspaces'
+import { Button } from '@/components/ui/button'
+import { AppShell } from './app-shell'
 import type { PersistentStorageStatus } from './durable-storage'
+import type { RecentExam } from './exam-workspaces'
+import {
+  CreateFirstCard,
+  ExamCard,
+  NewResourceCard,
+  QuestionBankCard,
+  ResourceCarousel,
+} from './resource-cards'
 import type { QuestionBankCollectionItem } from './resource-collections'
 import { homePreview } from './resource-collections'
-import { CreateFirstCard, ExamCard, NewResourceCard, QuestionBankCard, ResourceCarousel } from './resource-cards'
-import { AppShell } from './app-shell'
 
 /**
  * Home is a resume surface and nothing else: a shelf of the Exams you were
@@ -43,7 +50,7 @@ export function HomePage({
   onImport: () => void
 }) {
   const recentExams = homePreview(exams)
-  const importLink = <button type="button" className="primary-button" onClick={onImport}>Import</button>
+  const importLink = <Button variant="default" type="button" className="primary-button" onClick={onImport}>Import</Button>
   return (
     <AppShell crumbs={[{ label: 'Home' }]} persistentStorage={persistentStorage}>
       {error && (

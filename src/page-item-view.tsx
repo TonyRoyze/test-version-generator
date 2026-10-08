@@ -1,3 +1,6 @@
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 // A page item, drawn.
 //
 // Everything that takes up vertical space on a page is drawn here, and only
@@ -11,31 +14,31 @@
 // reads a page's furniture: a header, a footer and a page number belong to the
 // page, not to the items on it.
 
-import type { ReactNode } from 'react'
-import { TITLE_PX, sectionHeadingStyles } from './export-typography'
 import { Check, Lock, RotateCcw } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { DifficultyBadge, TopicBadge } from './badges'
 import { DocView } from './doc-view'
 import {
-  printedNumberLabelOf,
   hasAnswerBlank,
   headerHeightOf,
   numberColumnOf,
+  printedNumberLabelOf,
   printsNumberLine,
+  rowsOfPlanned,
   type AnswerKeyEntryItem,
   type AnswerKeySectionItem,
   type ChoiceGrid,
   type MatchingSet,
   type PageFurniture,
+  type PageHeader,
+  type PageItem,
   type PlannedBankAnswer,
   type PlannedPart,
   type PlannedWorkSpace,
-  type PageHeader,
-  type PageItem,
   type QuestionItem,
   type SectionHeadingItem,
-  rowsOfPlanned,
 } from './export-plan'
+import { TITLE_PX, sectionHeadingStyles } from './export-typography'
 import type { ProseMirrorJSON } from './question-doc'
 
 /** The blocks inside a node — a choice's own paragraphs, say. */
@@ -427,7 +430,7 @@ function EditableIdentityText({ editor }: { editor: IdentityLineEditor }) {
     <span className="identity-edit">
       {editor.edited && (
         <span className="identity-handles">
-          <button
+          <Button variant="plain" size="content"
             type="button"
             className="question-handle"
             aria-label="Restore the default header"
@@ -436,13 +439,13 @@ function EditableIdentityText({ editor }: { editor: IdentityLineEditor }) {
             onClick={() => editor.onChange(null)}
           >
             <RotateCcw aria-hidden="true" />
-          </button>
+          </Button>
         </span>
       )}
       {/* Sized by a mirrored copy of its value, like the title's field, so the
           underline is as wide as the words and not the page. */}
       <span className="identity-input-field" data-value={editor.text || ' '}>
-        <input
+        <Input
           aria-label="Header printed on the exam"
           className="identity-input"
           size={1}
@@ -515,7 +518,7 @@ export function PageHeaderContent({
             // onto as many lines as the printed title does. The title is one
             // line of text, so Enter finishes rather than breaking it.
             <span className="exam-title-field" data-value={furniture.title || 'Untitled Exam'}>
-              <textarea
+              <Textarea
                 aria-label="Title printed on the exam"
                 className="exam-title-input"
                 rows={1}
