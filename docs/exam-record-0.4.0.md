@@ -9,7 +9,7 @@ The **Exam Record** is the portable composition of one Exam: its name, its test-
 - Stable schema identifier: `https://testparrot.com/formats/exam/0.4.0/schema.json`
 - Checked-in schema: [`/formats/exam/0.4.0/schema.json`](../apps/rewrite/public/formats/exam/0.4.0/schema.json)
 - [Canonical examples](../apps/rewrite/public/formats/exam/0.4.0/examples/)
-- Superseded but still readable: [Exam Record 0.3.0](exam-record-0.3.0.md), and Exam Records `0.2.0` and `0.1.0`
+- Superseded but still readable: versions `0.1.0`–`0.3.0`; their exact [schemas and examples](../apps/rewrite/public/formats/exam/) remain available.
 - Invalid counterexamples live with the package, since an Exam Record is validated there: [`/formats/package/0.1.0/invalid/`](../apps/rewrite/public/formats/package/0.1.0/invalid/)
 
 The schema is the structural contract; this document supplies the rules JSON Schema cannot express. Implementations must perform both.

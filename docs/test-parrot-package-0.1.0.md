@@ -1,6 +1,6 @@
 # Test Parrot Package 0.1.0
 
-A **Test Parrot Package** carries one or more Question Bank Records and any number of [Exam Records](exam-record-0.1.0.md) that reference Questions in them. It travels in a [package zip](#the-package-zip) beside the pictures its records name: embedded in every Question Bank File and in every exported Exam PDF whose Content Selection includes the answer key, or downloaded on its own as `*.parrot.zip`. Importing it lets the teacher choose which banks and Exams to bring in. See ADR-0022 and ADR-0036.
+A **Test Parrot Package** carries one or more Question Bank Records and any number of [Exam Records](exam-record-0.4.0.md) that reference Questions in them. It travels in a [package zip](#the-package-zip) beside the pictures its records name: embedded in every Question Bank File and in every exported Exam PDF whose Content Selection includes the answer key, or downloaded on its own as `*.parrot.zip`. Importing it lets the teacher choose which banks and Exams to bring in. See ADR-0022 and ADR-0036.
 
 ## Published contract
 

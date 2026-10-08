@@ -59,4 +59,4 @@ For Vercel, set the project Root Directory to `apps/rewrite`; its existing
 Vite and routing configuration moved there with the app. Preview/deploying the
 legacy app uses `apps/legacy` as its separate Root Directory.
 
-[UI editing guide](docs/ui-rewrite.md) · [Domain glossary](CONTEXT.md)
+[Documentation index](docs/README.md) · [UI editing guide](docs/ui-rewrite.md) · [Domain glossary](CONTEXT.md)
