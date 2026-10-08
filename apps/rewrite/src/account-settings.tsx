@@ -124,7 +124,7 @@ export function AccountSettings({ passwordSetup = false, standalone = false }: {
         {mode !== 'reset' && <label>{mode === 'password' ? 'New password' : 'Password'}<Input type="password" name="password" autoComplete={mode === 'password' ? 'new-password' : 'current-password'} required minLength={mode === 'password' ? 8 : undefined} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} /></label>}
         {mode === 'password' && <label>Confirm password<Input type="password" name="confirmation" autoComplete="new-password" required minLength={8} value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={busy} /></label>}
         <div className="account-actions">
-          <Button variant="default" className="primary-button" disabled={busy}>{busy ? 'Working…' : mode === 'reset' ? 'Send reset link' : mode === 'password' ? 'Save password' : 'Sign in'}</Button>
+          <Button type="submit" variant="default" className="primary-button" disabled={busy}>{busy ? 'Working…' : mode === 'reset' ? 'Send reset link' : mode === 'password' ? 'Save password' : 'Sign in'}</Button>
           {mode !== 'password' && <Button variant="outline" type="button" className="secondary-button" disabled={busy} onClick={() => { setMode(mode === 'reset' ? 'login' : 'reset'); setError(''); setNotice('') }}>{mode === 'reset' ? 'Back to sign in' : 'Forgot password?'}</Button>}
           {mode === 'password' && !passwordSetup && <Button variant="outline" type="button" className="secondary-button" disabled={busy} onClick={() => setMode('login')}>Cancel</Button>}
         </div>
