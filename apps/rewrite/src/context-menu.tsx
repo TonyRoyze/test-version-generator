@@ -73,7 +73,7 @@ export type MenuItem =
   | { kind: "label"; label: string }
   | { kind: "separator" };
 
-type SubmenuItem = Extract<MenuItem, { kind: "action" | "radio" }>;
+type SubmenuItem = Extract<MenuItem, { kind: "action" | "radio" | "label" | "separator" }>;
 
 function ItemLabel({
   label,

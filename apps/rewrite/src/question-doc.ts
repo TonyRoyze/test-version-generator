@@ -452,8 +452,8 @@ export function explanationTextOf(doc: ProseMirrorJSON | undefined): string {
       : {}
   const parts: { type: 'text' | 'math'; value: string; marks?: string[] }[] = []
   const visit = (node: ProseMirrorJSON) => {
-    if (node.type === 'hardBreak') {
-      parts.push({ type: 'text', value: ' ' })
+    if (node.type === 'hardBreak' || node.type === 'hardbreak') {
+      parts.push({ type: 'text', value: '\n' })
       return
     }
     if (node.type === 'math_inline') {
@@ -472,11 +472,11 @@ export function explanationTextOf(doc: ProseMirrorJSON | undefined): string {
     childrenOf(node).forEach(visit)
   }
   childrenOf(doc).forEach((block, index) => {
-    if (index) parts.push({ type: 'text', value: ' ' })
+    if (index) parts.push({ type: 'text', value: '\n' })
     visit(block)
   })
   const normalized: typeof parts = parts.flatMap((part) => part.type === 'text'
-    ? [{ ...part, value: part.value.replace(/\s+/g, ' ') }]
+    ? [{ ...part, value: part.value.replace(/[^\S\r\n]+/g, ' ') }]
     : [part])
   const first = normalized.findIndex((part) => part.type === 'math' || part.value.trim())
   let last = normalized.length - 1
@@ -507,15 +507,15 @@ export function explanationDocumentOf(value: string | undefined): ProseMirrorJSO
     }
     if (offset < value.length) parts.push({ type: 'text', value: value.slice(offset) })
   }
-  const content: ProseMirrorJSON[] = parts.map((part) => part.type === 'math'
-    ? { type: 'math_inline', attrs: { value: part.value } }
-    : {
+  const content: ProseMirrorJSON[] = parts.flatMap((part): ProseMirrorJSON[] => part.type === 'math'
+    ? [{ type: 'math_inline', attrs: { value: part.value } }]
+    : part.value.split(/(\r\n|\r|\n)/).filter(Boolean).map((text) => /^(\r\n|\r|\n)$/.test(text) ? { type: 'hardbreak' } : {
         type: 'text',
-        text: part.value,
+        text,
         ...(part.marks?.length ? { marks: part.marks.map((mark) => mark.startsWith('link:')
           ? { type: 'link', attrs: { href: mark.slice(5) } }
           : { type: mark }) } : {}),
-      })
+      }))
   return { type: 'doc', content: [{ type: 'paragraph', content }] }
 }
 

@@ -1,3 +1,5 @@
+import type { CSSProperties } from 'react'
+import { useBlurCommitText } from '../use-blur-commit-text'
 import { saveImage } from '../local-images'
 import { coverLogoSource, type ExamCover } from '../page-cover'
 import type { CoverTemplateProps } from './template-types'
@@ -11,6 +13,43 @@ const FIELD_STYLES = `
 .cover-edit-input:disabled { color: inherit; -webkit-text-fill-color: currentColor; opacity: 1; }
 @media print { .cover-edit-input { outline: none !important; } }
 `
+
+function CoverField({ label, value, change, disabled, inputClassName = '', fieldClassName = '', inputStyle = {} }: {
+  label: string
+  value: string
+  change: (value: string) => void
+  disabled: boolean
+  inputClassName?: string
+  fieldClassName?: string
+  inputStyle?: CSSProperties
+}) {
+  const text = useBlurCommitText(value, change)
+  return (
+    <span
+      className={`cover-edit-field inline-grid max-w-full align-top after:[grid-area:1/1] after:invisible after:whitespace-pre-wrap after:wrap-break-word after:content-[attr(data-value)] ${fieldClassName}`}
+      data-value={text.value || ' '}
+    >
+      <textarea
+        aria-label={label}
+        className={`cover-edit-input text-base leading-normal ${inputClassName}`}
+        style={{ font: 'inherit', ...inputStyle }}
+        rows={1}
+        value={text.value}
+        disabled={disabled}
+        spellCheck
+        onChange={(event) => text.onChange(event.target.value)}
+        onFocus={text.onFocus}
+        onBlur={text.onBlur}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === 'Escape') {
+            event.preventDefault()
+            event.currentTarget.blur()
+          }
+        }}
+      />
+    </span>
+  )
+}
 
 export function RoyalInstituteCover({
   cover,
@@ -27,30 +66,10 @@ export function RoyalInstituteCover({
     change: (value: string) => void,
     inputClassName = '',
     fieldClassName = '',
-    inputStyle: React.CSSProperties = {},
-  ) => (
-    <span
-      className={`cover-edit-field inline-grid max-w-full align-top after:[grid-area:1/1] after:invisible after:whitespace-pre-wrap after:wrap-break-word after:content-[attr(data-value)] ${fieldClassName}`}
-      data-value={value || ' '}
-    >
-      <textarea
-        aria-label={label}
-        className={`cover-edit-input text-base leading-normal ${inputClassName}`}
-        style={{ font: 'inherit', ...inputStyle }}
-        rows={1}
-        value={value}
-        disabled={disabled || !onChange}
-        spellCheck
-        onChange={(event) => change(event.target.value.replace(/\s*\n\s*/g, ' '))}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' || event.key === 'Escape') {
-            event.preventDefault()
-            event.currentTarget.blur()
-          }
-        }}
-      />
-    </span>
-  )
+    inputStyle: CSSProperties = {},
+  ) => <CoverField key={label} label={label} value={value} change={change}
+    disabled={disabled || !onChange} inputClassName={inputClassName}
+    fieldClassName={fieldClassName} inputStyle={inputStyle} />
 
   return (
     <div className="contents">

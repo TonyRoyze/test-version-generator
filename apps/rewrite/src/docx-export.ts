@@ -1478,6 +1478,7 @@ function sectionOf(
                 ...(entry.reason ? [new Paragraph({
                   children: paperBookReasonParts(entry.reason).map((part): ParagraphChild => {
                     if (part.type === 'math') return mathRun(part.value)
+                    if (part.value === '\n') return new TextRun({ break: 1 })
                     const marks = part.marks ?? []
                     const text = new TextRun({
                       text: part.value,

@@ -1,3 +1,4 @@
+import { useBlurCommitText } from './use-blur-commit-text'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 // The exam page: what the teacher looks at, and what the printer prints.
@@ -34,6 +35,10 @@ import {
   FoldVertical,
   Heading,
   ListRestart,
+  ListOrdered,
+  List,
+  ListTree,
+  FilePlus2,
   Pencil,
   PencilLine,
   Rows2,
@@ -113,6 +118,7 @@ import {
   LABEL_KIND_LABELS,
   LABEL_SEQUENCE_LABELS,
   labelStyleOf,
+  labelAt,
   offeredBrackets,
   offeredStyles,
   type LabelKind,
@@ -423,10 +429,19 @@ function questionMenuItems({
         checked: style.brackets === brackets,
         onSelect: () => onLabelStyleChange(kind, { ...style, brackets }),
       }))
-      items.push(
-        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · sequence`, items: sequenceOptions },
-        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · punctuation`, items: bracketOptions },
-      )
+      items.push({
+        kind: 'submenu',
+        label: LABEL_KIND_LABELS[kind],
+        icon: kind === 'questions' ? <ListOrdered /> : kind === 'answers' ? <List /> : <ListTree />,
+        value: `${labelAt(style, 0)} ${labelAt(style, 1)} ${labelAt(style, 2)}`,
+        items: [
+          { kind: 'label', label: 'Sequence' },
+          ...sequenceOptions,
+          { kind: 'separator' },
+          { kind: 'label', label: 'Punctuation' },
+          ...bracketOptions,
+        ],
+      })
     }
   }
   items.push(
@@ -441,6 +456,7 @@ function questionMenuItems({
     {
       kind: 'checkbox',
       label: 'Start on next page',
+      icon: <FilePlus2 />,
       checked: pageBreakBefore,
       onSelect: () => onSetPageBreak(actedOnIds, !pageBreakBefore),
     },
@@ -1066,31 +1082,32 @@ function SectionHeadingField({
   // Focused as it appears, its text is selected too: a heading asked for from
   // the Section's controls — a new Section's placeholder heading, say — is
   // there to be typed over.
+  const text = useBlurCommitText(value, onChange)
   const field = useRef<HTMLTextAreaElement | null>(null)
   useEffect(() => {
     if (autoFocus) field.current?.select()
   }, [autoFocus])
   return (
-    <span className="section-heading-field" data-value={value || placeholder}>
+    <span className="section-heading-field" data-value={text.value || placeholder}>
       <Textarea
         ref={field}
         aria-label={label}
         className="section-heading-input"
         rows={1}
-        value={value}
+        value={text.value}
         placeholder={placeholder}
         disabled={disabled}
         autoFocus={autoFocus}
         spellCheck
-        onChange={(event) => onChange(event.target.value.replace(/\s*\n\s*/g, ' '))}
+        onChange={(event) => text.onChange(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === 'Enter' || event.key === 'Escape') {
             event.preventDefault()
             event.currentTarget.blur()
           }
         }}
-        onFocus={() => onFocusChange(true)}
-        onBlur={() => onFocusChange(false)}
+        onFocus={() => { text.onFocus(); onFocusChange(true) }}
+        onBlur={() => { text.onBlur(); onFocusChange(false) }}
       />
     </span>
   )
@@ -1822,6 +1839,15 @@ export function ExamPage({
   // The Exam's Sections, and the one each question is in: what a Section's
   // controls, and a gesture reading the sheet, both need.
   const sections = sectionsOf(exam)
+  // Pagination deliberately trails edits. Controlled text fields must read
+  // the Working Copy immediately, or React restores the previous planned
+  // value after a keystroke and moves the cursor when the new plan arrives.
+  const liveSectionHeadings = new Map(sections.map((section) => [section.id, section]))
+  const editableItem = (item: PageItem): PageItem => {
+    if (item.kind !== 'section-heading') return item
+    const section = liveSectionHeadings.get(item.sectionId)
+    return section ? { ...item, title: section.title, instructions: section.instructions } : item
+  }
   const sectionOfQuestion = new Map(
     sections.flatMap((section) =>
       questionsInSection(exam, arrangement, section.id).map(({ id }) => [id, section.id] as const),
@@ -2132,9 +2158,9 @@ export function ExamPage({
                   : []),
               ]
             })}
-          {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} disabled={titleDisabled} onChange={onCoverPageChange} />}
+          {page.furniture.paperBook && <PaperBookFurniture cover={exam.coverPage ?? page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} disabled={titleDisabled} onChange={onCoverPageChange} />}
           {page.furniture.coverPage ? <CoverPageView
-            cover={page.furniture.coverPage}
+            cover={exam.coverPage ?? page.furniture.coverPage}
             printedPageCount={page.furniture.printedPageCount ?? 1}
             disabled={titleDisabled}
             onChange={onCoverPageChange}
@@ -2171,7 +2197,7 @@ export function ExamPage({
             {page.items.map((item) => (
               <PageItemView
                 key={keyOf(item)}
-                item={item}
+                item={editableItem(item)}
                 onSectionHeadingChange={onSectionHeadingChange}
                 revealTitleOf={revealTitleOf}
                 onTitleRevealed={() => setRevealTitleOf(null)}

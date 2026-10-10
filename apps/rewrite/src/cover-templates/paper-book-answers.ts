@@ -16,6 +16,13 @@ export function richPaperBookReason(parts: PaperBookReasonPart[]): string {
 }
 
 export function paperBookReasonParts(reason: string): PaperBookReasonPart[] {
+  return parseReasonParts(reason).flatMap((part): PaperBookReasonPart[] => part.type === 'math'
+    ? [part]
+    : part.value.split(/(\r\n|\r|\n)/).filter(Boolean).map((value) =>
+      /^(\r\n|\r|\n)$/.test(value) ? { type: 'text', value: '\n' } : { ...part, value }))
+}
+
+function parseReasonParts(reason: string): PaperBookReasonPart[] {
   if (reason.startsWith(RICH_REASON_PREFIX)) {
     try {
       const decoded: unknown = JSON.parse(reason.slice(RICH_REASON_PREFIX.length))
@@ -70,7 +77,7 @@ export function paperBookAnswersOf(items: readonly PageItem[]): PaperBookAnswer[
 
     const answer = answerOf(question.choices)
     const rawReason = question.answerReason?.trim()
-    const reason = rawReason?.startsWith(RICH_REASON_PREFIX) ? rawReason : rawReason?.replace(/\s+/g, ' ')
+    const reason = rawReason
     if (answer) answers.push({ number, answer, ...(reason ? { reason } : {}) })
   }
   return answers
@@ -81,6 +88,7 @@ export function paperBookAnswerLines(items: readonly PageItem[]): string[] {
     `para ${paperBookAnswerText(entry)}`,
     ...(entry.reason ? [`para ${paperBookReasonParts(entry.reason).map((part) => {
       if (part.type === 'math') return `⟨math:${part.value.replace(/\s+/g, ' ').trim()}⟩`
+      if (part.value === '\n') return '⏎'
       const value = part.value.replace(/\s+/g, ' ')
       const marks = part.marks ?? []
       return marks.length ? `«${marks.join(',')}»${value}«/»` : value

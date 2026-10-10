@@ -85,3 +85,24 @@ test('an answer explanation survives Question Bank export and import', async () 
   const inspected = await inspectQuestionBankRecord(exported.recordBytes)
   expect(importedQuestionsFromRecord(inspected.record)[0]?.answerReason).toBe('Pressure increases with depth.')
 })
+
+test('Paper Book preserves authored explanation line breaks across print and DOCX', async () => {
+  const fixture = FIXTURES[6]!
+  const template = COVER_PAGE_TEMPLATE_BY_ID['paper-book']!
+  const reason = 'Atomic number = 11\nMass number = 23\n\nCharge = +1'
+  const plan = planExport({
+    ...fixture,
+    exam: {
+      ...fixture.exam,
+      questions: fixture.exam.questions.map((question) => question.type === 'multiple-choice' ? { ...question, answerReason: reason } : question),
+      coverPage: { ...template.cover, templateId: template.id },
+    },
+    selection: { test: true, answerKey: false },
+  })
+  expect(paperBookAnswersOf(plan.pages[0]!.items)[0]?.reason).toBe(reason)
+  const expected = layoutFingerprint([plan])
+  expect(expected.pages[0]?.content).toContain('para Atomic number = 11⏎Mass number = 23⏎⏎Charge = +1')
+  expect(compareFingerprints(expected, printFingerprint([plan]))).toEqual([])
+  const bytes = new Uint8Array(await (await createExamDocx([plan])).arrayBuffer())
+  expect(compareFingerprints(expected, await docxFingerprint(bytes))).toEqual([])
+})

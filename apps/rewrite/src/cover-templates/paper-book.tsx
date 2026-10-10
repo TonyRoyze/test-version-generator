@@ -1,3 +1,4 @@
+import { useBlurCommitText } from '../use-blur-commit-text'
 import type { ReactNode } from 'react'
 import katex from 'katex'
 import type { ExamCover } from '../page-cover'
@@ -7,7 +8,7 @@ import { paperBookAnswerText, paperBookReasonParts, type PaperBookAnswer } from 
 function PaperBookReason({ reason }: { reason: string }) {
   return <p className="paper-book-answer-reason">{paperBookReasonParts(reason).map((part, index) =>
     part.type === 'text'
-      ? (part.marks ?? []).reduce<ReactNode>((content, mark) => {
+      ? part.value === '\n' ? <br key={index} /> : (part.marks ?? []).reduce<ReactNode>((content, mark) => {
           switch (mark) {
             case 'strong': return <strong>{content}</strong>
             case 'emphasis': return <em>{content}</em>
@@ -35,14 +36,17 @@ function PaperBookField({ label, value, disabled, onChange, className = '' }: {
   onChange?: (value: string) => void
   className?: string
 }) {
-  return <span className={`paper-book-field ${className}`} data-value={value || ' '}>
+  const text = useBlurCommitText(value, onChange)
+  return <span className={`paper-book-field ${className}`} data-value={text.value || ' '}>
     <textarea
       aria-label={label}
       rows={1}
-      value={value}
+      value={text.value}
       disabled={disabled || !onChange}
       spellCheck
-      onChange={(event) => onChange?.(event.target.value.replace(/\s*\n\s*/g, ' '))}
+      onChange={(event) => text.onChange(event.target.value)}
+      onFocus={text.onFocus}
+      onBlur={text.onBlur}
       onKeyDown={(event) => {
         if (event.key === 'Enter' || event.key === 'Escape') {
           event.preventDefault()

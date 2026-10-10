@@ -1,3 +1,4 @@
+import { COVER_PAGE_TEMPLATE_BY_ID } from './cover-templates/templates'
 import { describe, expect, test } from 'bun:test'
 import { bodyPoints, pointsOf, titlePoints } from './export-typography'
 import { PDFDocument } from 'pdf-lib'
@@ -443,4 +444,32 @@ describe('PDF Export Adapter', () => {
       }
     }
   })
+})
+
+
+test('Paper Book PDF respects authored explanation line breaks and blank lines', async () => {
+  const fixture = FIXTURES[6]!
+  const template = COVER_PAGE_TEMPLATE_BY_ID['paper-book']!
+  const plan = planExport({
+    ...fixture,
+    exam: { ...fixture.exam,
+      questions: fixture.exam.questions.map((question) => question.type === 'multiple-choice'
+        ? { ...question, answerReason: 'Atomic 11\nMass 23\n\nCharge +1' } : question),
+      coverPage: { ...template.cover, templateId: template.id },
+    },
+    selection: { test: true, answerKey: false },
+  })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const document = await getDocument({ data: bytes }).promise
+  const items = (await (await document.getPage(1)).getTextContent()).items
+  const yOf = (word: string) => {
+    const item = items.find((item) => 'str' in item && item.str.includes(word))
+    expect(item).toBeDefined()
+    if (!item || !('transform' in item)) throw new Error(`Missing PDF text: ${word}`)
+    return item.transform[5]!
+  }
+  const firstGap = yOf('Atomic') - yOf('Mass')
+  const blankGap = yOf('Mass') - yOf('Charge')
+  expect(firstGap).toBeGreaterThan(0)
+  expect(blankGap).toBeCloseTo(firstGap * 2, 1)
 })
