@@ -412,7 +412,7 @@ function questionMenuItems({
   ]
   if (onLabelStyleChange) {
     items.push({ kind: 'separator' }, { kind: 'label', label: 'Numbering and labels' })
-    for (const kind of LABEL_KINDS) {
+    for (const kind of LABEL_KINDS.filter((kind) => kind !== 'parts')) {
       const style = labelStyleOf(labelStyles, kind)
       const sequenceOptions = offeredStyles(kind).map(({ sequence, brackets }) => ({
         kind: 'radio' as const,
@@ -507,7 +507,7 @@ function questionMenuItems({
     if (part.type !== 'multiple-choice') continue
     answerFormat.push(
       columnsMenu(
-        `Part ${part.letter} · Answer columns`,
+        `${part.number !== undefined ? `Question ${part.displayLabel ?? part.number}` : `Part ${part.letter}`} · Answer columns`,
         part.grid?.columns ?? DEFAULT_COLUMNS,
         (next) => onSetColumns([part.id], next),
       ),
@@ -523,8 +523,8 @@ function questionMenuItems({
     items.push(
       { kind: 'separator' },
       ...workSpaceMenu(
-        `Part ${part.letter} · Work space`,
-        `Part ${part.letter} · Fill rest of page`,
+        `${part.number !== undefined ? `Question ${part.displayLabel ?? part.number}` : `Part ${part.letter}`} · Work space`,
+        `${part.number !== undefined ? `Question ${part.displayLabel ?? part.number}` : `Part ${part.letter}`} · Fill rest of page`,
         workSpaceOfPart(part.id),
         [part.id],
         onSetWorkSpace,

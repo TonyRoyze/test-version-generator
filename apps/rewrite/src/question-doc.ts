@@ -241,7 +241,10 @@ function cleanPartContent(nodes: ProseMirrorJSON[]): ProseMirrorJSON[] {
   const answer = nodes.find(
     (node) => node.type === 'multipleChoice' || node.type === 'suggestedAnswer',
   ) ?? { type: 'multipleChoice', content: [blankChoice(), blankChoice()] }
-  return [stem, answer]
+  if (answer.type !== 'multipleChoice') return [stem, answer]
+  const explanation = nodes.find((node) => node.type === 'suggestedAnswer')
+    ?? { type: 'suggestedAnswer', content: [{ type: 'paragraph' }] }
+  return [stem, answer, { ...explanation, attrs: { ...explanation.attrs as object, label: 'Explanation' } }]
 }
 
 function childrenOf(node: ProseMirrorJSON): ProseMirrorJSON[] {

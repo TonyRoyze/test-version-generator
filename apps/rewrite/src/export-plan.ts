@@ -274,8 +274,10 @@ function plannedWorkSpace(space: WorkSpace, rows: WorkSpaceRows): PlannedWorkSpa
 // prints the way a question of its kind does, one level in.
 export type PlannedPart = {
   id: string
-  /** Its position under the Multipart question: `a`, `b`, …. */
+  /** Its authored position, retained for Part controls and older recordings. */
   letter: string
+  /** Its own question number on the paper; absent on older lettered plans. */
+  number?: number
   displayLabel?: string
   type: PartType
   stem: ProseMirrorJSON[]
@@ -289,6 +291,7 @@ export type PlannedPart = {
   workSpace: PlannedWorkSpace | null
   /** A Short Answer Part's Suggested Answer, for the Answer Key only. */
   suggestedAnswer?: ProseMirrorJSON[]
+  answerReason?: string
 }
 
 export type PlannedQuestion = {
@@ -345,15 +348,20 @@ export type PlannedQuestion = {
   suggestedAnswer?: ProseMirrorJSON[]
   /** Brief explanation shown beside the correct choice in Paper Book. */
   answerReason?: string
-  /** A Multipart question's Parts, lettered, in authored order; `null` for every other
+  /** A Multipart question's Parts, each with its own question number, in authored order; `null` for every other
    *  Question Type. A Multipart question's `stem` is the shared material its Parts are asked about. */
   parts: PlannedPart[] | null
 }
 
-/** How many numbers a question takes on the test: one, or one per prompt for
- *  a matching set. What continuous numbering advances by. */
+/** Numbered Parts distinguish current output from older lettered recordings. */
+export function hasNumberedParts(question: { parts?: readonly { number?: number }[] | null }): boolean {
+  return question.parts?.some((part) => part.number !== undefined) ?? false
+}
+
+/** How many numbers a question takes: one, or one per Matching Item or numbered Part. */
 export function numbersTakenBy(question: PlannedQuestion): number {
-  return question.matching ? question.matching.prompts.length : 1
+  return question.matching ? question.matching.prompts.length
+    : hasNumberedParts(question) ? Math.max(1, question.parts!.length) : 1
 }
 
 /** The question's number as a teacher would say it — `22`, or `22–25` for a
@@ -417,10 +425,10 @@ export type QuestionItem = {
   parts: PlannedPart[] | null
 }
 
-/** Whether this piece prints the question's number line: the first piece of
- *  any question but a matching set, whose numbers print on its prompts. */
+/** Whether the group itself prints a number: Matching Items and numbered Parts
+ *  carry their own numbers, leaving their shared material unnumbered. */
 export function printsNumberLine(item: QuestionItem): boolean {
-  return item.numbered && item.question.matching === null
+  return item.numbered && item.question.matching === null && !hasNumberedParts(item.question)
 }
 
 // The answer key's own content items. The repeated title lives in the page's
@@ -741,8 +749,9 @@ export function hasAnswerBlank(question: { marks?: readonly string[] }): boolean
 /** Where a question's body starts, in pixels from the content edge: past the
  *  number column and its gap. Every adapter indents a question by this. */
 export function questionIndentOf(
-  question: Pick<PlannedQuestion, 'type'> & { marks?: readonly string[] },
+  question: Pick<PlannedQuestion, 'type'> & { marks?: readonly string[]; parts?: PlannedPart[] | null },
 ): number {
+  if (hasNumberedParts(question)) return 0
   return NUMBER_COLUMN_WIDTH[numberColumnOf(question)] + QUESTION_NUMBER_COLUMN_GAP
 }
 
@@ -798,13 +807,13 @@ export function choiceAreaWidth(
  *  the answers' indent. */
 export function partChoiceAreaWidth(
   contentWidth: number,
-  question: Pick<PlannedQuestion, 'type'> & { marks?: readonly string[] } = { type: 'multipart' },
+  question: Pick<PlannedQuestion, 'type'> & { marks?: readonly string[]; parts?: PlannedPart[] | null } = { type: 'multipart' },
 ): number {
   return contentWidth - questionIndentOf(question) - PART_INDENT - CHOICE_INDENT
 }
 
 /** Both, on today's sheet. */
-export const PART_CHOICE_AREA_WIDTH = partChoiceAreaWidth(PAGE_CONTENT_WIDTH)
+export const PART_CHOICE_AREA_WIDTH = choiceAreaWidth(PAGE_CONTENT_WIDTH)
 export const CHOICE_AREA_WIDTH = choiceAreaWidth(PAGE_CONTENT_WIDTH)
 
 // A matching set spans the whole content width — its prompts carry their own
@@ -955,6 +964,7 @@ function deriveParts(
   exam: Exam,
   question: Question,
   arrangement: Arrangement,
+  number: number,
 ): PlannedPart[] {
   return partsOf(question).map((part, index) => {
     const choices: PlannedChoice[] = orderedPartChoices(part, arrangement).map(
@@ -974,12 +984,14 @@ function deriveParts(
     const multipleChoice = part.type === 'multiple-choice'
     const suggested = part.suggestedAnswer?.content
     const suggestedBlocks = Array.isArray(suggested) ? (suggested as ProseMirrorJSON[]) : []
-    const partDisplayLabel = displayLabelFor('parts', index, exam.labelStyles)
+    const partDisplayLabel = displayQuestionNumber(number + index, 1, exam.labelStyles) ?? `${number + index}.`
     return {
       id: part.id,
       letter: sequenceFor('parts', index, exam.labelStyles),
-      ...(partDisplayLabel !== undefined ? { displayLabel: partDisplayLabel } : {}),
+      number: number + index,
+      displayLabel: partDisplayLabel,
       type: part.type,
+      ...(part.answerReason ? { answerReason: part.answerReason } : {}),
       stem: part.stem,
       choices,
       grid: multipleChoice ? layOutGrid(choices, part.columns) : null,
@@ -1020,7 +1032,8 @@ function deriveQuestion(
     }
   })
   const matchingSet = matching ? deriveMatching(exam, question, arrangement, number, rules, wordBankLayoutOf(exam, question)) : null
-  const questionSpan = matchingSet?.prompts.length ?? 1
+  const parts = multipart ? deriveParts(exam, question, arrangement, number) : null
+  const questionSpan = matchingSet?.prompts.length ?? (parts ? Math.max(1, parts.length) : 1)
   const displayNumber = displayQuestionNumber(number, questionSpan, exam.labelStyles)
   const answerVisibility = question.type === 'multiple-choice' ? answerVisibilityOf(question, arrangement) : undefined
   return {
@@ -1054,7 +1067,7 @@ function deriveQuestion(
       ? { suggestedAnswer: suggestedAnswerOf(question) }
       : {}),
     ...(question.answerReason ? { answerReason: question.answerReason } : {}),
-    parts: multipart ? deriveParts(exam, question, arrangement) : null,
+    parts,
   }
 }
 
@@ -1485,6 +1498,21 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
     const metadata = {
       ...(item.question.difficulty ? { difficulty: item.question.difficulty } : {}),
       ...(item.question.topics?.length ? { topics: [...item.question.topics] } : {}),
+    }
+    if (hasNumberedParts(item.question)) {
+      for (const part of item.question.parts!) {
+        const correct = part.choices.find((choice) => choice.correct)
+        items.push({
+          kind: 'answer-key-entry',
+          number: part.number!,
+          ...(part.displayLabel !== undefined ? { displayNumber: part.displayLabel } : {}),
+          letter: part.type === 'multiple-choice' ? correct?.letter ?? null : null,
+          ...(correct?.displayLabel !== undefined ? { displayAnswer: correct.displayLabel } : {}),
+          ...metadata,
+          ...(part.suggestedAnswer ? { suggestedAnswer: part.suggestedAnswer } : {}),
+        })
+      }
+      continue
     }
     if (item.question.parts) {
       items.push({

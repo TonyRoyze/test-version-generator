@@ -6,7 +6,7 @@
 // top, a "Parts" heading, each Part a box headed with its type and holding
 // the answer component a question of that kind uses — that Parts can be
 // added, moved, deleted and switched between kinds there, and that the sheet
-// prints them lettered under the Multipart question's one number.
+// gives each Part its own question number after the shared description.
 //
 // A seeded Exam is enough to look at the sheet and the editor, but saving an
 // edit needs a Question Bank the bank service knows, so the tests that save
@@ -70,12 +70,12 @@ async function openExam(page: Page) {
 const editor = (page: Page) => page.getByRole('dialog', { name: 'Question editor' })
 const partTags = (page: Page) => editor(page).locator('.multipart-part-header')
 
-test('the sheet prints the Multipart question under one number with its Parts lettered beneath it', async ({ page }) => {
+test('the sheet prints a shared description followed by individually numbered Parts', async ({ page }) => {
   await openExam(page)
   await expect(page.getByRole('heading', { name: 'Multipart', exact: true }).first()).toBeVisible()
   const question = page.locator('.exam-question')
-  await expect(question.locator('.question-count')).toHaveText('1.')
-  await expect(question.locator('.part-count')).toHaveText(['a.', 'b.'])
+  await expect(question.locator('.question-count')).toHaveCount(0)
+  await expect(question.locator('.part-count')).toHaveText(['1.', '2.'])
   await expect(question).toContainText('The power of the Kingdom was fading by 1450.')
   await expect(question).toContainText('Which region was controlled in 1450?')
   await expect(question.locator('.choice-grid')).toContainText('Northern Coast')
@@ -164,13 +164,13 @@ test('a Part is added, moved and deleted, and saving keeps exactly that', async 
 test('each Part of a Multipart question gets the sheet controls a question of its kind has', async ({ page }) => {
   await openExam(page)
   await page.locator('.exam-question').click({ button: 'right' })
-  await page.getByRole('menuitem', { name: 'Part b · Work space' }).press('ArrowRight')
+  await page.getByRole('menuitem', { name: 'Question 2. · Work space' }).press('ArrowRight')
   await page.getByRole('menuitemradio', { name: 'Lined space' }).click()
   const partB = page.locator('.multipart-part-print').nth(1)
   await expect(partB.locator('.work-space-line')).toHaveCount(4)
 
   await page.locator('.exam-question').click({ button: 'right' })
-  await page.getByRole('menuitem', { name: 'Part a · Answer columns' }).press('ArrowRight')
+  await page.getByRole('menuitem', { name: 'Question 1. · Answer columns' }).press('ArrowRight')
   await page.getByRole('menuitemradio', { name: '1 column' }).click()
   await expect(page.locator('.multipart-part-print').nth(0).locator('.choice-grid')).toHaveAttribute('data-columns', '1')
 })
@@ -197,4 +197,38 @@ test('a Part switches kind from its type badge, and switching back brings its an
   await expect(part).not.toContainText('Its harbors silted up.')
   await switchTo('Short Answer')
   await expect(part.locator('.sa-body')).toHaveText('Its harbors silted up.')
+})
+
+
+test('the question after a Multipart group continues after its numbered Parts', async ({ page }) => {
+  const following = { id: 'following', type: 'open', columns: 2, doc: { type: 'doc', content: [paragraph('Next standalone question')] } }
+  await seedAuthoringState(page, {
+    questionBank: { questions: [aldmere, following] },
+    workingCopy: { title: 'Consecutive numbering', questionIds: ['s1', 'following'], sections: [{ id: 'all', title: 'Questions', instructions: '' }] },
+    dirty: false,
+  } as never)
+  const group = page.locator('.exam-workspace .exam-question[data-question-id="s1"]')
+  await expect(group.locator('.part-count')).toHaveText(['1.', '2.'])
+  await expect(group.locator('.question-stem').first()).toContainText('The power of the Kingdom was fading')
+  await expect(group.locator('.question-count')).toHaveCount(0)
+  await expect(page.locator('.exam-workspace .exam-question[data-question-id="following"] .question-count')).toHaveText('3.')
+})
+
+
+test('a choice Part explanation saves, reopens and stays off the student paper', async ({ page }) => {
+  await openExam(page)
+  await page.locator('.exam-question').dblclick()
+  const explanation = editor(page).locator('.multipart-part').first().locator('[data-type="suggested-answer"]')
+  await expect(explanation).toContainText('Explanation')
+  await explanation.locator('p').first().fill('Because the coast controlled trade.')
+  await partTags(page).first().getByRole('button', { name: /^Part type:/ }).click()
+  await editor(page).getByRole('menuitem', { name: 'Short Answer', exact: true }).click()
+  await partTags(page).first().getByRole('button', { name: /^Part type:/ }).click()
+  await editor(page).getByRole('menuitem', { name: 'Multiple Choice', exact: true }).click()
+  await expect(explanation).toContainText('Because the coast controlled trade.')
+  await editor(page).getByRole('button', { name: 'Save question' }).click()
+  await expect(editor(page)).not.toBeVisible()
+  await expect(page.locator('.exam-question')).not.toContainText('Because the coast controlled trade.')
+  await page.locator('.exam-question').dblclick()
+  await expect(editor(page).locator('.multipart-part').first().locator('[data-type="suggested-answer"]')).toContainText('Because the coast controlled trade.')
 })

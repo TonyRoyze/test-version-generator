@@ -1,3 +1,4 @@
+import { paperBookReasonParts } from './cover-templates/paper-book-answers'
 import fontkit from '@pdf-lib/fontkit'
 import {
   AFRelationship,
@@ -1031,6 +1032,10 @@ function drawQuestion(context: Context, question: QuestionBankRecordQuestion, nu
       )
       drawIndentedDocument(context, part.stem, 36)
       if (part.choices) drawChoices(context, part.choices, 36)
+      if (part.answerReason) {
+        drawText(context, 'Explanation', { font: 'bold' })
+        drawText(context, paperBookReasonParts(part.answerReason).map((part) => part.value).join(''))
+      }
       if (part.suggestedAnswer) {
         drawText(context, 'Suggested Answer', {
           x: MARGIN + 36,

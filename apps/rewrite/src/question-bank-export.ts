@@ -29,7 +29,7 @@ import {
 } from './picture-geometry'
 
 export const QUESTION_BANK_FORMAT = 'test-parrot/question-bank'
-export const QUESTION_BANK_FORMAT_VERSION = '0.9.0'
+export const QUESTION_BANK_FORMAT_VERSION = '0.10.0'
 export const QUESTION_BANK_ATTACHMENT_NAME = 'pdfcx.json'
 export const QUESTION_BANK_ATTACHMENT_DESCRIPTION = 'pdf-canonical-extraction'
 
@@ -179,6 +179,7 @@ export type QuestionBankRecordPart = {
   stem: SemanticDocument
   choices?: QuestionBankRecordChoice[]
   suggestedAnswer?: SemanticDocument
+  answerReason?: string
 }
 
 /** One answer of a Multiple Choice or True/False Question or a Multiple
@@ -603,6 +604,7 @@ function portableQuestion(
           id,
           type: 'multiple-choice',
           stem,
+          ...(part.answerReason ? { answerReason: part.answerReason } : {}),
           choices: part.choices.map((choice, choiceIndex) => ({
             id: `${id}-c${choiceIndex + 1}`,
             content: semanticDocument(childNodes(choice.node), mediaIds),

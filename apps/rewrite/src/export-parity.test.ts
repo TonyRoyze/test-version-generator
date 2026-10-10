@@ -501,3 +501,22 @@ describe('the comparison detects the discrepancies it exists for', () => {
     expect(difference?.what).toBe('page-count')
   })
 })
+
+test('recorded Multipart plans without numbered Parts retain their parent number and letters', async () => {
+  const fixture = FIXTURES.find((fixture) => fixture.name === 'a multipart with a multiple-choice part and a short-answer part')!
+  const plan = structuredClone(planExport({ ...fixture, selection: STUDENT_TEST }))
+  for (const page of plan.pages) for (const item of page.items) {
+    if (item.kind !== 'question') continue
+    for (const part of [...(item.question.parts ?? []), ...(item.parts ?? [])]) {
+      delete part.number
+      delete part.displayLabel
+    }
+  }
+  const expected = layoutFingerprint([plan])
+  expect(expected.pages[0]!.content.some((line) => line.startsWith('para 1. The power'))).toBe(true)
+  expect(expected.pages[0]!.content.some((line) => line.startsWith('para a. Which region'))).toBe(true)
+  expect(expected.pages[0]!.content.some((line) => line.startsWith('para b. Identify'))).toBe(true)
+  expect(compareFingerprints(expected, printFingerprint([plan]))).toEqual([])
+  const bytes = new Uint8Array(await (await createExamDocx([plan], noImages)).arrayBuffer())
+  expect(compareFingerprints(expected, await docxFingerprint(bytes))).toEqual([])
+})

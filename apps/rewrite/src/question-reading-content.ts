@@ -37,6 +37,7 @@ export type QuestionReadingContent = {
     stem: ProseMirrorJSON[]
     choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean; locked?: boolean }[]
     suggestedAnswer?: ProseMirrorJSON[]
+    answerReason?: string
   }[]
 }
 
@@ -78,6 +79,7 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
               })),
             }
           : {}),
+        ...(part.answerReason ? { answerReason: part.answerReason } : {}),
         ...(part.suggestedAnswer ? { suggestedAnswer: childNodes(part.suggestedAnswer) } : {}),
       })),
     }

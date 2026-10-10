@@ -1,3 +1,4 @@
+import { explanationDocumentOf, type ProseMirrorJSON } from './question-doc'
 import { Modal } from '@/components/modal'
 import { Button } from '@/components/ui/button'
 import {
@@ -454,6 +455,7 @@ function RecordQuestion({
                   ))}
                 </ol>
               )}
+              {part.answerReason && <section><h3>Explanation</h3><DocView content={(explanationDocumentOf(part.answerReason)?.content as ProseMirrorJSON[] | undefined) ?? []} /></section>}
               {part.suggestedAnswer && (
                 <section>
                   <h3>Suggested Answer</h3>

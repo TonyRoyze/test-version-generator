@@ -62,7 +62,7 @@ export function paperBookAnswersOf(items: readonly PageItem[]): PaperBookAnswer[
     if (item.parts) {
       for (const part of item.parts) {
         const answer = answerOf(part.choices)
-        if (answer) answers.push({ number: `${number}${part.displayLabel ?? part.letter}`, answer })
+        if (answer) answers.push({ number: part.number !== undefined ? part.displayLabel ?? String(part.number) : `${number}${part.displayLabel ?? part.letter}`, answer, ...(part.answerReason ? { reason: part.answerReason } : {}) })
       }
       continue
     }

@@ -22,7 +22,7 @@ test('Paper Book lays out editable questions on its first page across print and 
   expect(plan.pages[0]?.furniture.paperBook).toBeDefined()
   expect(plan.pages[0]?.furniture.coverPage).toBeUndefined()
   expect(plan.pages[0]?.items.length).toBeGreaterThan(0)
-  expect(paperBookAnswersOf(plan.pages[0]!.items)).toEqual([{ number: '1a', answer: 'A' }])
+  expect(paperBookAnswersOf(plan.pages[0]!.items)).toEqual([{ number: '1.', answer: 'A' }])
 
   const expected = layoutFingerprint([plan])
   expect(compareFingerprints(expected, printFingerprint([plan]))).toEqual([])
@@ -40,8 +40,8 @@ test('Paper Book lists only the answers for the parts on each page', () => {
   })
 
   expect(plan.pages.map((page) => paperBookAnswersOf(page.items))).toEqual([
-    [{ number: '1a', answer: 'A' }],
-    [{ number: '1b', answer: 'A' }, { number: '1c', answer: 'A' }],
+    [{ number: '1.', answer: 'A' }],
+    [{ number: '2.', answer: 'A' }, { number: '3.', answer: 'A' }],
   ])
 })
 

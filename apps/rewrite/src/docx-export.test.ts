@@ -466,3 +466,19 @@ describe('a choice grid hangs where print draws it', () => {
     expect(Math.abs(indent + width - pageSizeOf(margins).contentWidth * 15)).toBeLessThanOrEqual(1)
   })
 })
+
+
+test('authored table cells have compact padding and no paragraph gap', async () => {
+  const fixture = FIXTURES.find((candidate) => candidate.name === 'a table with a header row')!
+  const xml = parseXml(await part(await packagedFixture(fixture), 'word/document.xml'))
+  const cells = descendants(xml, 'w:tc')
+  expect(cells).toHaveLength(6)
+  for (const cell of cells) {
+    expect(path(cell, 'w:tcPr', 'w:tcMar', 'w:top')?.attrs['w:w']).toBe('30')
+    expect(path(cell, 'w:tcPr', 'w:tcMar', 'w:bottom')?.attrs['w:w']).toBe('30')
+    for (const paragraph of descendants(cell, 'w:p')) {
+      expect(path(paragraph, 'w:pPr', 'w:spacing')?.attrs['w:after']).toBe('0')
+      expect(Number(path(paragraph, 'w:pPr', 'w:spacing')?.attrs['w:before'] ?? 0)).toBe(0)
+    }
+  }
+})

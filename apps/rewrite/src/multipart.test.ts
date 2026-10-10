@@ -17,6 +17,10 @@ import {
   planExport,
   pageContentHeight,
   STUDENT_TEST,
+  printsNumberLine,
+  questionIndentOf,
+  numbersTakenBy,
+  unmeasured,
   type AnswerKeyEntryItem,
   type Measure,
   type QuestionItem,
@@ -160,7 +164,7 @@ describe('a Multipart question on the paper', () => {
   const planned = () =>
     document().test.flatMap((item) => (item.kind === 'question' ? [item.question] : []))
 
-  test('on an Exam that stores no Sections, prints last, in a Multipart section of its own, under one number', () => {
+  test('on an Exam that stores no Sections, prints last, in a Multipart section of its own, starting its Parts at the next number', () => {
     const headings = document().test.flatMap((item) => (item.kind === 'section-heading' ? [item.sectionId] : []))
     expect(headings).toEqual(['open', 'multipart'])
     expect(planned().map((question) => [question.id, question.number])).toEqual([
@@ -170,14 +174,19 @@ describe('a Multipart question on the paper', () => {
     ])
   })
 
-  test('letters its Parts beneath its number, each printed as a question of its kind', () => {
+  test('numbers each Part as a question after its unnumbered shared description', () => {
     const question = planned().find(({ id }) => id === 's1')!
     expect(question.marks).toEqual([])
-    // Neither kind prints an answer blank: each is set in by its letter alone.
+    // Each Part uses the question-number column, without a numbered parent.
     expect(question.parts?.map((part) => [part.letter, part.type])).toEqual([
       ['a', 'multiple-choice'],
       ['b', 'open'],
     ])
+    expect(question.parts?.map((part) => part.displayLabel)).toEqual(['3.', '4.'])
+    expect(numbersTakenBy(question)).toBe(2)
+    expect(questionIndentOf(question)).toBe(0)
+    const item = document().test.find((item): item is QuestionItem => item.kind === 'question' && item.question.id === 's1')!
+    expect(printsNumberLine(item)).toBe(false)
     expect(question.parts?.some((part) => 'answerBlank' in part)).toBe(false)
     expect(question.parts?.[0]!.grid).not.toBeNull()
     expect(question.parts?.[1]!.grid).toBeNull()
@@ -194,15 +203,13 @@ describe('a Multipart question on the paper', () => {
     ])
   })
 
-  test('takes one Answer Key entry, with a line per Part', () => {
+  test('gives each Part its own numbered Answer Key entry', () => {
     const entries = document().answerKey.filter(
       (item): item is AnswerKeyEntryItem => item.kind === 'answer-key-entry',
     )
-    const entry = entries.find((item) => item.number === 3)!
-    expect(entry.letter).toBeNull()
-    expect(entry.parts).toEqual([
-      { letter: 'a', answer: 'A' },
-      { letter: 'b', answer: null, suggestedAnswer: [paragraph('Its harbors silted up.')] },
+    expect(entries.filter((item) => item.number >= 3)).toEqual([
+      { kind: 'answer-key-entry', number: 3, displayNumber: '3.', letter: 'A' },
+      { kind: 'answer-key-entry', number: 4, displayNumber: '4.', letter: null, suggestedAnswer: [paragraph('Its harbors silted up.')] },
     ])
   })
 
@@ -355,7 +362,7 @@ describe('switching a Part between Multiple Choice and Short Answer', () => {
       suggestedAnswer: { content: 'block+' },
       multipartPartStem: { content: 'block+' },
       multipartPart: {
-        content: 'multipartPartStem (multipleChoice | suggestedAnswer)',
+        content: 'multipartPartStem (multipleChoice suggestedAnswer? | suggestedAnswer)',
         attrs: { id: { default: '' }, columns: { default: 2 } },
       },
       multipartParts: { content: 'multipartPart*' },
@@ -393,7 +400,7 @@ describe('switching a Part between Multiple Choice and Short Answer', () => {
     expect(part().firstChild!.textContent).toBe('Which region?')
     // Without anywhere to set them aside, the answers it comes back to are blank.
     expect(setPartKind(view, 1, 'multiple-choice')).toBe(true)
-    expect(part().lastChild!.childCount).toBe(4)
+    expect(part().child(1).childCount).toBe(4)
     expect(part().lastChild!.textContent).toBe('')
     expect(setPartKind(view, 1, 'multiple-choice')).toBe(false)
   })
@@ -409,8 +416,8 @@ describe('switching a Part between Multiple Choice and Short Answer', () => {
     expect(view.state.doc.textContent).not.toContain('Egypt')
 
     setPartKind(view, 1, 'multiple-choice', setAside)
-    expect(part().lastChild!.textContent).toBe('EgyptPersia')
-    expect(part().lastChild!.child(1).attrs.correct).toBe(true)
+    expect(part().child(1).textContent).toBe('EgyptPersia')
+    expect(part().child(1).child(1).attrs.correct).toBe(true)
     expect(view.state.doc.textContent).not.toContain('Trade routes')
 
     setPartKind(view, 1, 'open', setAside)
@@ -449,4 +456,54 @@ describe('switching a Part between Multiple Choice and Short Answer', () => {
     expect(movePartTo(view, partAt(1), 1)).toBe(false)
     expect(movePartTo(view, partAt(1), 2)).toBe(false)
   })
+})
+
+test('numbered Parts share one unnumbered description and advance the next question number', () => {
+  const exam: Exam = {
+    title: 'Shared description',
+    questions: [open('before'), aldmere(), open('after')],
+    sections: [{ id: 'all', title: 'Questions', instructions: '' }],
+  }
+  const document = buildExportDocument(exam, arrangementOf(['before', 's1', 'after']), { test: true, answerKey: true })
+  const questions = document.test.filter((item): item is QuestionItem => item.kind === 'question')
+  expect(questions.map((item) => item.question.number)).toEqual([1, 2, 4])
+  expect(questions[1]!.question.parts?.map((part) => part.displayLabel)).toEqual(['2.', '3.'])
+  expect(document.answerKey.filter((item): item is AnswerKeyEntryItem => item.kind === 'answer-key-entry').map((item) => item.number)).toEqual([1, 2, 3, 4])
+})
+
+test('numbering restarts and question-label styles apply to Parts and the questions after them', () => {
+  const exam: Exam = {
+    title: 'Numbering', questions: [open('before'), aldmere(), open('after')],
+    sections: [{ id: 'all', title: 'Questions', instructions: '' }],
+    numberingRestarts: ['s1'],
+    labelStyles: { questions: { sequence: 'upper-alpha', brackets: 'paren' }, parts: { sequence: 'lower-alpha', brackets: 'dot' } },
+  }
+  const document = buildExportDocument(exam, arrangementOf(['before', 's1', 'after']), { test: true, answerKey: true })
+  const questions = document.test.filter((item): item is QuestionItem => item.kind === 'question')
+  expect(questions[1]!.parts?.map((part) => [part.number, part.displayLabel])).toEqual([[1, '(A)'], [2, '(B)']])
+  expect(questions[2]!.question).toMatchObject({ number: 3, displayNumber: '(C)' })
+  expect(document.answerKey.filter((item): item is AnswerKeyEntryItem => item.kind === 'answer-key-entry').map((item) => item.displayNumber)).toEqual(['(A)', '(A)', '(B)', '(C)'])
+})
+
+
+test('Multipart choice explanations survive cleaning, planning and bank record round trips', async () => {
+  const question = aldmere()
+  const parts = (question.doc.content as ProseMirrorJSON[]).find((node) => node.type === 'multipartParts')!
+  const first = (parts.content as ProseMirrorJSON[])[0]!
+  ;(first.content as ProseMirrorJSON[]).push({ type: 'suggestedAnswer', attrs: { label: 'Explanation' }, content: [paragraph('Because of trade.'), paragraph('Second line.')] })
+  question.doc = cleanDocument(question.doc)
+  expect(partsOf(question)[0]!.type).toBe('multiple-choice')
+  const reason = partsOf(question)[0]!.answerReason!
+  const { paperBookReasonParts } = await import('./cover-templates/paper-book-answers')
+  expect(paperBookReasonParts(reason).map((part) => part.value).join('')).toBe('Because of trade.\nSecond line.')
+  const plan = planExport({ exam: { title: 'Explanations', questions: [question] }, arrangement: arrangementOf(['s1']), selection: STUDENT_TEST, measure: unmeasured })
+  const item = plan.pages.flatMap((page) => page.items).find((item) => item.kind === 'question') as QuestionItem
+  const { paperBookAnswersOf } = await import('./cover-templates/paper-book-answers')
+  expect(paperBookAnswersOf([item])[0]!.reason).toBe(reason)
+  const { prepareQuestionBankExport } = await import('./question-bank-export')
+  const { inspectQuestionBankRecordValue, importedQuestionsFromRecord } = await import('./question-bank-import')
+  const record = (await prepareQuestionBankExport({ id: 'bank', name: 'Explanations', createdAt: '2026-10-10T00:00:00Z', lastUpdatedAt: '2026-10-10T00:00:00Z', questions: [question] })).record
+  expect(record.bank.questions[0]!.parts![0]!.answerReason).toBe(reason)
+  const imported = importedQuestionsFromRecord((await inspectQuestionBankRecordValue(record)).record)
+  expect(partsOf(imported[0]!)[0]!.answerReason).toBe(reason)
 })

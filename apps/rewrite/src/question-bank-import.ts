@@ -11,6 +11,8 @@ import questionBankSchema060 from './question-bank-record-0.6.0.schema.json'
 import questionBankSchema070 from './question-bank-record-0.7.0.schema.json'
 import questionBankSchema080 from './question-bank-record-0.8.0.schema.json'
 import questionBankSchema090 from './question-bank-record-0.9.0.schema.json'
+import questionBankSchema0100 from './question-bank-record-0.10.0.schema.json'
+import { explanationDocumentOf } from './question-doc'
 import {
   QUESTION_BANK_ATTACHMENT_DESCRIPTION,
   QUESTION_BANK_FORMAT,
@@ -252,6 +254,10 @@ function importedParts(
                   ? blocksOrBlank(part.suggestedAnswer)
                   : [{ type: 'paragraph' }],
               },
+          ...(part.type === 'multiple-choice' && part.answerReason ? [{
+            type: 'suggestedAnswer', attrs: { label: 'Explanation' },
+            content: explanationDocumentOf(part.answerReason)?.content ?? [{ type: 'paragraph' }],
+          }] : []),
         ],
       }
     }),
@@ -355,6 +361,7 @@ const validate050 = ajv.compile(questionBankSchema050)
 const validate060 = ajv.compile(questionBankSchema060)
 const validate070 = ajv.compile(questionBankSchema070)
 const validate080 = ajv.compile(questionBankSchema080)
+const validate0100 = ajv.compile(questionBankSchema0100)
 const validate090 = ajv.compile(questionBankSchema090)
 
 function schemaMessage(errors: ErrorObject[] | null | undefined): string {
@@ -379,10 +386,10 @@ type CopyContext = {
 
 /** The versions whose `authoredSize` is a share of the picture's container,
  *  and which know the Picture Crop — both added in 0.7.0. */
-const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0'])
+const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0', '0.10.0'])
 
 /** The versions that know the Locked Answer, added in 0.9.0. */
-const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0'])
+const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0', '0.10.0'])
 
 function copyPicture(node: SemanticNode, context: CopyContext): Partial<SemanticNode> {
   const size =
@@ -475,6 +482,7 @@ function copyQuestion(question: QuestionBankRecordQuestion, context: CopyContext
             id: part.id,
             type: part.type,
             stem: copyDocument(part.stem),
+            ...(part.answerReason !== undefined ? { answerReason: part.answerReason } : {}),
             ...(part.choices !== undefined
               ? { choices: part.choices.map(copyChoice) }
               : {}),
@@ -549,10 +557,10 @@ function misplacedContent(value: unknown): string | undefined {
 }
 
 /** The versions that know the Pending Image, added in 0.5.0. */
-const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0'])
+const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0'])
 
 /** The versions that know the Side-by-Side, added in 0.6.0. */
-const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0'])
+const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0'])
 
 /** Where a Side-by-Side may stand: a top-level block of a Question's stem or
  *  of a Multipart Part's stem, and nowhere else. */
@@ -820,6 +828,7 @@ const parser070: Parser = (value) => parseWith(validate070, '0.7.0', value)
 
 const parser080: Parser = (value) => parseWith(validate080, '0.8.0', value)
 
+const parser0100: Parser = (value) => parseWith(validate0100, '0.10.0', value)
 const parser090: Parser = (value) => parseWith(validate090, '0.9.0', value)
 
 /** Exact versions only: adding compatibility requires adding an explicit parser or migration. */
@@ -834,6 +843,7 @@ export const SUPPORTED_QUESTION_BANK_VERSIONS: Readonly<Record<string, Parser>> 
     '0.7.0': parser070,
     '0.8.0': parser080,
     '0.9.0': parser090,
+    '0.10.0': parser0100,
   })
 
 const utf8 = new TextDecoder('utf-8', { fatal: true })
