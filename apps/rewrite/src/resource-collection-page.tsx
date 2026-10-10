@@ -109,7 +109,7 @@ export function ResourceCollectionPage({
         </section>
       ) : (
         <section
-          className={isExams ? 'collection-grid collection-grid--exams' : 'collection-grid'}
+          className="collection-grid"
           aria-label={`${resourceName} search results`}
         >
           {isExams

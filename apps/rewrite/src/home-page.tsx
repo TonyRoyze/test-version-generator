@@ -81,11 +81,11 @@ export function HomePage({
             }
           >
             {recentExams.map((exam) => (
-              <div role="listitem" key={exam.id}>
+              <div role="listitem" className="exam-card-item" key={exam.id}>
                 <ExamCard exam={exam} onOpen={onOpen} onDelete={onDeleteExam} />
               </div>
             ))}
-            <div role="listitem">
+            <div role="listitem" className="new-exam-card-item">
               <NewResourceCard label="New Exam" shape="sheet" onClick={onNewExam} />
             </div>
           </ResourceCarousel>

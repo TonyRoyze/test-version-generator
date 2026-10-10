@@ -253,8 +253,6 @@ export function PopOverCard({
   onSelect: (modifiers: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean }) => void
   onDragStart: (event: DragEvent<HTMLLIElement>) => void
 }) {
-  const { controls, stem, answers } = body(question, format, onFormat)
-  const whole = question.type === 'multipart'
   return <li
     className="pop-over-card"
     role="option"
@@ -279,10 +277,38 @@ export function PopOverCard({
       onDragStart(event)
     }}
   >
+    <PopOverQuestionPreview question={question} format={format} onFormat={onFormat} />
+  </li>
+}
+
+/** Shared card contents let the Exam's bank pane show the same readable
+ *  question preview as the Pop-over, with its own actions in the header. */
+export function PopOverQuestionPreview({
+  question,
+  format,
+  onFormat,
+  badges,
+  actions,
+  showFormatControls = true,
+}: {
+  question: Question
+  format: CopyFormat
+  onFormat: (format: CopyFormat) => void
+  badges?: ReactNode
+  actions?: ReactNode
+  showFormatControls?: boolean
+}) {
+  const { controls, stem, answers } = body(question, format, onFormat)
+  const whole = question.type === 'multipart'
+  return <>
     <div className="pop-over-card-head">
       <span className="question-reading-type">{SECTION_LABELS[question.type]}</span>
       {question.difficulty && <DifficultyBadge difficulty={question.difficulty} />}
-      <span className="pop-over-card-controls">{controls}</span>
+      {badges}
+      <span className="pop-over-card-controls">
+        {showFormatControls && controls}
+        {actions}
+      </span>
     </div>
     {/* A Multipart question shows every Part whole, since each has its own
         layout; any other card cuts each half off at a few lines. */}
@@ -292,5 +318,5 @@ export function PopOverCard({
     {answers && (whole
       ? <div className="pop-over-answer-half">{answers}</div>
       : <Clipped className="pop-over-answer-half">{answers}</Clipped>)}
-  </li>
+  </>
 }

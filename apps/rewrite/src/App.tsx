@@ -84,9 +84,15 @@ import {
   SECTION_LABELS,
   SECTION_ORDER,
   createQuestion,
+  partsOf,
+  rowsIn,
   topicsOf,
+  workSpaceOf,
+  workSpaceRowsOf,
+  WORK_SPACE_LINE_PITCH,
   withTopicAdded,
 } from './exam'
+import { wordBankLayoutOf } from './export-plan'
 import { ExamPage } from './exam-page'
 import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import type {
@@ -180,6 +186,7 @@ import { bankQuestionById } from './question-bank'
 import { QuestionBankExportDialog } from './question-bank-export-dialog'
 import { QuestionBankImportDialog } from './question-bank-import-dialog'
 import { QuestionBankPane } from './question-bank-pane'
+import type { CopyFormat, CopyPartFormat } from './question-copy'
 import {
   NO_FILTER,
   topicOptions,
@@ -933,6 +940,8 @@ function QuestionBankWorkspace({
   onAddToExam,
   onAddManyToExam,
   onRemoveFromExam,
+  formatForQuestion,
+  onFormatQuestion,
   beforeCanonicalQuestionCommit,
   onCanonicalQuestionCommitted,
   onQuestionDeleted,
@@ -956,6 +965,8 @@ function QuestionBankWorkspace({
   onAddToExam?: (question: Question) => void
   onAddManyToExam?: (questions: readonly Question[]) => void
   onRemoveFromExam?: (questionId: string) => void
+  formatForQuestion?: (question: Question) => CopyFormat
+  onFormatQuestion?: (question: Question, format: CopyFormat) => void
   beforeCanonicalQuestionCommit?: () => Promise<void>
   onCanonicalQuestionCommitted?: (question: Question) => void
   onQuestionDeleted?: (questionId: string) => void
@@ -1015,6 +1026,8 @@ function QuestionBankWorkspace({
           }
         : undefined}
       onRemoveFromWorkingCopy={onRemoveFromExam}
+      formatForQuestion={formatForQuestion}
+      onFormatQuestion={onFormatQuestion}
     />
     {exporting && <QuestionBankExportDialog bank={bank} onClose={() => setExporting(false)} />}
     {choosingType && <ContextMenu
@@ -1087,6 +1100,8 @@ function QuestionBankTabsPane({
   onAddToExam,
   onAddManyToExam,
   onRemoveFromExam,
+  formatForQuestion,
+  onFormatQuestion,
   workspaceDrag,
   resourceRevision = 0,
   examsService,
@@ -1104,6 +1119,8 @@ function QuestionBankTabsPane({
   onAddToExam?: (question: Question) => void
   onAddManyToExam?: (questions: readonly Question[]) => void
   onRemoveFromExam?: (questionId: string) => void
+  formatForQuestion?: (question: Question) => CopyFormat
+  onFormatQuestion?: (question: Question, format: CopyFormat) => void
   workspaceDrag?: ReturnType<typeof useWorkspaceDrag>
   resourceRevision?: number
   examsService?: ExamWorkspaceService
@@ -1111,6 +1128,7 @@ function QuestionBankTabsPane({
   onCanonicalQuestionCommitted?: (question: Question) => void
   onQuestionDeleted?: (questionId: string) => void
 }) {
+  const popOver = usePopOver()
   const stableContext = useMemo<BankWorkspaceContext>(
     () => ({ examId: context.examId }),
     [context.examId],
@@ -1284,6 +1302,13 @@ function QuestionBankTabsPane({
     {active ? <QuestionBankWorkspace
       key={active.id}
       bank={active}
+      extraActions={popOver.supported && <Button variant="ghost" size="icon-sm"
+        type="button"
+        className="toolbar-icon-button"
+        aria-label="Open Question Bank as a pop-over"
+        title="Open Question Bank as a pop-over"
+        onClick={() => popOver.open(active.id)}
+      ><PictureInPicture2 aria-hidden="true" /></Button>}
       service={service}
       filter={filter}
       onFilterChange={(nextFilter) => {
@@ -1298,6 +1323,8 @@ function QuestionBankTabsPane({
       onAddToExam={onAddToExam}
       onAddManyToExam={onAddManyToExam}
       onRemoveFromExam={onRemoveFromExam}
+      formatForQuestion={formatForQuestion}
+      onFormatQuestion={onFormatQuestion}
       beforeCanonicalQuestionCommit={beforeCanonicalQuestionCommit}
       onCanonicalQuestionCommitted={onCanonicalQuestionCommitted}
       onQuestionDeleted={onQuestionDeleted}
@@ -2137,7 +2164,7 @@ function ExamEditor({
           <div className="document-edit-actions" aria-label="Editing actions">
             <Button variant="ghost" size="icon-sm"
               type="button"
-              className="toolbar-icon-button"
+              className="toolbar-icon-button document-history-button"
               aria-label="Undo"
               title="Undo (Ctrl/Cmd+Z)"
               disabled={isHistoricalBrowsing || !store.canUndo()}
@@ -2149,7 +2176,7 @@ function ExamEditor({
             </Button>
             <Button variant="ghost" size="icon-sm"
               type="button"
-              className="toolbar-icon-button"
+              className="toolbar-icon-button document-history-button"
               aria-label="Redo"
               title="Redo (Ctrl/Cmd+Shift+Z)"
               disabled={isHistoricalBrowsing || !store.canRedo()}
@@ -2169,7 +2196,7 @@ function ExamEditor({
           <Button variant="ghost" size="icon-sm"
             ref={historyButton}
             type="button"
-            className="toolbar-icon-button"
+            className="toolbar-icon-button export-history-trigger"
             aria-label="Export History"
             title="Export History"
             aria-expanded={historyOpen}
@@ -2495,6 +2522,61 @@ function ExamEditor({
             onRemoveFromExam={(questionId) => {
               store.removeFromWorkingCopy([questionId])
               if (selection.isSelected(questionId)) selection.toggle(questionId)
+            }}
+            formatForQuestion={(question) => {
+              const examQuestion = exam.questions.find(({ id }) => id === question.id) ?? question
+              if (question.type === 'multiple-choice') return { columns: examQuestion.columns }
+              if (question.type === 'matching') return {
+                wordBank: wordBankLayoutOf(exam, examQuestion),
+              }
+              if (question.type === 'open') {
+                const count = rowsIn(workSpaceOf(exam, question.id).height, workSpaceRowsOf(exam.questionStyle))
+                const lines = [0, 2, 4, 6, 10].reduce((best, option) =>
+                  Math.abs(option - count) < Math.abs(best - count) ? option : best, 0)
+                return { lines }
+              }
+              if (question.type === 'multipart') {
+                const parts: Record<string, CopyPartFormat> = {}
+                for (const part of partsOf(examQuestion)) {
+                  if (part.type === 'multiple-choice') parts[part.id] = { columns: part.columns }
+                  else {
+                    const count = rowsIn(workSpaceOf(exam, part.id).height, workSpaceRowsOf(exam.questionStyle))
+                    parts[part.id] = { lines: [0, 2, 4, 6, 10].reduce((best, option) =>
+                      Math.abs(option - count) < Math.abs(best - count) ? option : best, 0) }
+                  }
+                }
+                return { parts }
+              }
+              return {}
+            }}
+            onFormatQuestion={(question, format) => {
+              const examQuestion = exam.questions.find(({ id }) => id === question.id) ?? question
+              if (question.type === 'multiple-choice' && format.columns !== undefined
+                && format.columns !== examQuestion.columns) {
+                store.setQuestionColumns([question.id], format.columns)
+              } else if (question.type === 'matching' && format.wordBank !== undefined
+                && format.wordBank !== wordBankLayoutOf(exam, examQuestion)) {
+                store.setWordBankLayout([question.id], format.wordBank)
+              } else if (question.type === 'open' && format.lines !== undefined) {
+                const current = rowsIn(workSpaceOf(exam, question.id).height, workSpaceRowsOf(exam.questionStyle))
+                if (format.lines !== current) store.setQuestionWorkSpace([question.id], format.lines === 0
+                    ? { height: 0, style: 'blank', fill: false }
+                    : { height: format.lines * WORK_SPACE_LINE_PITCH, style: 'lines', fill: false })
+              } else if (question.type === 'multipart') {
+                const parts = partsOf(examQuestion)
+                for (const part of parts) {
+                  const partFormat = format.parts?.[part.id]
+                  if (part.type === 'multiple-choice' && partFormat?.columns !== undefined
+                    && partFormat.columns !== part.columns) {
+                    store.setQuestionColumns([part.id], partFormat.columns)
+                  } else if (part.type === 'open' && partFormat?.lines !== undefined) {
+                    const current = rowsIn(workSpaceOf(exam, part.id).height, workSpaceRowsOf(exam.questionStyle))
+                    if (partFormat.lines !== current) store.setQuestionWorkSpace([part.id], partFormat.lines === 0
+                        ? { height: 0, style: 'blank', fill: false }
+                        : { height: partFormat.lines * WORK_SPACE_LINE_PITCH, style: 'lines', fill: false })
+                  }
+                }
+              }
             }}
             workspaceDrag={drag}
             resourceRevision={bankRevision + bankLibraryRevision}

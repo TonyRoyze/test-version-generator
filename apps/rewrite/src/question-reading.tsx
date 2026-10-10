@@ -16,6 +16,7 @@ import { Check, Lock } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { DifficultyBadge, TopicBadge } from './badges'
 import { DocView } from './doc-view'
+import { explanationDocumentOf, type ProseMirrorJSON } from './question-doc'
 import type { QuestionReadingContent } from './question-reading-content'
 
 /** A Locked Answer's mark: it keeps its letter when answers are shuffled. */
@@ -87,7 +88,7 @@ export function QuestionReading({
     )}
     {content.answerReason && <section className="question-reading-answer">
       <h4>Explanation</h4>
-      <p>{content.answerReason}</p>
+      <DocView content={(explanationDocumentOf(content.answerReason)?.content as ProseMirrorJSON[] | undefined) ?? []} />
     </section>}
     {content.parts && (
       // The Multipart question is the stem above; its Parts follow, lettered as the

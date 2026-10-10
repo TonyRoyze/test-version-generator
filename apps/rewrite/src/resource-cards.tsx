@@ -14,20 +14,12 @@ import {
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { TopicBadge } from './badges'
 import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
-import { DocView } from './doc-view'
-import { PAGE_GEOMETRY } from './exam-page'
 import type { RecentExam } from './exam-workspaces'
-import type { PageFurniture } from './export-plan'
-import { PageHeaderContent } from './page-item-view'
 import { usePopOver } from './pop-over-context'
 import type { QuestionBankCollectionItem } from './resource-collections'
 
 /** How many Topics a Question Bank card shows before it counts the rest. */
 const SHOWN_TOPICS = 3
-
-/** The sheet clips at one page, so a long Exam's later questions are drawn and
- *  then thrown away. Stop well past whatever a page can hold instead. */
-const THUMBNAIL_QUESTIONS = 12
 
 /**
  * The one thing an empty shelf says. The whole box is the button — a dotted
@@ -198,56 +190,22 @@ export function ExamCard({
       { kind: 'action' as const, label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => onDelete(exam) },
     ] : []),
   ]
-  // The same furniture the first sheet actually prints. The thumbnail is a
-  // real page at real geometry, shrunk — not an approximation of one — so an
-  // Exam is recognised on the shelf by the shape of its own first page.
-  const furniture: PageFurniture = {
-    identityFields: ['Name', 'Class', 'Date'],
-    title: exam.title,
-    arrangementLabel: 'ID: A',
-    pageNumber: 1,
-  }
   return (
-    <Card asChild className="gap-0 py-0"><article className="exam-card">
-      <Button variant="plain" size="content" type="button" className="exam-card-main" onClick={() => onOpen(exam.id)}>
-      <span className="sr-only">Open {exam.title}. </span>
-      {/* Decorative: everything it says, the caption and the label above say in
-          a form a screen reader can use, and six miniature pages would
-          otherwise put six `h1`s into the document outline. */}
-      <div className="exam-sheet" aria-hidden="true">
-        <div className="exam-page" style={PAGE_GEOMETRY}>
-          <PageHeaderContent header="first" furniture={furniture} />
-          <div className="page-content">
-            {exam.preview ? (
-              exam.preview.slice(0, THUMBNAIL_QUESTIONS).map((content, index) => (
-                <section className="exam-question" key={index}>
-                  <div className="question-number">
-                    <span className="question-count">{index + 1}.</span>
-                  </div>
-                  <div className="question-body">
-                    <DocView className="question-stem" content={content} />
-                  </div>
-                </section>
-              ))
-            ) : (
-              <p className="empty-page-line">Empty Exam</p>
-            )}
-          </div>
-          <footer className="page-footer">{furniture.pageNumber}</footer>
-        </div>
-      </div>
-      <div className="exam-card-caption">
-        <span className="exam-card-title" aria-hidden="true">{exam.title}</span>
-        <span className="exam-card-stats">
-          <span>{exam.questionCount} {exam.questionCount === 1 ? 'Q' : 'Qs'}</span>
+    <Card asChild className="gap-0 py-0"><article className="resource-card exam-card">
+      <Button variant="plain" size="content" type="button" className="resource-card-main" onClick={() => onOpen(exam.id)}>
+        <span className="sr-only">Open {exam.title}. </span>
+        <h2 aria-hidden="true">{exam.title}</h2>
+        <p className="bank-card-count">
+          {exam.questionCount}{' '}
+          {exam.questionCount === 1 ? 'Question' : 'Questions'}
           {exam.unsaved && (
             <span className="unsaved-mark" title="Unsaved changes">
               <TriangleAlert aria-hidden="true" />
               <span className="sr-only">Unsaved changes</span>
             </span>
           )}
-        </span>
-      </div>
+        </p>
+        <time dateTime={exam.lastOpenedAt}>{relativeTime('Updated', exam.lastOpenedAt)}</time>
       </Button>
       {onDelete && <Button variant="plain" size="content"
         type="button"
