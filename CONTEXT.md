@@ -166,11 +166,11 @@ Optional rich-text material authored for a Short Answer question to represent it
 _Avoid_: Correct answer, sample response, rubric
 
 **Multipart**:
-A Question Type whose Question is a stem followed by its Parts. The stem is ordinary rich text, usually the shared material the Parts are asked about — a passage, quote, image, table or anything else. One Multipart question takes one test number, and its Parts are lettered beneath it. A Question Bank keeps it whole: a Part is never a Question of its own, and an Exam adds, moves and Removes a Multipart question as one Question.
+A Question Type whose Question is a stem followed by its Parts. The stem is ordinary rich text, usually the shared material the Parts are asked about — a passage, quote, image, table or anything else. Its shared stem prints as a separate description before its first Part, and each Part takes its own consecutive question number on the paper. A Question Bank keeps it whole: a Part is never a Question of its own, and an Exam adds, moves and Removes a Multipart question as one Question.
 _Avoid_: Stimulus, passage, document-based question, question group, source
 
 **Part**:
-One lettered question within a Multipart question, in authored order: a Multiple Choice Part with its own stem and answers, or a Short Answer Part with its own stem and optional Suggested Answer. Unlike a Question's type, a Part's type may be switched while it is edited; only the answers of the type it ends as are saved. Parts are never shuffled, since they are lettered in place and often build on one another, but a Multiple Choice Part's answers Vary as a Multiple Choice question's do. A Multipart question with no Parts is incomplete rather than invalid. Question Metadata belongs to the Multipart question, not its Parts; its Answer Key entry records one line per Part.
+One question within a Multipart question, in authored order, with its own question number on the paper: a Multiple Choice Part with its own stem, answers and optional Explanation, or a Short Answer Part with its own stem and optional Suggested Answer. Unlike a Question's type, a Part's type may be switched while it is edited; only the answers of the type it ends as are saved. Parts are never shuffled, since they share their preceding description and often build on one another, but a Multiple Choice Part's answers Vary as a Multiple Choice question's do. A Multipart question with no Parts is incomplete rather than invalid. Question Metadata belongs to the Multipart question, not its Parts; the Answer Key records each Part under its own question number.
 _Avoid_: Sub-question, item (Item is Matching's), sub-part
 
 **Work Space**:
@@ -240,3 +240,5 @@ _Avoid_: DOCX renderer
 **Export Fingerprint**:
 The normalized semantic content, page assignment, and structural topology used to compare an Export Document, its Layout Plan, and each Export Adapter's output. It excludes output format, package bytes, generated identifiers, coordinates, fonts, raster appearance, and renderer-chosen line wrapping.
 _Avoid_: Version identity, snapshot, golden
+
+Question Bank Record 0.10.0 adds optional `answerReason` to Multiple Choice Parts. Older records remain readable; explanations live in each Part’s document and stay off the student question stream.

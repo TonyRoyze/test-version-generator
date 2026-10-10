@@ -1,5 +1,6 @@
+import { COVER_PAGE_TEMPLATE_BY_ID } from './cover-templates/templates'
 import { describe, expect, test } from 'bun:test'
-import { bodyPoints, pointsOf, titlePoints } from './export-typography'
+import { bodyPoints, pointsOf, titlePoints, PAPER_BOOK_HEADER_PX, PAPER_BOOK_TITLE_PX } from './export-typography'
 import { PDFDocument } from 'pdf-lib'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import {
@@ -443,4 +444,78 @@ describe('PDF Export Adapter', () => {
       }
     }
   })
+})
+
+
+test('Paper Book PDF respects authored explanation line breaks and blank lines', async () => {
+  const fixture = FIXTURES[6]!
+  const template = COVER_PAGE_TEMPLATE_BY_ID['paper-book']!
+  const plan = planExport({
+    ...fixture,
+    exam: { ...fixture.exam,
+      questions: fixture.exam.questions.map((question) => question.type === 'multiple-choice'
+        ? { ...question, answerReason: 'Atomic 11\nMass 23\n\nCharge +1' } : question),
+      coverPage: { ...template.cover, templateId: template.id },
+    },
+    selection: { test: true, answerKey: false },
+  })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const document = await getDocument({ data: bytes }).promise
+  const items = (await (await document.getPage(1)).getTextContent()).items
+  const yOf = (word: string) => {
+    const item = items.find((item) => 'str' in item && item.str.includes(word))
+    expect(item).toBeDefined()
+    if (!item || !('transform' in item)) throw new Error(`Missing PDF text: ${word}`)
+    return item.transform[5]!
+  }
+  const firstGap = yOf('Atomic') - yOf('Mass')
+  const blankGap = yOf('Mass') - yOf('Charge')
+  expect(firstGap).toBeGreaterThan(0)
+  expect(blankGap).toBeCloseTo(firstGap * 2, 1)
+})
+
+test('PDF prints a Multipart description without a number and numbers each Part independently', async () => {
+  const fixture = FIXTURES.find((fixture) => fixture.name === 'a multipart with a multiple-choice part and a short-answer part')!
+  const plan = planExport({ ...fixture, selection: { test: true, answerKey: false } })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const document = await getDocument({ data: bytes, disableWorker: true }).promise
+  const items = (await (await document.getPage(1)).getTextContent()).items.filter((item) => 'str' in item)
+  const first = items.find((item) => item.str.includes('Which region'))!
+  const second = items.find((item) => item.str.includes('Identify an issue'))!
+  const description = items.find((item) => item.str.includes('The power of the Kingdom'))!
+  expect(first).toBeDefined()
+  expect(second).toBeDefined()
+  expect(description.transform[5]).toBeGreaterThan(first.transform[5])
+  expect(items.filter((item) => /^\d+\.$/.test(item.str)).map((item) => item.str)).toEqual(['1.', '2.'])
+  expect(items.find((item) => item.str === '1.')!.transform[5]).toBeCloseTo(first.transform[5], 1)
+  expect(items.find((item) => item.str === '2.')!.transform[5]).toBeCloseTo(second.transform[5], 1)
+})
+
+
+test('Paper Book leaves clear space between a multiline explanation and the next answer', async () => {
+  const source = FIXTURES.flatMap((fixture) => fixture.exam.questions).find((q) => q.type === 'multiple-choice')!
+  const template = COVER_PAGE_TEMPLATE_BY_ID['paper-book']!
+  const plan = planExport({
+    exam: { title: 'Sidebar spacing', coverPage: { ...template.cover, templateId: template.id }, questions: [
+      { ...source, id: 'first', answerReason: `Atomic number
+Mass number
+Charge ends here` },
+      { ...source, id: 'second', answerReason: undefined },
+    ] },
+    arrangement: { id: 'a', letter: 'A', questionOrder: ['first', 'second'], choiceOrder: {} },
+    selection: { test: true, answerKey: false },
+    measure: FIXTURES[0]!.measure,
+  })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const page = await (await getDocument({ data: bytes }).promise).getPage(1)
+  const items = (await page.getTextContent()).items as { str: string; transform: number[] }[]
+  const runningHead = items.find((item) => item.str === template.cover.subject)!
+  const openingTitle = items.find((item) => item.str === `${template.cover.schoolName} - ${template.cover.subject}`)!
+  expect(runningHead.transform[0]).toBeCloseTo(PAPER_BOOK_HEADER_PX * 0.75, 1)
+  expect(openingTitle.transform[0]).toBeCloseTo(PAPER_BOOK_TITLE_PX * 0.75, 1)
+  const lastLine = items.find((item) => item.str.includes('Charge ends here'))!
+  const nextAnswer = items.find((item) => /^2\. /.test(item.str))!
+  expect(lastLine).toBeDefined()
+  expect(nextAnswer).toBeDefined()
+  expect(lastLine.transform[5]! - nextAnswer.transform[5]!).toBeGreaterThanOrEqual(13.5)
 })

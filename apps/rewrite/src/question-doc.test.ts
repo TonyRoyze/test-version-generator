@@ -4,6 +4,7 @@ import {
   choiceIdOf,
   cleanDocument,
   explanationTextOf,
+  explanationDocumentOf,
   choiceNodesOf,
   matchingBankNodesOf,
   matchingPromptNodesOf,
@@ -325,4 +326,23 @@ describe('withFreshChoiceIds', () => {
     )
     expect(choiceNodesOf(original).map(choiceIdOf)).toEqual(['c1', 'c2'])
   })
+})
+
+
+test('explanations retain paragraphs, blank lines and hard breaks when reopened', () => {
+  const original = { type: 'doc', content: [
+    { type: 'paragraph', content: [{ type: 'text', text: 'Atomic number = 11' }, { type: 'hardbreak' }, { type: 'text', text: 'Mass number = 23', marks: [{ type: 'strong' }] }] },
+    { type: 'paragraph' },
+    { type: 'paragraph', content: [{ type: 'text', text: 'Charge = +1' }] },
+  ] }
+  const stored = explanationTextOf(original)
+  expect(paperBookReasonParts(stored)).toEqual([
+    { type: 'text', value: 'Atomic number = 11' },
+    { type: 'text', value: '\n' },
+    { type: 'text', value: 'Mass number = 23', marks: ['strong'] },
+    { type: 'text', value: '\n' },
+    { type: 'text', value: '\n' },
+    { type: 'text', value: 'Charge = +1' },
+  ])
+  expect(paperBookReasonParts(explanationTextOf(explanationDocumentOf(stored)))).toEqual(paperBookReasonParts(stored))
 })

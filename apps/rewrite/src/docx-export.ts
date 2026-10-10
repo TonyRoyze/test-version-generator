@@ -66,6 +66,10 @@ import {
   LIST_ITEM_GAP_EM,
   PARAGRAPH_GAP_EM,
   TITLE_LINE_HEIGHT,
+  PAPER_BOOK_HEADER_PX,
+  PAPER_BOOK_TITLE_PX,
+  TABLE_CELL_PADDING_X,
+  TABLE_CELL_PADDING_Y,
   halfPointsOf,
   sectionHeadingHalfPoints,
   titleHalfPoints,
@@ -369,6 +373,8 @@ type BlockContext = {
   /** Blocks that sit close, as a choice's or a list item's do in print: no
    *  paragraph gap opens between them. */
   tight?: boolean
+  /** Table cell paragraphs have no extra space after each line. */
+  paragraphAfter?: number
 }
 
 // Body text's spacing, from the one table in `export-typography.ts`, at the
@@ -413,7 +419,7 @@ function paragraphOptions(
     spacing: {
       line: BODY_SPACING.line,
       lineRule: LineRuleType.AT_LEAST,
-      after: context.list ? BODY_SPACING.listItemGap : BLOCK_AFTER,
+      after: context.paragraphAfter ?? (context.list ? BODY_SPACING.listItemGap : BLOCK_AFTER),
       ...(context.before ? { before: context.before } : {}),
     },
     indent: indent?.left || indent?.hanging ? indent : undefined,
@@ -805,12 +811,13 @@ function documentTable(
             const content = cell
               ? blocks(
                   childrenOf(cell),
-                  { indent: 0, keepNext: context.keepNext },
-                  { ...build, contentWidth: cellWidth },
+                  { indent: 0, keepNext: context.keepNext, tight: true, paragraphAfter: 0 },
+                  { ...build, contentWidth: cellWidth - TABLE_CELL_PADDING_X * 2 },
                 )
               : []
             return new TableCell({
               width: { size: twips(cellWidth), type: WidthType.DXA },
+              margins: { top: twips(TABLE_CELL_PADDING_Y), bottom: twips(TABLE_CELL_PADDING_Y), left: twips(TABLE_CELL_PADDING_X), right: twips(TABLE_CELL_PADDING_X) },
               shading: header ? { fill: 'F1F1F1' } : undefined,
               borders: {
                 top: CELL_BORDER,
@@ -1280,8 +1287,8 @@ function headerParagraphs(furniture: PageFurniture, build: BuildContext): Paragr
     const cover = furniture.paperBook
     return [new Paragraph({
       children: [
-        new TextRun({ text: cover.subject, italics: true, size: 16 }),
-        new TextRun({ text: `\t${cover.schoolName} ➭ page ${furniture.pageNumber}`, italics: true, size: 16 }),
+        new TextRun({ text: cover.subject, italics: true, size: Math.floor(PAPER_BOOK_HEADER_PX * 1.5) }),
+        new TextRun({ text: `\t${cover.schoolName} ➭ page ${furniture.pageNumber}`, italics: true, size: Math.floor(PAPER_BOOK_HEADER_PX * 1.5) }),
       ],
       tabStops: [{ type: TabStopType.RIGHT, position: twips(PAGE_CONTENT_WIDTH) }],
     })]
@@ -1441,7 +1448,7 @@ function sectionOf(
   const book = page.furniture.paperBook
   const bookContent = book ? [
     ...(page.number === 1 ? [new Paragraph({
-      children: [new TextRun({ text: `${book.schoolName} - ${book.subject}`, italics: true, size: 28 })],
+      children: [new TextRun({ text: `${book.schoolName} - ${book.subject}`, italics: true, size: Math.floor(PAPER_BOOK_TITLE_PX * 1.5) })],
       style: PAPER_BOOK_TITLE_STYLE,
       alignment: AlignmentType.CENTER,
       spacing: { after: 0 },
@@ -1476,8 +1483,10 @@ function sectionOf(
               ...paperBookAnswersOf(page.items).flatMap((entry) => [
                 new Paragraph({ text: paperBookAnswerText(entry) }),
                 ...(entry.reason ? [new Paragraph({
+                  spacing: { after: twips(10) },
                   children: paperBookReasonParts(entry.reason).map((part): ParagraphChild => {
                     if (part.type === 'math') return mathRun(part.value)
+                    if (part.value === '\n') return new TextRun({ break: 1 })
                     const marks = part.marks ?? []
                     const text = new TextRun({
                       text: part.value,

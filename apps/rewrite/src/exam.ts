@@ -19,6 +19,8 @@ import {
   matchingBankNodesOf,
   matchingPromptNodesOf,
   partAnswerNodeOf,
+  suggestedAnswerDocumentOf,
+  explanationTextOf,
   partStemNodesOf,
   promptAnswerIdOf,
   multipartPartNodesOf,
@@ -366,6 +368,7 @@ export type Part = {
   columns: ColumnSetting
   /** A Short Answer Part's Suggested Answer as a document, when it has one. */
   suggestedAnswer?: ProseMirrorJSON
+  answerReason?: string
 }
 
 // The order Question Types are listed in wherever a teacher picks one, and the
@@ -1047,6 +1050,10 @@ export function partsOf(question: Question): Part[] {
             }))
           : [],
       columns: columns === 1 || columns === 2 || columns === 4 ? columns : DEFAULT_COLUMNS,
+    }
+    if (type === 'multiple-choice') {
+      const reason = explanationTextOf(suggestedAnswerDocumentOf(node))
+      if (reason) part.answerReason = reason
     }
     if (type === 'open' && answer) {
       const suggested: ProseMirrorJSON = {

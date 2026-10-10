@@ -110,6 +110,10 @@ export function QuestionReading({
                 ))}
               </ol>
             )}
+            {part.answerReason && <section className="question-reading-answer">
+              <h4>Explanation</h4>
+              <DocView content={(explanationDocumentOf(part.answerReason)?.content as ProseMirrorJSON[] | undefined) ?? []} />
+            </section>}
             {part.suggestedAnswer && (
               <section className="question-reading-answer">
                 <h4>Suggested Answer</h4>

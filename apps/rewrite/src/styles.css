@@ -1046,7 +1046,7 @@ button { cursor: pointer; }
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  font-size: 11px;
+  font-size: 14px;
   font-style: italic;
   white-space: nowrap;
 }
@@ -1056,7 +1056,7 @@ button { cursor: pointer; }
   right: var(--page-margin-right);
   left: var(--page-margin-left);
   text-align: center;
-  font-size: 18px;
+  font-size: 22px;
   font-style: italic;
   line-height: 1.2;
 }
@@ -1713,7 +1713,11 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 .doc-figure .doc-crop > img { position: absolute; max-width: none; }
 .doc-figure figcaption { font-size: 13px; font-style: italic; }
 .doc-table { border-collapse: collapse; }
-.doc-table td, .doc-table th { padding: 3px 8px; border: 1px solid #b9a893; }
+.doc-table td, .doc-table th { padding: 2px 8px; border: 1px solid #b9a893; }
+/* Table cells keep authored paragraph breaks without the surrounding prose gap. */
+.doc-table :is(td, th) > :is(p, ul, ol) { margin: 0; }
+.dialog-editor .milkdown .ProseMirror :is(td, th) { padding: 2px 8px; }
+.dialog-editor .milkdown .ProseMirror :is(td, th) > p { margin: 0; padding: 0; }
 /* Read in full on the Question Bank page and in the Pop-over, a table spans
    its lane with equal columns, as the Question editor and the DOCX export lay
    it out; left to size itself it shrinks to its shortest content. */

@@ -23,6 +23,10 @@ import {
   LIST_ITEM_GAP_EM,
   PARAGRAPH_GAP_EM,
   TITLE_LINE_HEIGHT,
+  PAPER_BOOK_HEADER_PX,
+  PAPER_BOOK_TITLE_PX,
+  TABLE_CELL_PADDING_X,
+  TABLE_CELL_PADDING_Y,
   halfPointsOf,
   pointsOf,
 } from './export-typography'
@@ -67,6 +71,16 @@ describe('print’s stylesheet is the table', () => {
     return match[1]!
   }
   const sizeIn = (block: string) => Number(/font(?:-size)?:[^;]*?(\d+)px/.exec(block)?.[1])
+
+  test('Paper Book headers use the shared readable sizes', async () => {
+    expect(sizeIn(await rule('.paper-book-running-head'))).toBe(PAPER_BOOK_HEADER_PX)
+    expect(sizeIn(await rule('.paper-book-opening-title'))).toBe(PAPER_BOOK_TITLE_PX)
+  })
+
+  test('table cells omit prose margins and use compact padding', async () => {
+    expect(await rule('.doc-table td, .doc-table th')).toContain(`padding: ${TABLE_CELL_PADDING_Y}px ${TABLE_CELL_PADDING_X}px;`)
+    expect(await rule('.doc-table :is(td, th) > :is(p, ul, ol)')).toContain('margin: 0;')
+  })
 
   test.each([
     ['.exam-page', 'body'],
@@ -253,4 +267,16 @@ describe('the PDF draws print’s type', () => {
     expect(baseline('Competition') - baseline('Development')).toBeCloseTo(line + pointsOf('body') * LIST_ITEM_GAP_EM, 1)
     expect(baseline('Several other factors') - baseline('Competition')).toBeCloseTo(line + pointsOf('body') * PARAGRAPH_GAP_EM, 1)
   })
+})
+
+
+test('PDF table rows keep their text at compact body line spacing', async () => {
+  const bytes = await createPublicationPdf(plansOfFixture('a table with a header row'), async () => null, fonts)
+  const page = await (await getDocument({ data: bytes }).promise).getPage(1)
+  const items = (await page.getTextContent()).items as { str: string; transform: number[] }[]
+  const baseline = (text: string) => items.find((item) => item.str === text)!.transform[5]!
+  const rowPitch = pointsOf('body') * BODY_LINE_HEIGHT + TABLE_CELL_PADDING_Y * 2 * 0.75
+  expect(baseline('Element') - baseline('Sodium')).toBeCloseTo(rowPitch, 1)
+  expect(baseline('Sodium') - baseline('Chlorine')).toBeCloseTo(rowPitch, 1)
+  expect(items.map((item) => item.str)).toEqual(expect.arrayContaining(['Symbol', 'Na', 'Cl']))
 })

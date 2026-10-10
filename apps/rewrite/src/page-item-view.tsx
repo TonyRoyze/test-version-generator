@@ -20,6 +20,7 @@ import { DifficultyBadge, TopicBadge } from './badges'
 import { DocView } from './doc-view'
 import {
   hasAnswerBlank,
+  hasNumberedParts,
   headerHeightOf,
   numberColumnOf,
   printedNumberLabelOf,
@@ -270,6 +271,7 @@ export function QuestionContent({
   renderPartWorkSpace?: (part: PlannedPart, space: PlannedWorkSpace) => ReactNode
 }) {
   const numbered = printsNumberLine(item)
+  const numberedParts = hasNumberedParts(item.question)
   const column = numberColumnOf(item.question)
   return (
     <>
@@ -277,7 +279,7 @@ export function QuestionContent({
           before it — a True/False question's marks, or an answer blank —
           `questionIndentOf` in export-plan.ts is the same width for the
           adapters. */}
-      <div
+      {!numberedParts && <div
         className={
           column === 'plain' ? 'question-number' : `question-number question-number--${column}`
         }
@@ -293,8 +295,8 @@ export function QuestionContent({
           </span>
         )}
         {numbered && <span className="question-count">{printedNumberLabelOf(item.question)}</span>}
-      </div>
-      <div className="question-body">
+      </div>}
+      <div className="question-body" style={numberedParts ? { gridColumn: '1 / -1' } : undefined}>
         <DocView className="question-stem" content={item.stem} />
         {item.grid && (
           <ChoiceGridView grid={item.grid} showCorrectness={showCorrectness} />

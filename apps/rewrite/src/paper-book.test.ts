@@ -22,7 +22,7 @@ test('Paper Book lays out editable questions on its first page across print and 
   expect(plan.pages[0]?.furniture.paperBook).toBeDefined()
   expect(plan.pages[0]?.furniture.coverPage).toBeUndefined()
   expect(plan.pages[0]?.items.length).toBeGreaterThan(0)
-  expect(paperBookAnswersOf(plan.pages[0]!.items)).toEqual([{ number: '1a', answer: 'A' }])
+  expect(paperBookAnswersOf(plan.pages[0]!.items)).toEqual([{ number: '1.', answer: 'A' }])
 
   const expected = layoutFingerprint([plan])
   expect(compareFingerprints(expected, printFingerprint([plan]))).toEqual([])
@@ -40,8 +40,8 @@ test('Paper Book lists only the answers for the parts on each page', () => {
   })
 
   expect(plan.pages.map((page) => paperBookAnswersOf(page.items))).toEqual([
-    [{ number: '1a', answer: 'A' }],
-    [{ number: '1b', answer: 'A' }, { number: '1c', answer: 'A' }],
+    [{ number: '1.', answer: 'A' }],
+    [{ number: '2.', answer: 'A' }, { number: '3.', answer: 'A' }],
   ])
 })
 
@@ -84,4 +84,25 @@ test('an answer explanation survives Question Bank export and import', async () 
   const exported = await prepareQuestionBankExport(bank)
   const inspected = await inspectQuestionBankRecord(exported.recordBytes)
   expect(importedQuestionsFromRecord(inspected.record)[0]?.answerReason).toBe('Pressure increases with depth.')
+})
+
+test('Paper Book preserves authored explanation line breaks across print and DOCX', async () => {
+  const fixture = FIXTURES[6]!
+  const template = COVER_PAGE_TEMPLATE_BY_ID['paper-book']!
+  const reason = 'Atomic number = 11\nMass number = 23\n\nCharge = +1'
+  const plan = planExport({
+    ...fixture,
+    exam: {
+      ...fixture.exam,
+      questions: fixture.exam.questions.map((question) => question.type === 'multiple-choice' ? { ...question, answerReason: reason } : question),
+      coverPage: { ...template.cover, templateId: template.id },
+    },
+    selection: { test: true, answerKey: false },
+  })
+  expect(paperBookAnswersOf(plan.pages[0]!.items)[0]?.reason).toBe(reason)
+  const expected = layoutFingerprint([plan])
+  expect(expected.pages[0]?.content).toContain('para Atomic number = 11⏎Mass number = 23⏎⏎Charge = +1')
+  expect(compareFingerprints(expected, printFingerprint([plan]))).toEqual([])
+  const bytes = new Uint8Array(await (await createExamDocx([plan])).arrayBuffer())
+  expect(compareFingerprints(expected, await docxFingerprint(bytes))).toEqual([])
 })

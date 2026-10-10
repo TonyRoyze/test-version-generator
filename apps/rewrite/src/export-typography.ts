@@ -54,6 +54,14 @@ export const PARAGRAPH_GAP_EM = 1
  *  used to open a paragraph gap of its own. */
 export const LIST_ITEM_GAP_EM = 0.2
 
+/** Paper Book furniture stays readable alongside the question text. */
+export const PAPER_BOOK_HEADER_PX = 14
+export const PAPER_BOOK_TITLE_PX = 22
+
+/** Compact authored table cells, in CSS pixels. */
+export const TABLE_CELL_PADDING_X = 8
+export const TABLE_CELL_PADDING_Y = 2
+
 const POINTS_PER_PX = 0.75
 
 /** A role's size in PDF points. */

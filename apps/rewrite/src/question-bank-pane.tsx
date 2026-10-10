@@ -35,6 +35,7 @@ import {
 } from 'react'
 import type { MenuPoint } from './context-menu'
 import {
+  partsOf,
   type Question,
   type QuestionType,
 } from './exam'
@@ -53,7 +54,6 @@ import {
   isFilterActive,
   topicOptions,
   type QuestionBankFilter,
-  type QuestionBankSort,
 } from './question-bank-view'
 import { CopyQuestionButton } from './question-copy-feedback'
 import { QuestionReading } from './question-reading'
@@ -507,7 +507,7 @@ export function QuestionBankPane({
             const draggable = !inExamWorkingCopy && onAddToWorkingCopy !== undefined
             const preview = stemPreview(question)
             const name = preview.text || UNTITLED
-            const hasExplanation = Boolean(question.answerReason?.trim())
+            const hasExplanation = Boolean(question.answerReason?.trim()) || partsOf(question).some((part) => Boolean(part.answerReason?.trim()))
             return (
               <li
                 className="question-bank-row question-bank-row--preview"

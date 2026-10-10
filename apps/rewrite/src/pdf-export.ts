@@ -63,6 +63,10 @@ import {
   TITLE_LINE_HEIGHT,
   LIST_ITEM_GAP_EM,
   PARAGRAPH_GAP_EM,
+  PAPER_BOOK_HEADER_PX,
+  PAPER_BOOK_TITLE_PX,
+  TABLE_CELL_PADDING_X,
+  TABLE_CELL_PADDING_Y,
   bodyScale,
   pointsOf,
   sectionHeadingPoints,
@@ -543,7 +547,7 @@ const GAP_BLOCKS = new Set(['paragraph', 'bullet_list', 'ordered_list'])
 function drawBlocks(
   context: DrawContext,
   nodes: readonly ProseMirrorJSON[],
-  options: { x?: number; width?: number; listLevel?: number; centred?: boolean; tight?: boolean } = {},
+  options: { x?: number; width?: number; listLevel?: number; centred?: boolean; tight?: boolean; paragraphAfter?: number } = {},
 ): void {
   const x = options.x ?? context.x
   const width = options.width ?? context.width
@@ -558,7 +562,7 @@ function drawBlocks(
     switch (node.type) {
       case 'paragraph':
         drawInline(context, textPieces(node), { x, width })
-        context.y -= BLOCK_AFTER
+        context.y -= options.paragraphAfter ?? BLOCK_AFTER
         break
       case 'heading': {
         const level = Math.min(Math.max(Number(attrs.level) || 1, 1), 6)
@@ -641,25 +645,29 @@ function drawTable(context: DrawContext, table: ProseMirrorJSON, x: number, widt
   const rows = childrenOf(table).filter((row) => row.type === 'table_row' || row.type === 'table_header_row')
   const columns = Math.max(1, ...rows.map((row) => childrenOf(row).length))
   const cellWidth = width / columns
+  const paddingX = pt(TABLE_CELL_PADDING_X)
+  const paddingY = pt(TABLE_CELL_PADDING_Y)
   for (const row of rows) {
     const top = context.y
-    let bottom = top - BODY_LINE - 8
+    let bottom = top - BODY_LINE - paddingY * 2
     for (let column = 0; column < columns; column += 1) {
       const cell = childrenOf(row)[column]
       if (!cell) continue
       const cellContext = {
         ...context,
-        x: x + column * cellWidth + 4,
-        y: top - 4,
-        width: cellWidth - 8,
+        x: x + column * cellWidth + paddingX,
+        y: top - paddingY,
+        width: cellWidth - paddingX * 2,
       }
       // A cell carries the same rich document vocabulary as a stem: links,
       // marks, math, images, lists, and nested blocks remain semantic content.
       drawBlocks(cellContext, childrenOf(cell), {
         x: cellContext.x,
         width: cellContext.width,
+        tight: true,
+        paragraphAfter: 0,
       })
-      bottom = Math.min(bottom, cellContext.y - 4)
+      bottom = Math.min(bottom, cellContext.y - paddingY)
     }
     ensureRoom(context, top - bottom)
     for (let column = 0; column < columns; column += 1) {
@@ -1160,7 +1168,7 @@ function drawPaperBookFurniture(context: DrawContext, furniture: PageFurniture, 
   const pageNumber = furniture.pageNumber
   const header = cover.subject
   const pageLabel = `${cover.schoolName} ➭ page ${pageNumber}`
-  const small = pt(11)
+  const small = pt(PAPER_BOOK_HEADER_PX)
   assertSupported(header, context.fonts.italic)
   assertSupported(pageLabel, context.fonts.italic)
   context.page.drawText(header, { x: context.x, y: top - small, size: small, font: context.fonts.italic, color: INK })
@@ -1169,7 +1177,7 @@ function drawPaperBookFurniture(context: DrawContext, furniture: PageFurniture, 
   if (pageNumber === 1) {
     const title = `${cover.schoolName} - ${cover.subject}`
     assertSupported(title, context.fonts.italic)
-    const titleSize = pt(18)
+    const titleSize = pt(PAPER_BOOK_TITLE_PX)
     const titleWidth = context.fonts.italic.widthOfTextAtSize(title, titleSize)
     if (titleWidth > pt(672)) throw new PdfLayoutError(context.pageNumber)
     context.page.drawText(title, { x: context.x + (pt(672) - titleWidth) / 2, y: top - pt(45), size: titleSize, font: context.fonts.italic, color: INK })
@@ -1215,8 +1223,9 @@ function drawPaperBookFurniture(context: DrawContext, furniture: PageFurniture, 
       drawInline(context, pieces, {
         x: sideX + pt(8), width: answerWidth, line: pt(14),
       })
-      y = context.y
-      y -= pt(6)
+      // drawInline leaves the bottom of a line; drawAnswerLine takes a
+      // baseline. Leave enough room for the next label's full glyph height.
+      y = context.y - pt(15)
     } else {
       y -= pt(2)
     }

@@ -12,8 +12,8 @@ import { multipleChoiceEditableCtx, newMultipleChoiceNode } from './multiple-cho
 // any other question's stem goes.
 // Below it one `multipartParts` box holds every Part; each Part carries its own
 // stem and, nested inside it, the answer component a question of its kind
-// already uses — a `multipleChoice` list or a `suggestedAnswer` block. Which
-// of the two it holds is what kind of Part it is, so a Part's kind can never
+// already uses — a `multipleChoice` list followed by an Explanation or a
+// `suggestedAnswer` block. Its first answer component determines its kind, so it cannot
 // disagree with its answers.
 //
 // The editor does not letter Parts: their order is what letters them on the
@@ -53,6 +53,7 @@ function partJSON(kind: PartKind) {
     content: [
       { type: 'multipartPartStem', content: [{ type: 'paragraph' }] },
       answerJSON(kind),
+      ...(kind === 'multiple-choice' ? [{ type: 'suggestedAnswer', attrs: { label: 'Explanation' }, content: [{ type: 'paragraph' }] }] : []),
     ],
   }
 }
@@ -78,7 +79,7 @@ export const multipartPartStemSchema = $nodeSchema('multipartPartStem', () => ({
 // on an Exam are keyed by it — and `columns` is the answer layout a Multiple
 // Choice Part starts with, as a question's own `columns` is.
 export const multipartPartSchema = $nodeSchema('multipartPart', () => ({
-  content: 'multipartPartStem (multipleChoice | suggestedAnswer)',
+  content: 'multipartPartStem (multipleChoice suggestedAnswer? | suggestedAnswer)',
   defining: true,
   isolating: true,
   attrs: { id: { default: '' }, columns: { default: 2 } },
@@ -115,10 +116,11 @@ export const multipartPartsSchema = $nodeSchema('multipartParts', () => ({
 
 /** What kind of Part a node is, read from the answer component it holds. */
 export function partKindOf(node: ProseNode): PartKind {
-  return node.lastChild?.type.name === 'suggestedAnswer' ? 'open' : 'multiple-choice'
+  return node.child(1)?.type.name === 'suggestedAnswer' ? 'open' : 'multiple-choice'
 }
 
-/** A Part's answers set aside while it is another kind, by Part id and kind.
+/** A Part set aside while it is another kind, by Part id and kind.
+ *  Its answer component and explanation are restored together.
  *  It lives only as long as one editing session: the document — what is saved
  *  — holds the answers of the kind the Part is, and nothing of the other. */
 export type SetAsideAnswers = Map<string, Partial<Record<PartKind, ProseNode>>>
@@ -137,13 +139,17 @@ export function setPartKind(
   if (part?.type.name !== 'multipartPart') return false
   const current = partKindOf(part)
   if (current === kind) return false
-  const answer = part.lastChild!
   const id = String(part.attrs.id)
   const kept = setAside?.get(id) ?? {}
-  setAside?.set(id, { ...kept, [current]: answer })
-  const replacement = kept[kind] ?? view.state.schema.nodeFromJSON(answerJSON(kind))
+  setAside?.set(id, { ...kept, [current]: part })
+  const restored = kept[kind]
+  const replacement = restored
+    ? Array.from({ length: restored.childCount - 1 }, (_, index) => restored.child(index + 1))
+    : [view.state.schema.nodeFromJSON(answerJSON(kind)),
+      ...(kind === 'multiple-choice' ? [view.state.schema.nodeFromJSON({ type: 'suggestedAnswer', attrs: { label: 'Explanation' }, content: [{ type: 'paragraph' }] })] : [])]
+
   const answerEnd = partPosition + part.nodeSize - 1
-  view.dispatch(view.state.tr.replaceWith(answerEnd - answer.nodeSize, answerEnd, replacement))
+  view.dispatch(view.state.tr.replaceWith(partPosition + 1 + part.firstChild!.nodeSize, answerEnd, replacement))
   return true
 }
 
@@ -215,7 +221,15 @@ export const keepMultipartParts = $prose((ctx: Ctx) =>
       newState.doc.forEach((node) => {
         if (node.type.name === 'multipartParts') present = true
       })
-      if (present) return null
+      if (present) {
+        const tr = newState.tr
+        newState.doc.descendants((node, position) => {
+          if (node.type.name !== 'multipartPart' || node.childCount !== 2 || partKindOf(node) !== 'multiple-choice') return
+          const explanation = newState.schema.nodes.suggestedAnswer!
+          tr.insert(tr.mapping.map(position + node.nodeSize - 1), explanation.create({ label: 'Explanation' }, newState.schema.nodes.paragraph!.create()))
+        })
+        return tr.docChanged ? tr : null
+      }
       const box = newState.schema.nodes.multipartParts
       if (!box) return null
       return newState.tr.insert(newState.doc.content.size, box.create())
