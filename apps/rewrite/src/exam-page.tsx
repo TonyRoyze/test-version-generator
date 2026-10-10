@@ -1594,7 +1594,7 @@ export function ExportPreview({ plan }: { plan: LayoutPlan }) {
   return (
     <main className="exam-workspace" style={pageGeometry(plan.pageSize)}>
       {plan.pages.map((page) => (
-        <article className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`} key={`${page.stream}-${page.header}-${page.number}`}>
+        <article className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`} key={`${page.stream}-${page.number}`}>
           {page.furniture.paperBook && <PaperBookFurniture cover={page.furniture.paperBook} pageNumber={page.number} answers={paperBookAnswersOf(page.items)} />}
           {page.furniture.coverPage ? <CoverPageView
             cover={page.furniture.coverPage}
@@ -2088,7 +2088,7 @@ export function ExamPage({
       {pages.map((page, index) => (
         <article
           className={`exam-page${page.furniture.headerHidden ? ' exam-page--headerless' : ''}${page.furniture.paperBook ? ` exam-page--paper-book${page.number === 1 ? ' paper-book--first' : ''}` : ''}`}
-          key={`${page.header}-${page.number}`}
+          key={`${page.stream}-${page.number}`}
           onClick={clearOnBackground}
         >
           {sectionBands

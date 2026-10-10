@@ -22,6 +22,57 @@ import './styles.css'
 import { initialAuthAction, supabase } from './supabase'
 
 const root = createRoot(document.getElementById('root')!)
+const startingPath = window.location.pathname
+
+function ExamStartupSkeleton() {
+  return <main className="exam-startup" aria-label="Loading Exam editor">
+    <header className="exam-startup-toolbar" aria-hidden="true">
+      <img className="app-logo" src="/logo.png" alt="" width={36} height={36} />
+      <div className="exam-startup-identity">
+        <span className="exam-startup-shimmer exam-startup-title" />
+        <span className="exam-startup-shimmer exam-startup-menus" />
+      </div>
+      <div className="exam-startup-actions">
+        <span className="exam-startup-shimmer" />
+        <span className="exam-startup-shimmer" />
+        <span className="exam-startup-shimmer exam-startup-save" />
+        <span className="exam-startup-shimmer exam-startup-export" />
+      </div>
+    </header>
+    <div className="exam-startup-workspace" aria-hidden="true">
+      <section className="exam-startup-paper-stage">
+        <div className="exam-startup-paper">
+          <span className="exam-startup-shimmer exam-startup-paper-heading" />
+          <span className="exam-startup-shimmer exam-startup-paper-subheading" />
+          <div className="exam-startup-paper-columns">
+            <div className="exam-startup-paper-lines">
+              {Array.from({ length: 13 }, (_, index) => <span
+                className="exam-startup-shimmer"
+                key={index}
+                style={{ width: `${index % 4 === 3 ? 68 : 88 + (index % 3) * 4}%` }}
+              />)}
+            </div>
+            <span className="exam-startup-shimmer exam-startup-answer-column" />
+          </div>
+        </div>
+      </section>
+      <aside className="exam-startup-bank">
+        <span className="exam-startup-shimmer exam-startup-tab" />
+        <div className="exam-startup-bank-panel">
+          <span className="exam-startup-shimmer exam-startup-bank-title" />
+          <span className="exam-startup-shimmer exam-startup-search" />
+          <div className="exam-startup-bank-filters">
+            <span className="exam-startup-shimmer" />
+            <span className="exam-startup-shimmer" />
+            <span className="exam-startup-shimmer" />
+          </div>
+          {Array.from({ length: 7 }, (_, index) => <span className="exam-startup-shimmer exam-startup-question" key={index} />)}
+        </div>
+      </aside>
+    </div>
+    <div className="exam-startup-status" role="status"><span className="exam-startup-spinner" />Loading Exam paper…</div>
+  </main>
+}
 
 async function start() {
   let userId: string | null = null
@@ -37,6 +88,9 @@ async function start() {
     supabase.auth.onAuthStateChange((_event, session) => {
       if ((session?.user.id ?? null) !== userId) window.location.reload()
     })
+  }
+  if (startingPath === '/editor' || startingPath === '/cover-design') {
+    root.render(<ExamStartupSkeleton />)
   }
   // The worker asks the requesting tab which account owns its image references.
   navigator.serviceWorker?.addEventListener('message', event => {
@@ -74,7 +128,6 @@ async function start() {
   void expireWaitingImports().catch(() => undefined)
   const workspaces = createExamWorkspaceService()
   const bankWorkspaces = createQuestionBankWorkspaceService()
-  const startingPath = window.location.pathname
   const startingOnEditor = startingPath === '/editor' || startingPath === '/cover-design'
   // Home has no workspace to restore, so it also clears an active placeholder
   // that was abandoned by closing or leaving the editor. A bare editor reload

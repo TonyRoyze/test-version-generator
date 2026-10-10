@@ -1,15 +1,12 @@
 import { Modal } from '@/components/modal'
 import { Button } from '@/components/ui/button'
-import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import { AppShell } from './app-shell'
-import { PrebuiltCover } from './cover-template-preview'
 import './cover-templates-page.css'
 import type { CoverPageTemplate } from './cover-templates/templates'
 import { COVER_PAGE_TEMPLATES } from './cover-templates/templates'
 import type { PersistentStorageStatus } from './durable-storage'
 import type { RecentExam } from './exam-workspaces'
-import { PrebuiltExamPaper } from './prebuilt-exam-paper'
 
 export { COVER_PAGE_TEMPLATES } from './cover-templates/templates'
 export type { CoverPageTemplate } from './cover-templates/templates'
@@ -26,7 +23,6 @@ export function CoverTemplatesPage({
   onApply: (examId: string | null, template: CoverPageTemplate) => void
 }) {
   const [templateToApply, setTemplateToApply] = useState<CoverPageTemplate | null>(null)
-  const [previewTemplate, setPreviewTemplate] = useState<CoverPageTemplate | null>(null)
 
   return (
     <AppShell crumbs={[{ label: 'Home', href: '/' }, { label: 'Cover Page Templates' }]} persistentStorage={persistentStorage}>
@@ -36,43 +32,17 @@ export function CoverTemplatesPage({
         <div className="cover-template-list" role="list">
           {COVER_PAGE_TEMPLATES.map((template) => (
             <article className="cover-template-row" role="listitem" key={template.id}>
-              <div className="cover-template-preview" aria-label={`${template.name} cover and exam paper preview`}>
-                <div className="cover-template-preview-page" aria-hidden="true">
-                  <div className="exam-page cover-template-paper" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}>
-                    <PrebuiltCover template={template} />
-                  </div>
-                </div>
-                <div className="cover-template-preview-page" aria-hidden="true">
-                  <div className="exam-page cover-template-paper" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}>
-                    <PrebuiltExamPaper template={template} />
-                  </div>
-                </div>
-              </div>
-              <div className="cover-template-preview-labels" aria-hidden="true"><span>Cover</span><span>Exam paper</span></div>
               <div className="cover-template-details">
                 <h2>{template.name}</h2>
                 <p>{template.description}</p>
               </div>
               <div className="cover-template-actions">
-                <Button variant="outline" type="button" className="secondary-button" onClick={() => setPreviewTemplate(template)}>Preview design</Button>
                 <Button variant="outline" type="button" className="secondary-button" onClick={() => setTemplateToApply(template)}>Use template</Button>
               </div>
             </article>
           ))}
         </div>
       </section>
-      {previewTemplate && (
-        <Modal title={`${previewTemplate.name} design`} onClose={() => setPreviewTemplate(null)} className="cover-template-design-dialog" aria-labelledby="cover-template-preview-heading">
-            <div className="cover-template-design-heading">
-              <h2 id="cover-template-preview-heading">{previewTemplate.name} design</h2>
-              <Button variant="outline" type="button" className="secondary-button" onClick={() => setPreviewTemplate(null)}>Close preview</Button>
-            </div>
-            <div className="cover-template-design-pages">
-              <div><h3>Cover</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltCover template={previewTemplate} /></article></div></div>
-              <div><h3>Exam paper</h3><div className="cover-template-design-page"><article className="exam-page" style={{ '--page-width': '816px', '--page-height': '1056px', '--page-margin': '72px' } as CSSProperties}><PrebuiltExamPaper template={previewTemplate} /></article></div></div>
-            </div>
-          </Modal>
-      )}
       {templateToApply && (
         <Modal title={`Use ${templateToApply.name}`} onClose={() => setTemplateToApply(null)} className="cover-template-dialog" aria-labelledby="apply-cover-template-heading">
             <Button variant="plain" size="content" type="button" className="cover-template-dialog-close" aria-label="Close" onClick={() => setTemplateToApply(null)}>×</Button>

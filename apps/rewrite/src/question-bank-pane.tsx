@@ -6,27 +6,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover'
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 // The Question Bank, beside the Working Copy.
 //
-// A compact, scannable table of the canonical questions a teacher has written,
+// A compact, readable list of the canonical questions a teacher has written,
 // newest first, with everything needed to find one and put it on the exam: a
 // stem search, Question Type, Difficulty and Topic filters, and a row that
 // opens, adds and removes its own question. Where on the exam a question lands
 // is said by dragging it there, rather than by a row action reaching for
 // whatever happens to be selected on the sheet.
 //
-// A row is a projection, not a rendering. It shows one line of the stem, the
-// classification, and whether the question is on the exam; answer choices and
-// correctness stay behind the popup, which remains the only place the whole of
-// a question is presented.
+// Each Question uses the Pop-over's preview card. Its add/remove control sits
+// beside the answer layout control; double-click opens the Question editor.
 //
 // Nothing here can Delete Question Content, and nothing here assembles an
 // authoring action out of smaller ones: every action calls exactly one of the
@@ -34,23 +24,22 @@ import {
 // Filter values and row selection are handed in rather than stored here. The
 // workspace may persist filters, but neither state enters authoring history.
 
-import { Check, CircleMinus, Pencil, Plus, Search, Upload } from 'lucide-react'
+import { Check, ChevronDown, CircleMinus, Pencil, Plus, Search, SlidersHorizontal, Upload } from 'lucide-react'
 import {
+  useEffect,
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import { DifficultyBadge, TopicBadge } from './badges'
 import type { MenuPoint } from './context-menu'
 import {
-  SECTION_LABELS,
-  topicsOf,
   type Question,
   type QuestionType,
 } from './exam'
 import type { QuestionBank } from './question-bank'
+import type { CopyFormat } from './question-copy'
 import {
   DIFFICULTY_OPTIONS,
   SORT_OPTIONS,
@@ -69,15 +58,11 @@ import {
 import { CopyQuestionButton } from './question-copy-feedback'
 import { QuestionReading } from './question-reading'
 import { readingOfQuestion } from './question-reading-content'
-import { stemPreview, type StemPreviewBadge } from './stem-preview'
+import { PopOverQuestionPreview } from './pop-over-card'
+import { stemPreview } from './stem-preview'
 import { useQuestionCopy } from './use-question-copy'
 import { selectAllPaneProps, useSelectAll } from './use-select-all'
 import type { WorkspaceDrag } from './use-workspace-drag'
-
-const BADGE_LABELS: Record<StemPreviewBadge, string> = {
-  image: 'Image',
-  math: 'Math',
-}
 
 /** What a row with nothing written into it is called. A question saves whether
  *  or not it says anything, so this is a real state rather than a placeholder. */
@@ -97,29 +82,39 @@ function FilterDropdown<T extends string>({
   selected,
   emptyMessage,
   onChange,
+  single = false,
 }: {
   label: string
   options: readonly FilterOption<T>[]
   selected: readonly T[]
   emptyMessage: string
   onChange: (values: T[]) => void
+  single?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const container = useRef<HTMLDivElement>(null)
-  return <div className="bank-filter" ref={container}>
+  const summary = options.filter((option) => selected.includes(option.value)).map(({ label: name }) => name)
+  return <div className="bank-filter pop-over-chip" ref={container}>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="plain" size="content" className="bank-filter-button" aria-label={label}
+        <Button variant="plain" size="content" className="bank-filter-button pop-over-chip-trigger" aria-label={label}
+          aria-expanded={open}
           data-active={selected.length > 0 ? 'true' : undefined}>
           {label}
-          {selected.length > 0 && <span className="bank-filter-count">{selected.length}</span>}
+          {summary.length > 0 && <>: <strong>{summary.length <= 2 ? summary.join(', ') : `${summary.length} selected`}</strong></>}
+          <ChevronDown aria-hidden="true" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="bank-filter-list" align="start" role="group" aria-label={label}
+      <PopoverContent className="bank-filter-list" align="start" role={single ? 'radiogroup' : 'group'} aria-label={label}
         collisionPadding={8} collisionBoundary={container.current?.closest('.question-bank') ?? undefined}
         onEscapeKeyDown={event => event.stopPropagation()}>
-        {options.length === 0 ? <p className="bank-filter-empty">{emptyMessage}</p> : options.map(option => (
-          <label className="bank-filter-option" key={option.value}>
+        {options.length === 0 ? <p className="bank-filter-empty">{emptyMessage}</p> : options.map(option => single ? (
+          <button className="pop-over-chip-option" type="button" role="radio" aria-checked={selected.includes(option.value)}
+            key={option.value} onClick={() => { onChange([option.value]); setOpen(false) }}>
+            <Check aria-hidden="true" />{option.label}
+          </button>
+        ) : (
+          <label className="pop-over-chip-option" key={option.value}>
             <Checkbox checked={selected.includes(option.value)} onCheckedChange={checked => onChange(checked === true
               ? [...selected, option.value] : selected.filter(value => value !== option.value))} />
             {option.label}
@@ -149,6 +144,8 @@ export function QuestionBankPane({
   onAddToWorkingCopy,
   onAddManyToWorkingCopy,
   onRemoveFromWorkingCopy,
+  formatForQuestion,
+  onFormatQuestion,
   drag,
 }: {
   bank: QuestionBank
@@ -190,6 +187,8 @@ export function QuestionBankPane({
   onAddManyToWorkingCopy?: (questionIds: readonly string[]) => void
   /** Takes the question back off the Working Copy, leaving its bank record be. */
   onRemoveFromWorkingCopy?: (questionId: string) => void
+  formatForQuestion?: (question: Question) => CopyFormat
+  onFormatQuestion?: (question: Question, format: CopyFormat) => void
   /** The gesture in flight. A row that is not already on the Working Copy is a
    *  drag source for it; a row that is offers no gesture at all, because a
    *  reference occurs at most once and refusing a drop after the fact would be
@@ -204,6 +203,12 @@ export function QuestionBankPane({
   useSelectAll('question-bank', root, orderedIds, onSelectAll)
   const addableQuestions = questions.filter(({ id }) => !workingCopyIds.has(id))
   const filtered = isFilterActive(filter)
+  const filtersApplied = filtered || (filter.sort ?? 'newest') !== 'newest'
+  const [filtersOpen, setFiltersOpen] = useState(filtersApplied)
+  const activeFilterCount = filter.types.length + filter.difficulties.length + filter.topics.length
+  useEffect(() => {
+    if (filtersApplied) setFiltersOpen(true)
+  }, [filtersApplied])
   // A gesture that has not yet moved far enough to be a drag. One pointer
   // drags at a time, so this is the pane's rather than each row's — and until
   // it passes the threshold a press is still on its way to being a click.
@@ -329,7 +334,8 @@ export function QuestionBankPane({
   })
 
   const filterBar = (
-      <div className="question-bank-filters">
+      <div className="question-bank-filter-shell">
+        <div className={layout === 'rows' ? 'question-bank-filter-controls' : 'question-bank-filters'}>
         <div className="bank-search">
           <Search aria-hidden="true" />
           <Input
@@ -340,6 +346,31 @@ export function QuestionBankPane({
             onChange={(event) => onFilterChange({ ...filter, search: event.target.value })}
           />
         </div>
+        {layout === 'rows' && <Button variant="plain" size="content"
+          type="button"
+          className="pop-over-filters-button"
+          aria-expanded={filtersOpen}
+          data-active={activeFilterCount > 0 ? 'true' : undefined}
+          onClick={() => setFiltersOpen((open) => !open)}
+        >
+          <SlidersHorizontal aria-hidden="true" />
+          Filters
+          {activeFilterCount > 0 && <span className="bank-filter-count">{activeFilterCount}</span>}
+        </Button>}
+        {layout === 'rows' && onAddManyToWorkingCopy && (
+          <Button variant="plain" size="content"
+            type="button"
+            className="bank-add-all"
+            title={filtered ? 'Add all matching questions to the exam' : 'Add all questions to the exam'}
+            disabled={addableQuestions.length === 0}
+            onClick={() => onAddManyToWorkingCopy(addableQuestions.map(({ id }) => id))}
+          >
+            <Plus aria-hidden="true" />
+            Add all
+          </Button>
+        )}
+        </div>
+        {(layout === 'page' || filtersOpen) && <div className="question-bank-filters">
         {/* The page's outline chooses a type and a topic; only the pane beside
             the Working Copy, which has no outline, needs them as lists. */}
         {layout === 'rows' && <FilterDropdown
@@ -365,25 +396,15 @@ export function QuestionBankPane({
           emptyMessage="No Topics yet"
           onChange={(topics) => onFilterChange({ ...filter, topics })}
         />}
-        <label className="bank-sort">
-          {/*<ArrowDownAZ aria-hidden="true" />*/}
-          <span className="sr-only">Sort Questions</span>
-          <Select
-            value={filter.sort ?? 'newest'}
-            onValueChange={(value) => onFilterChange({
-              ...filter,
-              sort: value as QuestionBankSort,
-            })}
-          >
-            <SelectTrigger aria-label="Sort Questions" size="sm"><SelectValue /></SelectTrigger>
-            <SelectContent position="popper" align="end"><SelectGroup>
-            {SORT_OPTIONS.map((option) => (
-              <SelectItem value={option.value} key={option.value}>{option.label}</SelectItem>
-            ))}
-            </SelectGroup></SelectContent>
-          </Select>
-        </label>
-        {onAddManyToWorkingCopy && (
+        <FilterDropdown
+          label="Sort"
+          options={SORT_OPTIONS}
+          selected={[filter.sort ?? 'newest']}
+          emptyMessage="No sort options"
+          single
+          onChange={([sort]) => sort && onFilterChange({ ...filter, sort })}
+        />
+        {layout === 'page' && onAddManyToWorkingCopy && (
           <Button variant="plain" size="content"
             type="button"
             className="bank-add-all"
@@ -404,6 +425,7 @@ export function QuestionBankPane({
             Clear filters
           </Button>
         )}
+        </div>}
       </div>
   )
 
@@ -477,7 +499,7 @@ export function QuestionBankPane({
         </div>
       ) : (
         <ul
-          className="question-bank-list"
+          className="question-bank-list question-bank-list--preview"
           onScroll={(event) => setScrolled(event.currentTarget.scrollTop > 0)}
         >
           {questions.map((question) => {
@@ -485,13 +507,14 @@ export function QuestionBankPane({
             const draggable = !inExamWorkingCopy && onAddToWorkingCopy !== undefined
             const preview = stemPreview(question)
             const name = preview.text || UNTITLED
-            const topics = topicsOf(question)
+            const hasExplanation = Boolean(question.answerReason?.trim())
             return (
               <li
-                className="question-bank-row"
+                className="question-bank-row question-bank-row--preview"
                 key={question.id}
                 data-question-id={question.id}
                 data-in-exam={inExamWorkingCopy ? 'true' : undefined}
+                aria-label={name}
                 // An unused row is a drag source; a row already on the Exam
                 // Draft is not one, and says so before the gesture starts.
                 data-draggable={draggable ? 'true' : undefined}
@@ -521,57 +544,16 @@ export function QuestionBankPane({
                   onEdit(question.id)
                 }}
               >
-                <div className="question-bank-row-content">
-                  <span className="question-bank-row-meta">
-                    <span className="question-bank-row-type">
-                      {SECTION_LABELS[question.type]}
-                      {preview.parts !== undefined
-                        && ` · ${preview.parts} ${preview.parts === 1 ? 'part' : 'parts'}`}
-                    </span>
-                    {question.difficulty && (
-                      <DifficultyBadge difficulty={question.difficulty} />
-                    )}
-                    {inExamWorkingCopy && (
-                      <span className="question-bank-row-badge">In exam</span>
-                    )}
-                  </span>
-                  <span className="question-bank-row-stem">
-                    <span className="question-bank-row-line">{name}</span>
-                    {preview.badges.map((badge) => (
-                      <span className="question-bank-row-content-badge" key={badge}>
-                        {BADGE_LABELS[badge]}
-                      </span>
-                    ))}
-                  </span>
-                  {topics.length > 0 && (
-                    <span className="question-bank-row-topics">
-                      {topics.map((topic) => (
-                        <TopicBadge topic={topic} key={topic} />
-                      ))}
-                    </span>
-                  )}
-                </div>
-                <div
-                  className="question-bank-row-actions"
+                <PopOverQuestionPreview
+                  question={question}
+                  format={inExamWorkingCopy ? formatForQuestion?.(question) ?? {} : {}}
+                  onFormat={(format) => onFormatQuestion?.(question, format)}
+                  showFormatControls={inExamWorkingCopy && !!onFormatQuestion}
+                  actions={<div
+                  className="question-bank-preview-actions"
                   onClick={(event) => event.stopPropagation()}
                   onDoubleClick={(event) => event.stopPropagation()}
                 >
-                  <Button variant="ghost" size="icon-sm"
-                    type="button"
-                    className="question-bank-action"
-                    aria-label={`Edit ${name}`}
-                    title="Edit"
-                    onClick={() => onEdit(question.id)}
-                  >
-                    <Pencil />
-                  </Button>
-                  <CopyQuestionButton
-                    question={question}
-                    name={name}
-                    state={copying.state(question.id)}
-                    onCopy={copying.copy}
-                    className="question-bank-action"
-                  />
                   {/* A question already on the Working Copy offers no way onto it
                       a second time — a reference occurs at most once — so the
                       plus becomes a tick: the same slot answers "can I add
@@ -583,7 +565,7 @@ export function QuestionBankPane({
                     <Button variant="ghost" size="icon-sm"
                       type="button"
                       className="question-bank-action question-bank-included"
-                      aria-label={`Remove ${name} from the exam`}
+                      aria-label={`Remove ${name} from the exam. ${hasExplanation ? 'Explanation present' : 'No explanation'}.`}
                       title="Remove from the exam"
                       onClick={() => onRemoveFromWorkingCopy(question.id)}
                     >
@@ -594,14 +576,22 @@ export function QuestionBankPane({
                     <Button variant="ghost" size="icon-sm"
                       type="button"
                       className="question-bank-action"
-                      aria-label={`Add ${name} to the exam`}
+                      aria-label={`Add ${name} to the exam. ${hasExplanation ? 'Explanation present' : 'No explanation'}.`}
                       title="Add to the exam"
                       onClick={() => onAddToWorkingCopy(question.id)}
                     >
                       <Plus />
                     </Button>
                   ) : null}
-                </div>
+                </div>}
+                />
+                <span
+                  className="question-bank-explanation-dot"
+                  data-has-explanation={hasExplanation ? 'true' : 'false'}
+                  role="img"
+                  aria-label={hasExplanation ? 'Explanation present' : 'No explanation'}
+                  title={hasExplanation ? 'Explanation present' : 'No explanation'}
+                />
               </li>
             )
           })}
@@ -638,9 +628,9 @@ export function QuestionBankPane({
           {heading ?? <h2>Question Bank</h2>}
           <div className="question-bank-header-actions">
             {extraActions}
-            {onExport && <Button variant="plain" size="content"
+            {onExport && <Button variant={layout === 'page' ? 'default' : 'plain'} size="content"
               type="button"
-              className={layout === 'page' ? 'secondary-button' : 'toolbar-icon-button'}
+              className={layout === 'page' ? 'primary-button' : 'toolbar-icon-button'}
               aria-label="Export Question Bank"
               title="Export Question Bank"
               aria-haspopup="dialog"
@@ -651,9 +641,9 @@ export function QuestionBankPane({
               <Upload aria-hidden="true" />
               {layout === 'page' && 'Export'}
             </Button>}
-            {onCreate && <Button variant="plain" size="content"
+            {onCreate && <Button variant={layout === 'page' ? 'outline' : 'plain'} size="content"
               type="button"
-              className={layout === 'page' ? 'primary-button' : 'toolbar-icon-button'}
+              className={layout === 'page' ? 'secondary-button' : 'toolbar-icon-button'}
               aria-label={layout === 'page' ? undefined : 'Add Question'}
               title={layout === 'page' ? undefined : 'Add Question'}
               aria-haspopup="menu"
