@@ -424,14 +424,8 @@ function questionMenuItems({
         onSelect: () => onLabelStyleChange(kind, { ...style, brackets }),
       }))
       items.push(
-        {
-          kind: 'submenu',
-          label: LABEL_KIND_LABELS[kind],
-          items: [
-            { kind: 'submenu', label: 'Sequence', items: sequenceOptions },
-            { kind: 'submenu', label: 'Punctuation', items: bracketOptions },
-          ],
-        },
+        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · sequence`, items: sequenceOptions },
+        { kind: 'submenu', label: `${LABEL_KIND_LABELS[kind]} · punctuation`, items: bracketOptions },
       )
     }
   }
