@@ -1,3 +1,4 @@
+import { Dices } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useMemo, useState } from 'react'
@@ -19,6 +20,7 @@ export function ResourceCollectionPage({
   onOpenExam,
   onOpenBank,
   onNewExam,
+  onGenerateExam,
   onNewBank,
   onExportBank,
   onDeleteBank,
@@ -31,6 +33,7 @@ export function ResourceCollectionPage({
   persistentStorage: PersistentStorageStatus
   onOpenExam: (id: string) => void
   onOpenBank: (id: string) => void
+  onGenerateExam?: () => void
   onNewExam?: () => void
   onNewBank?: () => void
   onExportBank?: (bank: QuestionBankCollectionItem) => void
@@ -63,6 +66,7 @@ export function ResourceCollectionPage({
       <header className="collection-heading">
         <h1>{resourceName}</h1>
         <div className="collection-actions">
+          {isExams && onGenerateExam && <Button variant="outline" onClick={onGenerateExam}><Dices />Generate exam</Button>}
           {!isExams && onImportBank && (
             <Button variant="outline" type="button" className="secondary-button" onClick={onImportBank}>
               Import

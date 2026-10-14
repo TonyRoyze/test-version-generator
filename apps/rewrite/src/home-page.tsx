@@ -1,3 +1,4 @@
+import { Dices } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppShell } from './app-shell'
 import type { PersistentStorageStatus } from './durable-storage'
@@ -19,8 +20,8 @@ import { homePreview } from './resource-collections'
  * each section gets a quiet label rather than a title. Creating happens on
  * the shelf itself: an empty shelf is one full-width dotted invitation, and a
  * shelf with anything on it ends with a ghost card the size of the next
- * one. The only button is Import, at the end of the first shelf's bar: a
- * test or a Question Bank made elsewhere has nowhere on a shelf to come from.
+ * one. The shelf bar offers Import and Generate exam, the two ways to
+ * start from questions instead of a blank paper.
  */
 export function HomePage({
   exams,
@@ -28,6 +29,7 @@ export function HomePage({
   error,
   persistentStorage,
   onNewExam,
+  onGenerateExam,
   onOpen,
   onNewBank,
   onOpenBank,
@@ -40,6 +42,7 @@ export function HomePage({
   banks: readonly QuestionBankCollectionItem[]
   error: string | null
   persistentStorage: PersistentStorageStatus
+  onGenerateExam?: () => void
   onNewExam: () => void
   onOpen: (id: string) => void
   onNewBank: () => void
@@ -50,7 +53,12 @@ export function HomePage({
   onImport: () => void
 }) {
   const recentExams = homePreview(exams)
-  const importLink = <Button variant="default" type="button" className="primary-button" onClick={onImport}>Import</Button>
+  const shelfActions = (
+    <div className="collection-actions">
+      {onGenerateExam && <Button variant="outline" onClick={onGenerateExam}><Dices />Generate exam</Button>}
+      <Button variant="default" type="button" className="primary-button" onClick={onImport}>Import</Button>
+    </div>
+  )
   return (
     <AppShell crumbs={[{ label: 'Home' }]} persistentStorage={persistentStorage}>
       {error && (
@@ -66,14 +74,14 @@ export function HomePage({
               <h1 id="recent-exams-heading" className="shelf-label">
                 Pick up where you left off
               </h1>
-              {importLink}
+              {shelfActions}
             </div>
             <CreateFirstCard label="New Exam" onClick={onNewExam} />
           </>
         ) : (
           <ResourceCarousel
             label="Recent Exams"
-            actions={importLink}
+            actions={shelfActions}
             heading={
               <h1 id="recent-exams-heading" className="shelf-label">
                 Pick up where you left off

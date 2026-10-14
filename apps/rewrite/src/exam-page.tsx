@@ -29,6 +29,7 @@ import {
   CircleMinus,
   Columns2,
   Copy,
+  Dices,
   Ellipsis,
   EllipsisVertical,
   EyeOff,
@@ -756,6 +757,7 @@ function QuestionView({
   orderedIds,
   selection,
   onEdit,
+  onRandomReplace,
   onOpenMenu,
   onSetWorkSpace,
   maxWorkSpace,
@@ -775,6 +777,7 @@ function QuestionView({
   selected: boolean
   orderedIds: readonly string[]
   selection: Selection
+  onRandomReplace?: (questionId: string) => void
   onEdit: (questionId: string) => void
   onOpenMenu: (questionId: string, point: MenuPoint, side?: MenuSide) => void
   dragging: boolean
@@ -966,6 +969,13 @@ function QuestionView({
       {item.numbered && (
         <QuestionHandles question={question} onOpenMenu={onOpenMenu} />
       )}
+      {item.numbered && onRandomReplace && <Button variant="plain" size="content"
+        className="question-handle question-dice"
+        aria-label={`Replace question ${numberLabelOf(question)} randomly`}
+        title="Replace with another question from the same bank and type"
+        onClick={(event) => { event.stopPropagation(); onRandomReplace(question.id) }}
+        onDoubleClick={(event) => event.stopPropagation()}
+      ><Dices /></Button>}
       <QuestionContent
         item={shown}
         showCorrectness
@@ -1317,6 +1327,7 @@ function PageItemView({
   orderedIds,
   selection,
   onEdit,
+  onRandomReplace,
   onOpenMenu,
   onSetWorkSpace,
   maxWorkSpace,
@@ -1350,6 +1361,7 @@ function PageItemView({
   emptySectionActive: (sectionId: string) => boolean
   orderedIds: readonly string[]
   selection: Selection
+  onRandomReplace?: (questionId: string) => void
   onEdit: (questionId: string) => void
   onOpenMenu: (questionId: string, point: MenuPoint, side?: MenuSide) => void
   onSetWorkSpace: SetWorkSpace
@@ -1393,6 +1405,7 @@ function PageItemView({
           orderedIds={orderedIds}
           selection={selection}
           onEdit={onEdit}
+          onRandomReplace={onRandomReplace}
           onOpenMenu={onOpenMenu}
           onSetWorkSpace={onSetWorkSpace}
           maxWorkSpace={maxWorkSpace}
@@ -1650,6 +1663,7 @@ export function ExamPage({
   revealQuestionId,
   onRevealed,
   onEdit,
+  onRandomReplace,
   onDuplicate,
   onShuffleSelected,
   onShuffleSelectedAnswers,
@@ -1685,6 +1699,7 @@ export function ExamPage({
    *  on a page — which, for an insertion, is not the same moment. */
   revealQuestionId?: string | null
   onRevealed?: () => void
+  onRandomReplace?: (questionId: string) => void
   onEdit: (questionId: string) => void
   onDuplicate: (questionId: string) => void
   onShuffleSelected: (questionIds: readonly string[]) => void
@@ -2208,6 +2223,7 @@ export function ExamPage({
                 orderedIds={orderedIds}
                 selection={selection}
                 onEdit={onEdit}
+                onRandomReplace={onRandomReplace}
                 onOpenMenu={openMenu}
                 onSetWorkSpace={onSetWorkSpace}
                 maxWorkSpace={maxWorkSpaceHeight(plan.pageSize)}

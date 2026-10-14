@@ -446,6 +446,8 @@ export type ExamStore = {
    *  answers, clamped to what each allows; `Infinity` shows them all. Exam
    *  presentation, like answer order: the Question keeps every answer. */
   setShownIncorrect(questionIds: readonly string[], count: number): void
+  /** Replaces one reference in place, preserving presentation in one undo step. */
+  replaceInWorkingCopy(questionId: string, replacement: Question): void
   /** Removes references from the Working Copy, leaving their Question Bank
    *  records exactly as they were. Remove excludes; it never deletes. */
   removeFromWorkingCopy(questionIds: readonly string[]): void
@@ -1342,6 +1344,34 @@ export function createExamStore(options: {
           current,
           withHiddenAnswers(current.workingCopy, next.hiddenAnswers ?? {}),
         )
+      }),
+
+    replaceInWorkingCopy: (questionId, replacement) =>
+      change((current) => {
+        const original = bankQuestionById(current.questionBank, questionId)
+        const draft = current.workingCopy
+        if (!original || original.type !== replacement.type
+          || !draft.questionIds.includes(questionId)
+          || draft.questionIds.includes(replacement.id)) return current
+        const cleaned = withReferencesRemoved(draft, [questionId], partsOf(original).map(({ id }) => id))
+        const workingCopy: ExamWorkingCopy = {
+          ...cleaned,
+          questionIds: draft.questionIds.map((id) => id === questionId ? replacement.id : id),
+          ...(draft.sectionOf ? { sectionOf: { ...cleaned.sectionOf, [replacement.id]: draft.sectionOf[questionId]! } } : {}),
+          numberingRestarts: draft.numberingRestarts?.map((id) => id === questionId ? replacement.id : id),
+          pageBreaks: draft.pageBreaks?.map((id) => id === questionId ? replacement.id : id),
+        }
+        if (draft.columns?.[questionId] !== undefined) workingCopy.columns = { ...workingCopy.columns, [replacement.id]: draft.columns[questionId] }
+        if (draft.workSpace?.[questionId]) workingCopy.workSpace = { ...workingCopy.workSpace, [replacement.id]: draft.workSpace[questionId] }
+        if (draft.wordBankLayout?.[questionId]) workingCopy.wordBankLayout = { ...workingCopy.wordBankLayout, [replacement.id]: draft.wordBankLayout[questionId] }
+        const bank = withQuestionBanked(current.questionBank, replacement)
+        return {
+          ...current,
+          questionBank: bank,
+          workingCopy: workingCopy.wordBankLayout?.[replacement.id]
+            ? workingCopy
+            : withWordBankLayouts(bank, workingCopy, [replacement.id], bankAnswerWidth),
+        }
       }),
 
     removeFromWorkingCopy: (questionIds) =>
