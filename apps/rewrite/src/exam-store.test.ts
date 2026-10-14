@@ -1960,3 +1960,66 @@ describe('a Matching question’s Word Bank layout', () => {
     expect(store.getState().workingCopy.wordBankLayout).not.toHaveProperty(second!)
   })
 })
+
+describe('random question replacement', () => {
+  test('preserves position and presentation, resets answers, persists and undoes atomically', async () => {
+    const { store, backend, savedBackend, questions } = await withExamWorkingCopy(3)
+    const original = questions[1]!
+    const replacement = createQuestion('multiple-choice')
+    store.setQuestionColumns([original.id], 2)
+    store.shuffleSelectedAnswers([original.id])
+    store.setShownIncorrect([original.id], 1)
+    store.setNumberingRestart(original.id, true)
+    store.setQuestionPageBreak([original.id], true)
+    const before = structuredClone(store.getState())
+    store.replaceInWorkingCopy(original.id, replacement)
+    await store.whenSettled()
+    expect(renderedIds(store)).toEqual([questions[0]!.id, replacement.id, questions[2]!.id])
+    expect(store.getState().workingCopy.columns?.[replacement.id]).toBe(2)
+    expect(store.getState().workingCopy.columns?.[original.id]).toBeUndefined()
+    expect(store.getState().workingCopy.choiceOrder?.[original.id]).toBeUndefined()
+    expect(store.getState().workingCopy.choiceOrder?.[replacement.id]).toBeUndefined()
+    expect(store.getState().workingCopy.hiddenAnswers?.[original.id]).toBeUndefined()
+    expect(store.getState().workingCopy.hiddenAnswers?.[replacement.id]).toBeUndefined()
+    expect(store.getState().workingCopy.numberingRestarts).toEqual([replacement.id])
+    expect(store.getState().workingCopy.pageBreaks).toEqual([replacement.id])
+    expect(store.getState().questionBank.questions).toContainEqual(original)
+    const loaded = await loadExamStore(backend, savedBackend)
+    expect(renderedIds(loaded)).toEqual(renderedIds(store))
+    store.undo()
+    expect(store.getState()).toEqual(before)
+    store.redo()
+    expect(renderedIds(store)).toContain(replacement.id)
+  })
+  test('does not replace with a duplicate or a different question type', async () => {
+    const { store, questions } = await withExamWorkingCopy(2)
+    const before = store.getState()
+    store.replaceInWorkingCopy(questions[0]!.id, questions[1]!)
+    expect(store.getState()).toBe(before)
+    store.replaceInWorkingCopy(questions[0]!.id, createQuestion('open'))
+    expect(store.getState()).toBe(before)
+  })
+})
+
+test('replacement keeps a section and its chosen Word Bank layout even when it has only one question', async () => {
+  const { store, questions } = await withExamWorkingCopy(1, 'matching')
+  const original = questions[0]!
+  store.setWordBankLayout([original.id], 'above')
+  const sectionId = store.getState().workingCopy.sectionOf![original.id]!
+  const replacement = createQuestion('matching')
+  store.replaceInWorkingCopy(original.id, replacement)
+  expect(store.getState().workingCopy.sectionOf?.[replacement.id]).toBe(sectionId)
+  expect(store.getState().workingCopy.wordBankLayout?.[replacement.id]).toBe('above')
+  expect(renderedIds(store)).toEqual([replacement.id])
+})
+
+test('replacement keeps a Short Answer position’s work space', async () => {
+  const { store, questions } = await withExamWorkingCopy(1, 'open')
+  const original = questions[0]!
+  store.setQuestionWorkSpace([original.id], { height: 96, style: 'lines', fill: false })
+  const space = store.getState().workingCopy.workSpace![original.id]
+  const replacement = createQuestion('open')
+  store.replaceInWorkingCopy(original.id, replacement)
+  expect(store.getState().workingCopy.workSpace?.[replacement.id]).toEqual(space)
+  expect(store.getState().workingCopy.workSpace?.[original.id]).toBeUndefined()
+})

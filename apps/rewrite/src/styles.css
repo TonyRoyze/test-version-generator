@@ -2402,7 +2402,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 
 /* Home: two shelves, and nothing to read. The section names are labels rather
    than titles — Home is where you resume work, not a page about itself. */
-.home-shelf + .home-shelf { margin-top: 34px; }
+.home-shelf + .home-shelf { margin-top: 24px; }
 .shelf-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
 .shelf-actions { display: flex; align-items: center; gap: 12px; margin-left: auto; }
 .shelf-actions a { text-decoration: none; }
@@ -2457,10 +2457,7 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
   color: var(--paper-accent); border-color: var(--paper-accent); background-color: var(--paper-accent-wash);
   background-image: radial-gradient(circle at center, #e5c2ae 1.3px, transparent 1.4px);
 }
-.new-resource-card--card { width: 100%; min-height: 190px; }
-.new-resource-card--sheet {
-  width: 245px; height: 190px; box-sizing: border-box;
-}
+.new-resource-card--card, .new-resource-card--sheet { width: 100%; height: 170px; }
 
 /* The Question Bank page: one bank, full screen, in the dashboard's chrome.
    Like the editor it is a frame rather than a document — the name and the
@@ -2523,7 +2520,7 @@ html:has(.bank-page), body:has(.bank-page) {
 .destructive-dialog h2 { margin: 0 0 12px; }
 .destructive-dialog ul { margin: 10px 0; }
 .destructive-dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
-.resource-row { display: flex; gap: 16px; padding: 2px 2px 14px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: inline proximity; }
+.resource-row { display: flex; gap: 12px; padding: 2px 0 4px; overflow-x: auto; overscroll-behavior-inline: contain; scroll-snap-type: inline proximity; }
 .resource-row > [role='listitem'] { flex: 0 0 var(--sheet-width); scroll-snap-align: start; }
 .carousel-arrow {
   display: flex; align-items: center; justify-content: center; width: 28px; height: 28px;
@@ -2538,10 +2535,10 @@ html:has(.bank-page), body:has(.bank-page) {
 .collection-filter { display: flex; align-items: center; gap: 14px; margin: 16px 0 16px; }
 .collection-search input { width: min(320px, 42vw); padding: 9px 12px; border: 1px solid #cdb9a6; border-radius: 8px; background: #fffdf8; }
 .collection-count { margin: 0; color: #6e5b4d; font-size: 14px; }
-.collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(245px, 1fr)); gap: 16px; }
-.resource-card { min-height: 190px; border: 1px solid #e0d3c2; border-radius: 9px; color: inherit; text-align: left; background: #fffaf3; overflow: hidden; }
+.collection-grid { display: grid; grid-template-columns: repeat(auto-fill, 245px); gap: 12px; align-content: start; }
+.resource-card { position: relative; width: 100%; height: 170px; min-height: 0; border: 1px solid #e0d3c2; border-radius: 9px; color: inherit; text-align: left; background: #fffaf3; overflow: hidden; }
 .resource-card:hover, .resource-card:focus-within { border-color: #b65f43; box-shadow: 0 3px 12px rgb(91 68 47 / 12%); }
-.exam-card { position: relative; width: 100%; height: 190px; }
+.exam-card { width: 100%; }
 .resource-row > .exam-card-item,
 .resource-row > .new-exam-card-item {
   flex: 0 0 245px; width: 245px; min-width: 0; box-sizing: border-box;
@@ -2552,13 +2549,15 @@ html:has(.bank-page), body:has(.bank-page) {
    a readable size once the thumbnail's `zoom` is applied. */
 .empty-page-line { display: block; margin-top: 90px; color: #9b8a7d; font-family: Arial, sans-serif; font-size: 44px; text-align: center; }
 .resource-card-main { padding: 14px; }
-.resource-card-main { display: block; width: 100%; border: 0; color: inherit; text-align: left; background: transparent; }
-.resource-card h2 { margin: 0 0 7px; overflow: hidden; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
-.resource-card time { display: block; margin-top: 8px; color: #866f5e; font-size: 12px; }
+.resource-card-main { display: flex; flex-direction: column; flex: 1; justify-content: flex-start; width: 100%; height: 100%; cursor: pointer; border: 0; color: inherit; text-align: left; background: transparent; }
+.resource-card h2 { width: 100%; padding-right: 26px; margin: 0 0 7px; overflow: hidden; font-size: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.resource-card time { display: block; margin-top: 6px; color: #866f5e; font-size: 12px; }
 /* The mark is pinned to the corner, so the name stops short of it. */
 .question-bank-card h2 { padding-right: 26px; }
 .bank-card-count { margin: 0; color: #6e5b4d; font-size: 14px; }
-.bank-card-topics { display: flex; flex-wrap: wrap; gap: 5px; min-height: 24px; margin-top: 9px; }
+.bank-card-topics { display: flex; flex-wrap: wrap; gap: 5px; max-height: 46px; overflow: hidden; margin-top: 8px; }
+.bank-card-topics:empty { display: none; }
+.exam-card time { margin-top: auto; }
 .question-bank-card { position: relative; }
 /* Pinned to the card's corner rather than laid out in the head row: a button
    cannot nest inside the button that opens the bank. */
@@ -2570,7 +2569,7 @@ html:has(.bank-page), body:has(.bank-page) {
 }
 .bank-card-menu svg { width: 16px; height: 16px; }
 .bank-card-menu:hover, .bank-card-menu:focus-visible { color: var(--paper-accent); border-color: #ddcdb9; background: #f7eee3; }
-.bank-card-usage { margin: 10px 0 0; color: #6e5b4d; font-size: 13px; }
+.bank-card-usage { margin: auto 0 0; padding-top: 6px; color: #6e5b4d; font-size: 13px; }
 /* The mark in the editor's document bar is the way home. */
 .editor-home-mark {
   display: flex; align-items: center; padding: 3px; border: 1px solid transparent;
@@ -3978,3 +3977,58 @@ button.pop-over-chip-option[aria-pressed='true'] svg { visibility: visible; }
 .milkdown .picture-upload { position: relative; cursor: pointer; }
 .milkdown .picture-upload-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .milkdown .picture-link { flex: 1; min-width: 0; padding: 6px 8px; border: 1px solid var(--paper-outline); border-radius: 6px; font: inherit; }
+
+.question-dice { position: absolute; top: 0; right: 0; z-index: 2; opacity: 0; background: var(--paper-surface); }
+.exam-question:hover .question-dice, .exam-question--selected .question-dice, .exam-question:focus-within .question-dice { opacity: 1; }
+.question-drag-preview .question-dice, .export-preview .question-dice { display: none; }
+@media (hover: none) { .question-dice { opacity: 1; } }
+@media print { .question-dice { display: none !important; } }
+
+/* A paper setup owns a page; bank collections never have to fit in a modal. */
+.exam-builder { max-width: 100%; }
+.exam-builder-return { display: inline-flex; align-items: center; gap: 6px; color: var(--paper-ink-soft); font-size: 14px; text-decoration: none; }
+.exam-builder-return svg { width: 16px; height: 16px; }
+.exam-builder h1 { margin: 16px 0 8px; font-size: 28px; }
+.exam-builder-intro { margin: 0; color: var(--paper-ink-soft); line-height: 1.5; }
+.exam-builder-steps { display: flex; flex-wrap: wrap; gap: 24px; margin: 24px 0; padding: 0 0 20px; list-style: none; border-bottom: 1px solid var(--paper-outline); }
+.exam-builder-steps li { display: flex; align-items: center; gap: 8px; color: var(--ui-muted-foreground); font-size: 14px; }
+.exam-builder-steps li > span { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--paper-outline); border-radius: 50%; }
+.exam-builder-steps svg { width: 14px; height: 14px; }
+.exam-builder-steps [aria-current] { color: var(--paper-accent); font-weight: 700; }
+.exam-builder-steps [aria-current] > span, .exam-builder-steps [data-complete] > span { border-color: var(--paper-accent); background: var(--paper-accent-wash); color: var(--paper-accent); }
+.exam-builder h2 { margin: 0 0 20px; font-size: 22px; }
+.exam-builder h2:focus { outline: none; }
+.exam-builder-details { max-width: 520px; }
+.exam-builder-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
+.exam-builder-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 24px; align-items: start; }
+.exam-builder-filters { display: flex; flex-direction: column; gap: 12px; }
+.exam-builder-result-count { color: var(--ui-muted-foreground); font-size: 13px; }
+.exam-builder-bank-list { gap: 0; }
+.exam-builder-bank-row { padding: 12px 0; border-top: 1px solid var(--paper-outline); align-items: center; }
+.exam-builder-bank-row[data-selected] { border-left: 3px solid var(--paper-accent); padding-left: 12px; }
+.exam-builder-bank-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.exam-builder-bank-row input { width: 80px; flex: none; }
+.exam-builder-pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; font-size: 13px; }
+.exam-builder-summary { position: sticky; top: 20px; padding: 20px; border: 1px solid var(--paper-outline); border-radius: 9px; background: var(--paper-surface); }
+.exam-builder-summary h3 { margin: 0; font-size: 17px; overflow-wrap: anywhere; }
+.exam-builder-total { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+.exam-builder-summary p { line-height: 1.5; }
+.exam-builder-note { color: var(--ui-muted-foreground); font-size: 14px; line-height: 1.5; }
+.exam-builder-review { max-width: 720px; }
+.exam-builder-review h3 { margin: 0; font-size: 20px; overflow-wrap: anywhere; }
+.exam-builder-review ul { padding: 0; margin: 24px 0; list-style: none; }
+.exam-builder-review li { display: flex; justify-content: space-between; gap: 20px; padding: 14px 0; border-bottom: 1px solid var(--paper-outline); }
+.exam-builder-review li > span { min-width: 0; overflow-wrap: anywhere; }
+.exam-builder-review li strong { flex: none; font-size: 14px; }
+@media (max-width: 700px) {
+  .exam-builder-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .exam-builder-summary { position: static; grid-row: 1; }
+  .exam-builder-steps { gap: 12px; }
+  .exam-builder-steps li { font-size: 12px; }
+  .collection-heading, .shelf-bar { flex-wrap: wrap; gap: 12px; }
+  .collection-actions, .shelf-actions { flex-wrap: wrap; }
+}
+@media (max-width: 560px) {
+  .collection-grid { grid-template-columns: minmax(0, 1fr); }
+  .exam-builder-review li { gap: 12px; }
+}

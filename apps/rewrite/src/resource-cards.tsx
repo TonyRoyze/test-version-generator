@@ -194,7 +194,7 @@ export function ExamCard({
     <Card asChild className="gap-0 py-0"><article className="resource-card exam-card">
       <Button variant="plain" size="content" type="button" className="resource-card-main" onClick={() => onOpen(exam.id)}>
         <span className="sr-only">Open {exam.title}. </span>
-        <h2 aria-hidden="true">{exam.title}</h2>
+        <h2 aria-hidden="true" title={exam.title}>{exam.title}</h2>
         <p className="bank-card-count">
           {exam.questionCount}{' '}
           {exam.questionCount === 1 ? 'Question' : 'Questions'}
@@ -275,7 +275,7 @@ export function QuestionBankCard({
         onClick={() => onOpen(bank.id)}
       >
         <span className="sr-only">Open {bank.name}. </span>
-        <h2 aria-hidden="true">{bank.name}</h2>
+        <h2 aria-hidden="true" title={bank.name}>{bank.name}</h2>
         <p className="bank-card-count">
           {bank.questionCount}{' '}
           {bank.questionCount === 1 ? 'Question' : 'Questions'}

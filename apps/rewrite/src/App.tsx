@@ -94,6 +94,8 @@ import {
 } from './exam'
 import { wordBankLayoutOf } from './export-plan'
 import { ExamPage } from './exam-page'
+import { RandomExamPage } from './random-exam-page'
+import { drawExamQuestions, replacementQuestion, type BankDraw } from './random-exam'
 import { createExamStore, loadExamStore, type ExamStore } from './exam-store'
 import type {
   ExamWorkspaceService,
@@ -2650,6 +2652,20 @@ function ExamEditor({
                 setBankRevision((revision) => revision + 1)
               })()
             }}
+            onRandomReplace={(questionId) => {
+              void (async () => {
+                const owner = await bankWorkspaces.ownerOfQuestion(questionId)
+                const current = store.getState()
+                const original = bankQuestionById(current.questionBank, questionId)
+                if (!current.workingCopy.questionIds.includes(questionId)) return
+                if (!owner || !original) { setVarySummary('The owning Question Bank is unavailable.'); return }
+                const replacement = replacementQuestion(owner, original, current.workingCopy.questionIds)
+                if (!replacement) { setVarySummary(`No unused questions of this type remain in ${owner.name}.`); return }
+                store.replaceInWorkingCopy(questionId, replacement)
+                selection.clear()
+                setVarySummary(`Replaced question with another from ${owner.name}.`)
+              })().catch(() => setVarySummary('Could not replace this question. Try again.'))
+            }}
             onShuffleSelected={shuffleSelectedQuestions}
             onShuffleSelectedAnswers={shuffleSelectedAnswers}
             onSetShownIncorrect={(questionIds, count) => {
@@ -3010,6 +3026,23 @@ export default function App({
   const openExam = (id: string) => window.location.assign(`/editor?exam=${id}`)
   const openBank = useCallback((id: string) => navigate(`/question-bank?id=${id}`), [])
   const newExam = () => { void workspaces.create().then((exam) => openExam(exam.id)) }
+  const createRandomExam = async (draws: BankDraw[], total: number, title: string) => {
+    const banks = await Promise.all(draws.map(({ bankId }) => bankWorkspaces.read(bankId)))
+    const questions = drawExamQuestions(banks.filter((bank): bank is QuestionBankResource => bank !== null), draws, total)
+    const created = await workspaces.create()
+    try {
+      const generated = await loadExamStore(workspaces.backendFor(created.id), undefined, domMeasure.bankAnswerWidth)
+      generated.setTitle(title)
+      generated.addManyToWorkingCopy(questions)
+      await generated.whenSettled()
+      if (generated.backupStatus() !== 'ready') throw new Error('Could not save the generated exam on this device.')
+      for (const draw of draws.filter(({ count }) => count > 0)) await bankWorkspaces.openTab({ examId: created.id }, draw.bankId)
+      openExam(created.id)
+    } catch (error) {
+      await workspaces.delete(created.id)
+      throw error
+    }
+  }
   const applyCoverTemplate = async (examId: string | null, template: CoverPageTemplate) => {
     try {
       const exam = examId ? null : await workspaces.create()
@@ -3106,6 +3139,12 @@ export default function App({
   if (route === '/about') return <>{globalChrome}<AboutPage persistentStorage={storageStatus} /></>
   if (route === '/privacy') return <>{globalChrome}<PrivacyPage persistentStorage={storageStatus} /></>
   if (route === '/settings' || route === '/login') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
+  if (route === '/exams/generate') return <>{globalChrome}<RandomExamPage
+    bankWorkspaces={bankWorkspaces}
+    persistentStorage={storageStatus}
+    onBlank={async () => { const created = await workspaces.create(); openExam(created.id) }}
+    onGenerate={createRandomExam}
+  /></>
   if (route === '/exams') return <>{globalChrome}<ResourceCollectionPage
     kind="exams"
     exams={exams}
@@ -3114,6 +3153,7 @@ export default function App({
     onOpenExam={openExam}
     onOpenBank={openBank}
     onNewExam={newExam}
+    onGenerateExam={() => navigate('/exams/generate')}
     onDeleteExam={requestExamDeletion}
   />{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-banks') return <>{globalChrome}<ResourceCollectionPage
@@ -3154,6 +3194,7 @@ export default function App({
     error={homeError}
     persistentStorage={storageStatus}
     onNewExam={newExam}
+    onGenerateExam={() => navigate('/exams/generate')}
     onOpen={openExam}
     onNewBank={newBank}
     onOpenBank={openBank}
