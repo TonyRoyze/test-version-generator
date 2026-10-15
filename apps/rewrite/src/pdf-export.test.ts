@@ -519,3 +519,62 @@ Charge ends here` },
   expect(nextAnswer).toBeDefined()
   expect(lastLine.transform[5]! - nextAnswer.transform[5]!).toBeGreaterThanOrEqual(13.5)
 })
+
+for (const type of ['structured-essay', 'essay'] as const) {
+  test(`PDF retains ${type} labels, subquestions and teacher-only marking notes`, async () => {
+    const fixture = FIXTURES.find((item) => item.name === `${type} with shared material and written parts`)!
+    const read = async (answerKey: boolean) => {
+      const plan = planExport({ ...fixture, selection: { test: !answerKey, answerKey } })
+      const bytes = await createPublicationPdf([plan], noImages, fonts)
+      const document = await getDocument({ data: bytes, disableWorker: true }).promise
+      const pages = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
+        const content = await (await document.getPage(index + 1)).getTextContent()
+        return content.items.map((item) => 'str' in item ? item.str : '').join(' ')
+      }))
+      return pages.join(' ')
+    }
+    const student = await read(false)
+    expect(student).toContain(type === 'essay' ? '(A)' : '(i)')
+    expect(student).toContain(type === 'essay' ? '(B)' : '(ii)')
+    expect(student).toContain(type === 'essay' ? '(viii)' : '(h)')
+    expect(student).toContain('Name the input energy.')
+    expect(student).toContain('Explain your reasoning.')
+    expect(student).not.toContain('Gravitational potential energy.')
+    const key = await read(true)
+    expect(key).toContain('Gravitational potential energy.')
+    expect(key).toContain('It increases the voltage.')
+  })
+}
+
+test('PDF leaves authored answer lines between nested subquestions without printing markers', async () => {
+  const fixture = FIXTURES.find((item) => item.name === 'essay subquestions with inline answer lines')!
+  const plan = planExport({ ...fixture, selection: { test: true, answerKey: false } })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const document = await getDocument({ data: bytes, disableWorker: true }).promise
+  const content = await (await document.getPage(1)).getTextContent()
+  const items = content.items.filter((item) => 'str' in item)
+  expect(items.map((item) => item.str).join(' ')).not.toContain('lines>')
+  const first = items.find((item) => item.str.includes('Name the input energy.'))!
+  const second = items.find((item) => item.str.includes('Explain your reasoning.'))!
+  const nested = items.find((item) => item.str.includes('Give a unit.'))!
+  expect(first).toBeDefined()
+  expect(second).toBeDefined()
+  expect(nested).toBeDefined()
+  // Two ruled rows occupy 56 CSS px; three occupy 88, at 0.75 PDF pt/px.
+  expect(first.transform[5]! - second.transform[5]!).toBeGreaterThanOrEqual(42)
+  expect(second.transform[5]! - nested.transform[5]!).toBeGreaterThanOrEqual(66)
+})
+
+
+test('PDF omits the letter of a single Essay Part in both the paper and key', async () => {
+  const fixture = FIXTURES.find((item) => item.name === 'an Essay with one unlettered written Part')!
+  const plan = planExport({ ...fixture, selection: { test: true, answerKey: true } })
+  const document = await getDocument({ data: await createPublicationPdf([plan], noImages, fonts), disableWorker: true }).promise
+  const texts = await Promise.all(Array.from({ length: document.numPages }, async (_, index) => {
+    const content = await (await document.getPage(index + 1)).getTextContent()
+    return content.items.map((item) => 'str' in item ? item.str : '').join(' ')
+  }))
+  expect(texts.join(' ')).toContain('Explain the transformation.')
+  expect(texts.join(' ')).toContain('Energy is conserved.')
+  expect(texts.join(' ')).not.toContain('(A)')
+})

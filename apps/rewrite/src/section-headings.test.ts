@@ -62,7 +62,7 @@ describe('stored section headings', () => {
   test('are readable only as known sections carrying string parts', () => {
     expect(isSectionHeadings({})).toBe(true)
     expect(isSectionHeadings({ open: { title: 'Essays', instructions: '' } })).toBe(true)
-    expect(isSectionHeadings({ essay: { title: 'Essays' } })).toBe(false)
+    expect(isSectionHeadings({ unknown: { title: 'Unknown' } })).toBe(false)
     expect(isSectionHeadings({ open: { title: 3 } })).toBe(false)
     expect(isSectionHeadings({ open: { colour: 'red' } })).toBe(false)
     expect(isSectionHeadings([])).toBe(false)

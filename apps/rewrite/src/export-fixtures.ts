@@ -349,6 +349,7 @@ const QUESTION_STYLE_EXAM: Exam = {
 }
 
 export const FIXTURES: readonly Fixture[] = [
+
   // A Multipart question is the one shape that takes one number for several questions:
   // the material prints under the number, and each Part prints lettered
   // beneath it the way a question of its kind prints — a Multiple Choice Part
@@ -1458,4 +1459,39 @@ export const FIXTURES: readonly Fixture[] = [
       },
     ),
   ),
+  ...(['structured-essay', 'essay'] as const).map((type): Fixture => ({
+    name: `${type} with shared material and written parts`,
+    exam: { title: 'Science II', sections: [{ id: 'essay-section', title: 'Science II', instructions: '' }], sectionOf: { [`${type}-question`]: 'essay-section', 'after-essay': 'essay-section' }, questions: [{
+      ...multipart(`${type}-question`, [paragraph(text('Study the power station.'))], [
+        part(`${type}-part-a`, [paragraph(text('Explain the energy transformation.')), {
+          type: 'ordered_list', attrs: { order: 8 }, content: [{ type: 'list_item', content: [paragraph(text('Name the input energy.')), {
+            type: 'ordered_list', attrs: { order: 1 }, content: [{ type: 'list_item', content: [paragraph(text('Explain your reasoning.'))] }],
+          }] }],
+        }], suggestedAnswer(paragraph(text('Gravitational potential energy.')))),
+        part(`${type}-part-b`, [paragraph(text('Explain the role of the transformer.'))], suggestedAnswer(paragraph(text('It increases the voltage.')))),
+      ]), type,
+    }, open('after-essay', paragraph(text('Next question.')))] },
+    arrangement: arrangement([`${type}-question`, 'after-essay']),
+    measure: unmeasured,
+  })),
+
+  fixture('essay subquestions with inline answer lines', {
+    title: 'Answer spaces',
+    questions: [{ ...multipart('inline-essay', [paragraph(text('Answer each subquestion.'))], [
+      part('inline-part', [{ type: 'ordered_list', content: [
+        { type: 'list_item', content: [paragraph(text('Name the input energy. <2lines>'))] },
+        { type: 'list_item', content: [paragraph(text('Explain your reasoning. '), text('<3', mark('strong')), text('lines>')), { type: 'ordered_list', content: [
+          { type: 'list_item', content: [paragraph(text('Give a unit. <1line>'))] },
+        ] }] },
+      ] }], suggestedAnswer(paragraph(text('Energy is conserved.')))),
+    ]), type: 'structured-essay' }],
+  }, arrangement(['inline-essay']), { answerKey: true }),
+
+  fixture('an Essay with one unlettered written Part', {
+    title: 'One Essay Part',
+    questions: [{ ...multipart('single-essay', [paragraph(text('Discuss energy conservation.'))], [
+      part('single-written', [paragraph(text('Explain the transformation. <2lines>'))], suggestedAnswer(paragraph(text('Energy is conserved.')))),
+    ]), type: 'essay' }],
+  }, arrangement(['single-essay']), { answerKey: true }),
+
 ]

@@ -1,3 +1,4 @@
+import { answerLinesSpace } from './answer-lines'
 // A question's content, rendered as plain elements.
 //
 // The exam page is a view of the printed test, not an editor: nothing here is
@@ -151,7 +152,7 @@ function renderNode(node: ProseMirrorJSON, key: number): ReactNode {
       return <ul key={key}>{renderAll(node)}</ul>
     case 'ordered_list':
       return (
-        <ol key={key} start={Number(attrs.order) || undefined}>
+        <ol key={key} start={Number(attrs.order) || undefined} data-essay-sequence={typeof attrs.essaySequence === 'string' ? attrs.essaySequence : undefined}>
           {renderAll(node)}
         </ol>
       )
@@ -177,6 +178,12 @@ function renderNode(node: ProseMirrorJSON, key: number): ReactNode {
     }
     case 'math_inline':
       return <Tex key={key} value={text(attrs.value)} display={false} />
+    case 'answer_lines': {
+      const space = answerLinesSpace(Number(attrs.lines))
+      return <div key={key} className="work-space" data-style="lines" data-lines={space.lines} style={{ height: `${space.height}px` }}>
+        {Array.from({ length: space.lines }, (_, index) => <div key={index} className="work-space-line" style={{ height: `${index === 0 ? space.rows.first : space.rows.pitch}px` }} />)}
+      </div>
+    }
     case 'hr':
       return <hr key={key} />
     case 'image': {

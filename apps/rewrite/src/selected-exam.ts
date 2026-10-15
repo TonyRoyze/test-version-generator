@@ -1,3 +1,4 @@
+import { hasParts } from './essay'
 // The compatibility boundary between Question Bank authoring and the export
 // pipeline.
 //
@@ -149,7 +150,7 @@ export function selectedExam(
   // Question's authored/default layout only until this Exam specifies one.
   const columns = draft.columns ?? {}
   const questions = bankedQuestions.map((question) =>
-    question.type === 'multipart'
+    hasParts(question.type)
       ? withPartColumns(question, columns)
       : columns[question.id] === undefined || columns[question.id] === columnsOf(question)
         ? question

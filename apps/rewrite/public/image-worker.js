@@ -57,6 +57,9 @@ async function assetFor(hash, clientId) {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url)
   if (url.origin !== self.location.origin || event.request.method !== 'GET') return
+  // Vite source URLs are stable across edits, unlike hashed production assets.
+  // Serving these cache-first mixes current components with stale styles/code.
+  if (/^\/(?:src|node_modules|@vite|@fs|@id)\//.test(url.pathname)) return
   if (url.pathname.startsWith('/local-images/')) {
     const hash = url.pathname.slice('/local-images/'.length)
     if (!/^[a-f0-9]{64}$/.test(hash)) {

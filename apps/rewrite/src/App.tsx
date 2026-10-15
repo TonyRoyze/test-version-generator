@@ -1,3 +1,4 @@
+import { hasParts, isEssayType } from './essay'
 import { FrontMatterSelect } from '@/components/front-matter-select'
 import { Modal } from '@/components/modal'
 import { Button } from '@/components/ui/button'
@@ -279,6 +280,8 @@ const QUESTION_TYPE_ICONS: Record<QuestionType, ReactNode> = {
   matching: <Link2 />,
   open: <AlignLeft />,
   multipart: <BookOpenText />,
+  'structured-essay': <ListOrdered />,
+  essay: <Pencil />,
 }
 
 const STORAGE_NOTICE_DURATION = 8_000
@@ -323,6 +326,7 @@ function CrepeQuestion({
   fixedChoices = false,
   matching = false,
   multipart = false,
+  essayType,
 }: {
   value: ProseMirrorJSON
   onChange: (doc: ProseMirrorJSON) => void
@@ -336,6 +340,7 @@ function CrepeQuestion({
   matching?: boolean
   /** Whether the question is a Multipart question, whose Parts box is kept on the page
    *  the way a matching set is. */
+  essayType?: import('./essay').EssayType
   multipart?: boolean
 }) {
   useEditor((root) => {
@@ -425,7 +430,7 @@ function CrepeQuestion({
       .use(multipleChoiceMode(true, fixedChoices))
       .use(suggestedAnswerMode(answerBlock))
       .use(matchingMode(matching))
-      .use(multipartMode(multipart))
+      .use(multipartMode(multipart, essayType))
       .use(subscriptSchema)
       .use(superscriptSchema)
       .use(scriptKeymap)
@@ -651,6 +656,7 @@ function QuestionDialog({
         }
       }}
         className="question-dialog"
+        data-question-type={type}
         ref={bindDialog}
 
 
@@ -750,7 +756,8 @@ function QuestionDialog({
             answerBlock={type === 'open' ? 'Suggested Answer' : type === 'multiple-choice' || type === 'true-false' ? 'Explanation' : false}
             fixedChoices={type === 'true-false'}
             matching={type === 'matching'}
-            multipart={type === 'multipart'}
+            multipart={hasParts(type)}
+            essayType={isEssayType(type) ? type : undefined}
             onReady={(readDocument) => {
               readEditorDocument.current = readDocument
             }}
@@ -2537,7 +2544,7 @@ function ExamEditor({
                   Math.abs(option - count) < Math.abs(best - count) ? option : best, 0)
                 return { lines }
               }
-              if (question.type === 'multipart') {
+              if (hasParts(question.type)) {
                 const parts: Record<string, CopyPartFormat> = {}
                 for (const part of partsOf(examQuestion)) {
                   if (part.type === 'multiple-choice') parts[part.id] = { columns: part.columns }
@@ -2564,7 +2571,7 @@ function ExamEditor({
                 if (format.lines !== current) store.setQuestionWorkSpace([question.id], format.lines === 0
                     ? { height: 0, style: 'blank', fill: false }
                     : { height: format.lines * WORK_SPACE_LINE_PITCH, style: 'lines', fill: false })
-              } else if (question.type === 'multipart') {
+              } else if (hasParts(question.type)) {
                 const parts = partsOf(examQuestion)
                 for (const part of parts) {
                   const partFormat = format.parts?.[part.id]

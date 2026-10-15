@@ -1,3 +1,4 @@
+import { essayListLabel, essayPartLabel, essayStem, isEssayType } from './essay'
 // Copy: Questions on the clipboard, or dragged, ready to land in another
 // document.
 //
@@ -146,16 +147,18 @@ export function copyBlocksOf(question: Question, format: CopyFormat = {}): CopyB
       }
       return [...directions, ...bank, ...items]
     }
+    case 'structured-essay':
+    case 'essay':
     case 'multipart':
       return [
         ...(stem.length > 0 ? [line(stem)] : []),
-        ...partsOf(question).flatMap((part, index) => {
+        ...partsOf(question).flatMap((part, index, parts) => {
           const partFormat = format.parts?.[part.id] ?? {}
           return [
-            line(part.stem, `${bankLetter(index).toLowerCase()}. `),
+            line(essayStem(part.stem, question.type), isEssayType(question.type) ? `${essayPartLabel(question.type, index, parts.length)} ` : `${bankLetter(index).toLowerCase()}. `),
             ...(part.type === 'multiple-choice'
               ? answersOf(part.choices.map(({ node }) => content(node)), partFormat.columns ?? part.columns, 1)
-              : rulesOf(partFormat.lines, 1)),
+              : part.type === 'open' ? rulesOf(partFormat.lines, 1) : []),
           ]
         }),
       ]
@@ -337,6 +340,8 @@ function nodeHtml(node: ProseMirrorJSON, writer: Writer, lead: string, indent: n
       if (isDisplayMath(node)) return `${open}${mathHtml(source, true, writer)}</p>`
       return `${open}<code>${escapeHtml(source).replace(/\n/g, '<br>')}</code></p>`
     }
+    case 'answer_lines':
+      return ''
     case 'hr':
       return lead ? `${open}</p><hr>` : '<hr>'
     case 'bullet_list':
@@ -347,7 +352,7 @@ function nodeHtml(node: ProseMirrorJSON, writer: Writer, lead: string, indent: n
           ? childrenOf(child).map((inline) => inlineHtml(inline, writer)).join('')
           : nodeHtml(child, writer, '', 0)).join('<br>')}</li>`,
       ).join('')
-      return `${lead ? `${open}</p>` : ''}<${tag} style="margin:0 0 0 ${indent * 0.5 + 0.25}in">${items}</${tag}>`
+      return `${lead ? `${open}</p>` : ''}<${tag}${attrsOf(node).essaySequence === 'lower-roman' ? ' type="i"' : attrsOf(node).essaySequence === 'lower-alpha' ? ' type="a"' : ''} style="margin:0 0 0 ${indent * 0.5 + 0.25}in">${items}</${tag}>`
     }
     case 'table': {
       const rows = childrenOf(node).map((row) =>
@@ -429,12 +434,14 @@ function nodeText(node: ProseMirrorJSON): string[] {
       return [pendingImageOf(node) ? '[Picture needed]' : '[Picture]']
     case 'code_block':
       return isDisplayMath(node) ? [`$$${sourceOf(node)}$$`] : sourceOf(node).split('\n')
+    case 'answer_lines':
+      return []
     case 'hr':
       return ['---']
     case 'bullet_list':
     case 'ordered_list':
       return childrenOf(node).flatMap((item, index) => {
-        const marker = node.type === 'bullet_list' ? '- ' : `${index + 1}. `
+        const marker = node.type === 'bullet_list' ? '- ' : `${essayListLabel(attrsOf(node).essaySequence, index) ?? `${index + 1}.`} `
         return childrenOf(item).flatMap(nodeText).map((text, row) => `${row === 0 ? marker : '   '}${text}`)
       })
     case 'table':

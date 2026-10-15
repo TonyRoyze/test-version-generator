@@ -1,3 +1,4 @@
+import { hasParts } from './essay'
 // The compact projection of one question, for a Question Bank row.
 //
 // A bank row is one line high and holds many questions, so it shows a
@@ -66,7 +67,7 @@ export function stemPreview(question: Question): StemPreview {
       .filter(Boolean)
     return { ...preview, text: items.join(' · ') }
   }
-  return question.type === 'multipart'
+  return hasParts(question.type)
     ? { ...preview, parts: partsOf(question).length }
     : preview
 }

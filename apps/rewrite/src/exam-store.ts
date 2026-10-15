@@ -27,8 +27,7 @@ import {
   mergeSection,
   moveToNewSection,
   splitSection,
-  defaultWorkSpaceOf,
-  workSpaceIn,
+  workSpaceOf,
   placeQuestions,
   rewordSection,
   sameSectionOf,
@@ -1113,6 +1112,7 @@ export function createExamStore(options: {
         const currentSpaces = current.workingCopy.workSpace ?? {}
         let changed = false
         const nextSpaces = { ...currentSpaces }
+        const presented = selectedExam(current.questionBank, current.workingCopy).exam
         for (const questionId of targeted) {
           // A Short Answer Part of a Multipart question on this Exam leaves room under
           // its own id, as a Short Answer question does under its.
@@ -1126,8 +1126,7 @@ export function createExamStore(options: {
           }
           // What the position prints now: its own setting, or its Question
           // Style's default when it has none.
-          const style = current.workingCopy.questionStyle
-          const prior = workSpaceIn(currentSpaces, style, questionId)
+          const prior = workSpaceOf(presented, questionId)
           const next: WorkSpace = {
             height: snapWorkSpaceHeight(patch.height ?? prior.height),
             style: patch.style ?? prior.style,
@@ -1142,7 +1141,7 @@ export function createExamStore(options: {
           // taking work space away leaves the Working Copy as it was before —
           // unless the Question Style would rule lines there: then "None" is
           // the teacher's own setting, stored, and wins over the style.
-          if (hasWorkSpace(next) || hasWorkSpace(defaultWorkSpaceOf(style))) {
+          if (hasWorkSpace(next) || hasWorkSpace(workSpaceOf({ ...presented, workSpace: {} }, questionId))) {
             nextSpaces[questionId] = next
           } else delete nextSpaces[questionId]
           changed = true

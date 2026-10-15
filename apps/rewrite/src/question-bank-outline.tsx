@@ -35,6 +35,8 @@ const TYPE_ICONS: Record<QuestionType, ComponentType<{ 'aria-hidden'?: boolean }
   matching: Link2,
   open: AlignLeft,
   multipart: BookOpenText,
+  'structured-essay': BookOpenText,
+  essay: BookOpenText,
 }
 
 export function QuestionBankOutline({

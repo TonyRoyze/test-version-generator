@@ -1,3 +1,4 @@
+import { hasParts } from './essay'
 import {
   choicesOf,
   partsOf,
@@ -29,7 +30,7 @@ import {
 } from './picture-geometry'
 
 export const QUESTION_BANK_FORMAT = 'test-parrot/question-bank'
-export const QUESTION_BANK_FORMAT_VERSION = '0.10.0'
+export const QUESTION_BANK_FORMAT_VERSION = '0.11.0'
 export const QUESTION_BANK_ATTACHMENT_NAME = 'pdfcx.json'
 export const QUESTION_BANK_ATTACHMENT_DESCRIPTION = 'pdf-canonical-extraction'
 
@@ -125,6 +126,8 @@ export type QuestionBankRecordQuestionType =
   | 'matching'
   | 'short-answer'
   | 'multipart'
+  | 'structured-essay'
+  | 'essay'
 
 /** How each record Question Type is written wherever a teacher reads one — the
  *  export preview, the import preview, and the Question Bank File's own pages. */
@@ -134,6 +137,8 @@ export const RECORD_TYPE_LABELS: Record<QuestionBankRecordQuestionType, string> 
   matching: 'Matching',
   'short-answer': 'Short Answer',
   multipart: 'Multipart',
+  'structured-essay': 'Structured Essay',
+  essay: 'Essay',
 }
 
 /** The order a summary counts the Question Types off in — the order a test
@@ -144,6 +149,8 @@ export const RECORD_TYPE_ORDER: readonly QuestionBankRecordQuestionType[] = [
   'matching',
   'short-answer',
   'multipart',
+  'structured-essay',
+  'essay',
 ]
 
 /** One item of a matching set. `answer` is the package-local id of the Word
@@ -513,6 +520,8 @@ export const RECORD_TYPES: Record<QuestionType, QuestionBankRecordQuestionType> 
   matching: 'matching',
   open: 'short-answer',
   multipart: 'multipart',
+  'structured-essay': 'structured-essay',
+  essay: 'essay',
 }
 
 function portableQuestion(
@@ -575,7 +584,7 @@ function portableQuestion(
       })),
     }
   }
-  if (question.type === 'multipart') {
+  if (hasParts(question.type)) {
     // The stem is the Multipart question; each Part follows it under an id of its own.
     // Parts are lettered where they stand, so they keep authored order.
     return {
@@ -584,7 +593,9 @@ function portableQuestion(
         const id = `q${index + 1}-s${partIndex + 1}`
         const where = `Question ${index + 1}, Part ${partLetter(partIndex)}`
         const stem = semanticStem(part.stem, mediaIds)
-        if (part.type === 'open') {
+        // The portable format's written-response shape is shared; the parent
+        // Essay type restores a dedicated written Part when read.
+        if (part.type !== 'multiple-choice') {
           return {
             id,
             type: 'short-answer',

@@ -404,6 +404,10 @@ function listLines(
   const lines: ContentLine[] = []
   let opening = opener
   for (const child of item.children) {
+    if (has(child, 'work-space')) {
+      lines.push(...blockLines(child, reader))
+      continue
+    }
     if (child.name === 'ul' || child.name === 'ol') {
       for (const nested of child.children) {
         const produced = listLines(

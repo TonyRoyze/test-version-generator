@@ -112,6 +112,8 @@ const TYPE_RANK: Record<QuestionType, number> = {
   matching: 2,
   open: 3,
   multipart: 4,
+  'structured-essay': 5,
+  essay: 6,
 }
 
 const DIFFICULTY_RANK: Record<DifficultyFilter, number> = {

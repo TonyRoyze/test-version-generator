@@ -1,3 +1,5 @@
+import { hasParts, isEssayType } from './essay'
+import questionBankSchema0110 from './question-bank-record-0.11.0.schema.json'
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020'
 import { DEFAULT_COLUMNS, type Question, type QuestionType } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
@@ -174,6 +176,8 @@ export const LOCAL_TYPES: Record<QuestionBankRecordQuestionType, QuestionType> =
   matching: 'matching',
   'short-answer': 'open',
   multipart: 'multipart',
+  'structured-essay': 'structured-essay',
+  essay: 'essay',
 }
 
 /** Where each package-local id of one record Question landed locally. */
@@ -299,7 +303,7 @@ export function importedQuestionIdentities(
         content:
           question.type === 'matching'
             ? [...stem, importedMatching(question, createId, answers)]
-            : question.type === 'multipart'
+            : hasParts(question.type)
               ? [...stem, importedParts(question.parts ?? [], createId, answers)]
               : question.choices
               ? [
@@ -361,6 +365,7 @@ const validate050 = ajv.compile(questionBankSchema050)
 const validate060 = ajv.compile(questionBankSchema060)
 const validate070 = ajv.compile(questionBankSchema070)
 const validate080 = ajv.compile(questionBankSchema080)
+const validate0110 = ajv.compile(questionBankSchema0110)
 const validate0100 = ajv.compile(questionBankSchema0100)
 const validate090 = ajv.compile(questionBankSchema090)
 
@@ -386,10 +391,10 @@ type CopyContext = {
 
 /** The versions whose `authoredSize` is a share of the picture's container,
  *  and which know the Picture Crop — both added in 0.7.0. */
-const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0', '0.10.0'])
+const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
 
 /** The versions that know the Locked Answer, added in 0.9.0. */
-const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0', '0.10.0'])
+const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0', '0.10.0', '0.11.0'])
 
 function copyPicture(node: SemanticNode, context: CopyContext): Partial<SemanticNode> {
   const size =
@@ -557,10 +562,10 @@ function misplacedContent(value: unknown): string | undefined {
 }
 
 /** The versions that know the Pending Image, added in 0.5.0. */
-const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0'])
+const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
 
 /** The versions that know the Side-by-Side, added in 0.6.0. */
-const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0'])
+const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
 
 /** Where a Side-by-Side may stand: a top-level block of a Question's stem or
  *  of a Multipart Part's stem, and nowhere else. */
@@ -844,6 +849,7 @@ export const SUPPORTED_QUESTION_BANK_VERSIONS: Readonly<Record<string, Parser>> 
     '0.8.0': parser080,
     '0.9.0': parser090,
     '0.10.0': parser0100,
+    '0.11.0': (value) => parseWith(validate0110, '0.11.0', value),
   })
 
 const utf8 = new TextDecoder('utf-8', { fatal: true })
@@ -1096,6 +1102,8 @@ async function validateSemantics(
     matching: 0,
     'short-answer': 0,
     multipart: 0,
+    'structured-essay': 0,
+    essay: 0,
   }
 
   for (const question of record.bank.questions) {
@@ -1115,13 +1123,13 @@ async function validateSemantics(
         `${RECORD_TYPE_LABELS[question.type]} Question “${question.id}” cannot contain matching items or a Word Bank.`,
       )
     }
-    if (question.type !== 'multipart' && question.parts !== undefined) {
+    if (!hasParts(question.type) && question.parts !== undefined) {
       throw new QuestionBankImportError(
         'invalid-question',
         `${RECORD_TYPE_LABELS[question.type]} Question “${question.id}” cannot contain Multipart Parts.`,
       )
     }
-    if (question.type === 'multipart') {
+    if (hasParts(question.type)) {
       // The Multipart question answers nothing itself: every answer belongs to a Part,
       // and a Part obeys the rules of the Question Type it is named for. A
       // Multipart question with no Parts, or with a Multiple Choice Part none of whose
@@ -1135,6 +1143,7 @@ async function validateSemantics(
       const parts = question.parts ?? []
       let incomplete = parts.length === 0
       parts.forEach((part, partIndex) => {
+        if (isEssayType(question.type) && part.type !== 'short-answer') throw new QuestionBankImportError('invalid-question', 'Essay parts must be written responses, not multiple choice.')
         const where = `Part ${partLetter(partIndex)} (“${part.id}”) of Multipart Question “${question.id}”`
         const label = RECORD_PART_TYPE_LABELS[part.type]
         if (part.type === 'short-answer') {

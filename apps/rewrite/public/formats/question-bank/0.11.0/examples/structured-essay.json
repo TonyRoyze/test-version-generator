@@ -1,0 +1,67 @@
+{
+  "format": "test-parrot/question-bank",
+  "formatVersion": "0.11.0",
+  "generator": {
+    "name": "Contract Fixture Publisher",
+    "version": "1.0.0"
+  },
+  "requiredFeatures": [],
+  "bank": {
+    "name": "Structured Essay",
+    "questions": [
+      {
+        "id": "q1",
+        "type": "structured-essay",
+        "stem": {
+          "type": "document",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Study the power station diagram supplied with this question."
+                }
+              ]
+            }
+          ]
+        },
+        "parts": [
+          {
+            "id": "q1-s1",
+            "type": "short-answer",
+            "stem": {
+              "type": "document",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Explain the energy transformation."
+                    }
+                  ]
+                }
+              ]
+            },
+            "suggestedAnswer": {
+              "type": "document",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "Gravitational potential energy becomes electrical energy."
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "media": []
+}

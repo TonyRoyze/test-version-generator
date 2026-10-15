@@ -44,6 +44,7 @@ import type { PageMargins } from './page-margins'
 import { questionStyleRules, type QuestionStyle } from './question-style'
 import { newMatchingNode } from './matching'
 import { newMultipartPartsNode } from './multipart'
+import { hasParts, isEssayType } from './essay'
 
 export type QuestionType =
   | 'multiple-choice'
@@ -51,10 +52,12 @@ export type QuestionType =
   | 'matching'
   | 'open'
   | 'multipart'
+  | 'structured-essay'
+  | 'essay'
 
 /** What a Part of a Multipart question can be: Multiple Choice, or Short Answer — the
  *  `'open'` type's internal name, as for a whole question. */
-export type PartType = 'multiple-choice' | 'open'
+export type PartType = 'multiple-choice' | 'open' | 'written'
 
 /** Whether a question of this type answers with choices a teacher picks from.
  *  True/False answers with choices too — two fixed ones — so anything that
@@ -100,6 +103,8 @@ export const SECTION_LABELS: Record<QuestionType, string> = {
   matching: 'Matching',
   open: 'Short answer',
   multipart: 'Multipart',
+  'structured-essay': 'Structured essay',
+  essay: 'Essay',
 }
 
 /** How each Difficulty is written wherever a teacher sees it, so the popup that
@@ -285,6 +290,10 @@ export function isWorkSpace(value: unknown): value is WorkSpace {
  *  lines. A work space the teacher set, "None" stored as a zero height
  *  included, always wins over the style (ADR-0041). */
 export function workSpaceOf(exam: Exam, questionId: string): WorkSpace {
+  // Written Essay Parts own only their authored inline answer areas. Legacy
+  // Short Answer settings must not restore an extra space or resize handle.
+  const owner = exam.questions.find((question) => isEssayType(question.type) && partsOf(question).some((part) => part.id === questionId))
+  if (owner) return NO_WORK_SPACE
   return workSpaceIn(exam.workSpace, exam.questionStyle, questionId)
 }
 
@@ -382,14 +391,16 @@ export const SECTION_ORDER: readonly QuestionType[] = [
   'matching',
   'open',
   'multipart',
+  'structured-essay',
+  'essay',
 ]
 
 export const DEFAULT_EXAM_TITLE = 'Untitled Exam'
 
 function newQuestionDoc(type: QuestionType): ProseMirrorJSON {
   if (type === 'open') return structuredClone(emptyDoc)
-  if (type === 'multipart') {
-    return { type: 'doc', content: [{ type: 'paragraph' }, newMultipartPartsNode()] }
+  if (hasParts(type)) {
+    return { type: 'doc', content: [{ type: 'paragraph' }, newMultipartPartsNode(isEssayType(type) ? 'open' : 'multiple-choice')] }
   }
   const answers =
     type === 'true-false'
@@ -1030,12 +1041,12 @@ function isBlankDocument(doc: ProseMirrorJSON | undefined): boolean {
 // A Multipart question's Parts in authored order — the order they are lettered in on
 // every arrangement. Empty for any other question type.
 export function partsOf(question: Question): Part[] {
-  if (question.type !== 'multipart') return []
+  if (!hasParts(question.type)) return []
   return multipartPartNodesOf(question.doc).map((node) => {
     const answer = partAnswerNodeOf(node)
     const attrs = (node.attrs ?? {}) as Record<string, unknown>
     const columns = attrs.columns
-    const type: PartType = answer?.type === 'suggestedAnswer' ? 'open' : 'multiple-choice'
+    const type: PartType = isEssayType(question.type) ? 'written' : answer?.type === 'suggestedAnswer' ? 'open' : 'multiple-choice'
     const part: Part = {
       id: choiceIdOf(node),
       type,
@@ -1055,7 +1066,7 @@ export function partsOf(question: Question): Part[] {
       const reason = explanationTextOf(suggestedAnswerDocumentOf(node))
       if (reason) part.answerReason = reason
     }
-    if (type === 'open' && answer) {
+    if (type !== 'multiple-choice' && answer) {
       const suggested: ProseMirrorJSON = {
         type: 'doc',
         content: Array.isArray(answer.content) ? answer.content : [],
@@ -1251,7 +1262,7 @@ export function shuffleSelectedAnswers(
   const targets: { id: string; current: Choice[] }[] = []
   for (const question of exam.questions) {
     if (!selected.has(question.id)) continue
-    if (question.type === 'multipart') {
+    if (hasParts(question.type)) {
       for (const part of partsOf(question)) {
         if (part.type === 'multiple-choice') {
           targets.push({ id: part.id, current: orderedPartChoices(part, arrangement) })
