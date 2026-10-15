@@ -18,8 +18,8 @@ import publicSchema070 from '../public/formats/question-bank/0.7.0/schema.json'
 import applicationSchema070 from './question-bank-record-0.7.0.schema.json'
 import publicSchema080 from '../public/formats/question-bank/0.8.0/schema.json'
 import applicationSchema080 from './question-bank-record-0.8.0.schema.json'
-import publicSchema from '../public/formats/question-bank/0.10.0/schema.json'
-import applicationSchema from './question-bank-record-0.10.0.schema.json'
+import publicSchema from '../public/formats/question-bank/0.11.0/schema.json'
+import applicationSchema from './question-bank-record-0.11.0.schema.json'
 import {
   QUESTION_BANK_FORMAT_VERSION,
   SUPPORTED_SEMANTIC_MARK_TYPES,
@@ -91,10 +91,10 @@ function schemaEnum(definition: 'node' | 'mark', property: string): string[] {
   return schema.$defs[definition]!.properties[property]!.enum
 }
 
-describe('public Question Bank Record 0.10.0 contract', () => {
+describe('public Question Bank Record 0.11.0 contract', () => {
   test('canonical examples validate independently against the published schema', async () => {
     expect(publicSchema.$id).toBe(
-      'https://testparrot.com/formats/question-bank/0.10.0/schema.json',
+      'https://testparrot.com/formats/question-bank/0.11.0/schema.json',
     )
     expect(publicSchema.properties.formatVersion.const).toBe(QUESTION_BANK_FORMAT_VERSION)
     expect(
@@ -103,7 +103,7 @@ describe('public Question Bank Record 0.10.0 contract', () => {
           import.meta.dir,
           '..',
           'public',
-          'question-bank-record-0.10.0.schema.json',
+          'question-bank-record-0.11.0.schema.json',
         ),
       ).json(),
     ).toEqual(publicSchema)
@@ -116,6 +116,7 @@ describe('public Question Bank Record 0.10.0 contract', () => {
     expect(names).toEqual([
       'complete-rich-text.json',
       'cropped-picture.json',
+      'essay.json',
       'locked-answers.json',
       'matching.json',
       'media-rich.json',
@@ -125,6 +126,7 @@ describe('public Question Bank Record 0.10.0 contract', () => {
       'provenance-and-links.json',
       'short-answer.json',
       'side-by-side.json',
+      'structured-essay.json',
       'true-false.json',
     ])
     for (const name of names) {
@@ -164,7 +166,7 @@ describe('public Question Bank Record 0.10.0 contract', () => {
     const proposal = await inspectQuestionBankRecord(
       await Bun.file(join(exampleRoot, 'pending-images.json')).bytes(),
     )
-    expect(proposal.summary.formatVersion).toBe('0.10.0')
+    expect(proposal.summary.formatVersion).toBe('0.11.0')
   })
 
   test('a True/False Question states its fixed pair and nothing else', async () => {
@@ -176,6 +178,8 @@ describe('public Question Bank Record 0.10.0 contract', () => {
       matching: 0,
       'short-answer': 0,
       multipart: 0,
+      'structured-essay': 0,
+      essay: 0,
     })
     expect(proposal.record.bank.questions[0]).toMatchObject({
       type: 'true-false',
@@ -193,6 +197,8 @@ describe('public Question Bank Record 0.10.0 contract', () => {
       matching: 2,
       'short-answer': 0,
       multipart: 0,
+      'structured-essay': 0,
+      essay: 0,
     })
     // The second set leaves an item unmatched; that is reported, not refused.
     expect(proposal.summary.questionsWithoutCorrectAnswer).toBe(1)
@@ -227,6 +233,8 @@ describe('public Question Bank Record 0.10.0 contract', () => {
       matching: 0,
       'short-answer': 0,
       multipart: 3,
+      'structured-essay': 0,
+      essay: 0,
     })
     // The third Multipart question has no Parts yet; that is reported, not refused.
     expect(proposal.summary.questionsWithoutCorrectAnswer).toBe(1)
@@ -1050,13 +1058,15 @@ describe('retained Question Bank Record 0.1.0 contract', () => {
       'matching',
       'short-answer',
     ])
-    expect(typeEnum(publicSchema070)).toEqual(typeEnum(publicSchema))
+    expect(typeEnum(publicSchema070)).toEqual(typeEnum(publicSchema).filter((type) => type !== 'essay' && type !== 'structured-essay'))
     expect(typeEnum(publicSchema)).toEqual([
       'multiple-choice',
       'true-false',
       'matching',
       'short-answer',
       'multipart',
+      'structured-essay',
+      'essay',
     ])
   })
 

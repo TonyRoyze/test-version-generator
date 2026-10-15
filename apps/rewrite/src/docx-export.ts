@@ -1,3 +1,4 @@
+import { answerLinesSpace } from './answer-lines'
 import { coverLogoSource } from './page-cover'
 import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The DOCX Export Adapter.
@@ -205,11 +206,11 @@ type MutableNumberingConfig = NumberingConfig[number][]
 
 // Levels are indented like the print view's own nesting: each step in by half an
 // inch, with the marker hanging back out of the text block.
-function levelsOf(ordered: boolean, start: number) {
+function levelsOf(ordered: boolean, start: number, essaySequence?: unknown) {
   return Array.from({ length: LIST_LEVELS }, (_unused, level) => ({
     level,
-    format: ordered ? ORDERED_FORMATS[level]! : LevelFormat.BULLET,
-    text: ordered ? `%${level + 1}.` : BULLET_GLYPHS[level]!,
+    format: essaySequence === 'lower-roman' ? LevelFormat.LOWER_ROMAN : essaySequence === 'lower-alpha' ? LevelFormat.LOWER_LETTER : ordered ? ORDERED_FORMATS[level]! : LevelFormat.BULLET,
+    text: essaySequence ? `(%${level + 1})` : ordered ? `%${level + 1}.` : BULLET_GLYPHS[level]!,
     alignment: AlignmentType.LEFT,
     start: level === 0 ? start : 1,
     style: {
@@ -226,9 +227,9 @@ function levelsOf(ordered: boolean, start: number) {
 class Numbering {
   readonly config: MutableNumberingConfig = []
 
-  reference(ordered: boolean, start: number): string {
+  reference(ordered: boolean, start: number, essaySequence?: unknown): string {
     const reference = `exam-list-${this.config.length}`
-    this.config.push({ reference, levels: levelsOf(ordered, start) })
+    this.config.push({ reference, levels: levelsOf(ordered, start, essaySequence) })
     return reference
   }
 }
@@ -523,6 +524,7 @@ function blockOf(
       const reference = build.numbering.reference(
         ordered,
         ordered ? Number(attrs.order) || 1 : 1,
+        attrs.essaySequence,
       )
       const level = context.list ? context.list.level + 1 : 0
       // The opening prefix belongs to the first item that prints, not to every
@@ -636,6 +638,9 @@ function blockOf(
         ),
       ]
     }
+
+    case 'answer_lines':
+      return [...prefixLine(context), ...workSpaceParagraphs(answerLinesSpace(Number(attrs.lines)), context.indent)]
 
     case 'hr':
       return [

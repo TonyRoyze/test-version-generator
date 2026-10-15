@@ -95,7 +95,7 @@ export function QuestionReading({
       // test prints them, each drawn the way a question of its kind is.
       <ol type="a" className="record-multipart-parts question-reading-parts">
         {content.parts.map((part) => (
-          <li key={part.id} aria-label={`Part ${part.letter}, ${part.typeLabel}`}>
+          <li key={part.id} data-part-label={part.displayLabel} aria-label={`Part ${part.displayLabel ?? part.letter}, ${part.typeLabel}`}>
             <DocView className="question-reading-stem" content={part.stem} />
             {part.choices && (
               <ol type="A" className="question-reading-choices">

@@ -1,3 +1,5 @@
+import { answerLinesSpace } from './answer-lines'
+import { essayListLabel } from './essay'
 import { coverLogoSource } from './page-cover'
 import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from './cover-templates/paper-book-answers'
 // The PDF Export Adapter.
@@ -586,11 +588,13 @@ function drawBlocks(
         orderedIndex = Number(attrs.order) || 1
         for (const [index, child] of childrenOf(node).entries()) {
           if (index > 0) context.y -= Math.max(0, BODY_SIZE * LIST_ITEM_GAP_EM - BLOCK_AFTER)
-          const marker = node.type === 'ordered_list' ? `${orderedIndex++}.` : '•'
-          drawTextLine(context, marker, { x, width: 18 })
+          const marker = node.type === 'ordered_list' ? essayListLabel(attrs.essaySequence, orderedIndex - 1) ?? `${orderedIndex}.` : '•'
+          orderedIndex++
+          const listIndent = attrs.essaySequence ? pt(32) : 18
+          drawTextLine(context, marker, { x, width: listIndent })
           context.y += BODY_LINE
           // An item's own paragraphs sit together, as `li > p` does in print.
-          drawBlocks(context, childrenOf(child), { x: x + 18, width: width - 18, tight: true })
+          drawBlocks(context, childrenOf(child), { x: x + listIndent, width: width - listIndent, tight: true })
         }
         break
       }
@@ -621,6 +625,10 @@ function drawBlocks(
         }
         break
       }
+      case 'answer_lines':
+        ensureRoom(context, pt(answerLinesSpace(Number(attrs.lines)).height))
+        drawWorkSpace(context, answerLinesSpace(Number(attrs.lines)), x, width)
+        break
       case 'hr':
         ensureRoom(context, 12)
         context.page.drawLine({

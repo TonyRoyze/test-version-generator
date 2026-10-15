@@ -520,7 +520,7 @@ function questionMenuItems({
   // A Short Answer Part leaves room under its own id, as a Short Answer
   // question does under its.
   for (const part of question.parts ?? []) {
-    if (part.type === 'multiple-choice') continue
+    if (part.type !== 'open') continue
     items.push(
       { kind: 'separator' },
       ...workSpaceMenu(

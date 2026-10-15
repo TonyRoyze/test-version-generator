@@ -410,6 +410,9 @@ function planBlock(
         : [figure]
     }
 
+    case 'answer_lines':
+      return [...(opener.length > 0 ? [line(kind, renderInline(opener))] : []), workSpaceLine('lines', Number(attrs.lines))]
+
     case 'hr':
       return [line('rule', renderInline(opener))]
 

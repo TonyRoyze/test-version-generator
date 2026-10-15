@@ -1,3 +1,4 @@
+import { hasParts, isEssayType, essayPartLabel, essayStem } from './essay'
 import {
   Select,
   SelectContent,
@@ -202,6 +203,8 @@ function body(question: Question, format: CopyFormat, onFormat: (format: CopyFor
         stem,
         answers: (format.lines ?? 0) > 0 ? <Rules count={format.lines ?? 0} /> : null,
       }
+    case 'structured-essay':
+    case 'essay':
     case 'multipart':
       // The shared stem, then each Part split the same way as a whole card:
       // its own stem, a dashed rule, its own answers.
@@ -209,24 +212,24 @@ function body(question: Question, format: CopyFormat, onFormat: (format: CopyFor
         controls: null,
         stem,
         answers: <ol className="pop-over-parts">
-          {partsOf(question).map((part, index) => {
+          {partsOf(question).map((part, index, parts) => {
             const letter = bankLetter(index).toLowerCase()
             const partFormat: CopyPartFormat = format.parts?.[part.id] ?? {}
             const setPart = (next: CopyPartFormat) => onFormat({ ...format, parts: { ...format.parts, [part.id]: next } })
-            const answers = part.type === 'multiple-choice'
+            const answers = part.type === 'written' ? null : part.type === 'multiple-choice'
               ? <Answers answers={part.choices.map(({ node }) => childrenOf(node))} columns={partFormat.columns ?? part.columns} />
               : (partFormat.lines ?? 0) > 0 ? <Rules count={partFormat.lines ?? 0} /> : null
             return <li key={part.id} className="pop-over-part">
               <div className="pop-over-part-head">
-                <span className="pop-over-part-letter">{letter}.</span>
-                <span className="pop-over-part-type">{SECTION_LABELS[part.type]}</span>
+                <span className="pop-over-part-letter">{isEssayType(question.type) ? essayPartLabel(question.type, index, parts.length) : `${letter}.`}</span>
+                <span className="pop-over-part-type">{part.type === 'written' ? 'Written response' : SECTION_LABELS[part.type]}</span>
                 <span className="pop-over-card-controls">
-                  {part.type === 'multiple-choice'
+                  {part.type === 'written' ? null : part.type === 'multiple-choice'
                     ? <ColumnToggle label={`Part ${letter} answer columns`} value={partFormat.columns ?? part.columns} onChange={(value) => setPart({ ...partFormat, columns: value })} />
                     : <FormatSelect label={`Part ${letter} answer lines`} value={partFormat.lines ?? 0} options={LINE_OPTIONS} onChange={(value) => setPart({ ...partFormat, lines: value })} />}
                 </span>
               </div>
-              <DocView className="pop-over-stem" content={part.stem} />
+              <DocView className="pop-over-stem" content={essayStem(part.stem, question.type)} />
               {answers && <div className="pop-over-answer-half">{answers}</div>}
             </li>
           })}
@@ -299,7 +302,7 @@ export function PopOverQuestionPreview({
   showFormatControls?: boolean
 }) {
   const { controls, stem, answers } = body(question, format, onFormat)
-  const whole = question.type === 'multipart'
+  const whole = hasParts(question.type)
   return <>
     <div className="pop-over-card-head">
       <span className="question-reading-type">{SECTION_LABELS[question.type]}</span>

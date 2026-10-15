@@ -4032,3 +4032,31 @@ button.pop-over-chip-option[aria-pressed='true'] svg { visibility: visible; }
   .collection-grid { grid-template-columns: minmax(0, 1fr); }
   .exam-builder-review li { gap: 12px; }
 }
+
+/* Essay questions keep one number; their parts and subquestions have their own labels. */
+.question-dialog[data-question-type='essay'] .multipart-parts-list,
+.question-dialog[data-question-type='structured-essay'] .multipart-parts-list { counter-reset: essay-part; }
+.question-dialog[data-question-type='essay'] .multipart-part,
+.question-dialog[data-question-type='structured-essay'] .multipart-part { counter-increment: essay-part; }
+.question-dialog[data-question-type='essay'] .multipart-part-label::after { content: ' (' counter(essay-part, upper-alpha) ')'; }
+.question-dialog[data-question-type='structured-essay'] .multipart-part-label::after { content: ' (' counter(essay-part, lower-roman) ')'; }
+.question-dialog[data-question-type='essay'] .multipart-part-stem ol > li::marker,
+ol[data-essay-sequence='lower-roman'] > li::marker { content: '(' counter(list-item, lower-roman) ') '; }
+.question-dialog[data-question-type='essay'] .multipart-part-stem ol ol > li::marker,
+.question-dialog[data-question-type='structured-essay'] .multipart-part-stem ol > li::marker,
+ol[data-essay-sequence='lower-alpha'] > li::marker { content: '(' counter(list-item, lower-alpha) ') '; }
+.question-reading-parts > li[data-part-label]::marker { content: attr(data-part-label) ' '; }
+.question-dialog[data-question-type='essay'] .multipart-menu-anchor[hidden],
+.question-dialog[data-question-type='structured-essay'] .multipart-menu-anchor[hidden] { display: none; }
+.multipart-part-controls .essay-add-subquestions { width: auto; padding: 2px 6px; font-size: 12px; }
+/* Crepe's list items have NodeView wrappers and an explicit label element. */
+.question-dialog:is([data-question-type='essay'], [data-question-type='structured-essay']) .multipart-part-stem ol { counter-reset: essay-subquestion; }
+.question-dialog:is([data-question-type='essay'], [data-question-type='structured-essay']) .multipart-part-stem ol > .milkdown-list-item-block { counter-increment: essay-subquestion; }
+.question-dialog:is([data-question-type='essay'], [data-question-type='structured-essay']) .multipart-part-stem .label.ordered { font-size: 0; }
+.question-dialog[data-question-type='essay'] .multipart-part-stem ol .label.ordered::after,
+.question-dialog[data-question-type='structured-essay'] .multipart-part-stem ol ol .label.ordered::after { content: '(' counter(essay-subquestion, lower-roman) ')'; font-size: 14px; }
+.question-dialog[data-question-type='structured-essay'] .multipart-part-stem ol .label.ordered::after,
+.question-dialog[data-question-type='essay'] .multipart-part-stem ol ol .label.ordered::after { content: '(' counter(essay-subquestion, lower-alpha) ')'; font-size: 14px; }
+.doc-view ol[data-essay-sequence] { padding-left: 32px; }
+
+.question-dialog[data-question-type="essay"] .multipart-parts-list > .multipart-part:only-child .multipart-part-label::after { content: none; }

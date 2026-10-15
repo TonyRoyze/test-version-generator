@@ -130,7 +130,7 @@ To exclude Question Content from an Exam while leaving it in its Question Bank.
 To permanently remove Question Content from its Question Bank, every Exam that references it, and their Working Copies. Deletion requires showing the affected Exams and explicit confirmation; existing Export Records remain unchanged.
 
 **Question Type**:
-What a Question asks for, settled when it is created and never changed afterwards: Multiple Choice, True/False, Matching, Short Answer, or Multipart. It decides how the Question is answered and laid out, the wording a new Question Section of only Questions of this type begins with, and what its Answer Key entry records.
+What a Question asks for, settled when it is created and never changed afterwards: Multiple Choice, True/False, Matching, Short Answer, Multipart, Structured Essay, or Essay. It decides how the Question is answered and laid out, the wording a new Question Section of only Questions of this type begins with, and what its Answer Key entry records.
 _Avoid_: Question format, question kind
 
 **True/False**:
@@ -162,16 +162,28 @@ A Question Type whose response is intentionally brief and does not present answe
 _Avoid_: Open, Open ended, Open Response, Short Response
 
 **Suggested Answer**:
-Optional rich-text material authored for a Short Answer question to represent its answer in the Answer Key.
+Optional rich-text material authored for a Short Answer question or a Written Part to represent its answer in the Answer Key.
 _Avoid_: Correct answer, sample response, rubric
+
+**Structured Essay**:
+A Question Type with one shared introduction and written-response Parts labelled (i), (ii), and so on. The whole Question takes one test number, and each Part is a Written Part with only its authored Answer Lines. Parts stay together in the Question Bank and keep their authored order. Each Part may carry a Suggested Answer, shown only in the Answer Key.
+
+**Essay**:
+A Question Type with one test number and written-response groups labelled (A), (B), and so on; a single group has no letter. Each group may contain numbered subquestions labelled (i), (ii), and further nested prompts labelled (a), (b). Students normally answer on a separate sheet, so groups begin without Work Space. Groups stay in authored order and may each carry a Suggested Answer for the Answer Key.
 
 **Multipart**:
 A Question Type whose Question is a stem followed by its Parts. The stem is ordinary rich text, usually the shared material the Parts are asked about — a passage, quote, image, table or anything else. Its shared stem prints as a separate description before its first Part, and each Part takes its own consecutive question number on the paper. A Question Bank keeps it whole: a Part is never a Question of its own, and an Exam adds, moves and Removes a Multipart question as one Question.
 _Avoid_: Stimulus, passage, document-based question, question group, source
 
 **Part**:
-One question within a Multipart question, in authored order, with its own question number on the paper: a Multiple Choice Part with its own stem, answers and optional Explanation, or a Short Answer Part with its own stem and optional Suggested Answer. Unlike a Question's type, a Part's type may be switched while it is edited; only the answers of the type it ends as are saved. Parts are never shuffled, since they share their preceding description and often build on one another, but a Multiple Choice Part's answers Vary as a Multiple Choice question's do. A Multipart question with no Parts is incomplete rather than invalid. Question Metadata belongs to the Multipart question, not its Parts; the Answer Key records each Part under its own question number.
+A component kept within a Multipart, Structured Essay, or Essay Question. In a Structured Essay or Essay it is a Written Part labelled beneath its parent’s one test number. In a Multipart question it is one question, in authored order, with its own question number on the paper: a Multiple Choice Part with its own stem, answers and optional Explanation, or a Short Answer Part with its own stem and optional Suggested Answer. Unlike a Question's type, a Multipart Part's type may be switched while it is edited; only the answers of the type it ends as are saved. Parts are never shuffled, since they share their preceding description and often build on one another, but a Multiple Choice Part's answers Vary as a Multiple Choice question's do. A Multipart question with no Parts is incomplete rather than invalid. Question Metadata belongs to the Multipart question, not its Parts; the Answer Key records each Part under its own question number.
 _Avoid_: Sub-question, item (Item is Matching's), sub-part
+
+**Written Part**:
+A Part within a Structured Essay or Essay, containing prompt text, optional nested subquestions, authored Answer Lines and an optional Suggested Answer. It has no automatic Work Space or resizing handle. Adding or removing Answer Lines in its text fully controls the response space.
+
+**Answer Lines**:
+Ruled response space authored at a specific position within a Structured Essay or Essay Part, so individual subquestions can each leave room for an answer. It travels with the Question and appears in the student paper, including PDF and DOCX, while the Answer Key contains the Suggested Answer. Written Parts have no additional Work Space below their content.
 
 **Work Space**:
 Room an Exam leaves below a Short Answer question or Short Answer Part for a student's working: blank or ruled, as tall as the teacher drags it, or filling the rest of its page. It is Exam presentation set on the exam sheet like answer columns, never Question Content, so the same Question may take different room on another Exam; Duplicate copies it. Where the teacher has set none, the Exam's Question Style supplies it — ruled lines under Classic and Condensed, none under Standard — and a Work Space the teacher set, None included, always wins. It is kept as a number of rows; the Question Style decides how far apart they lie on the page, closer under Condensed, and the first row is a little shorter, so the first rule sits close under its question.

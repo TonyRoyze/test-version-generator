@@ -1,3 +1,4 @@
+import { hasParts, isEssayType, essayPartLabel, essayStem } from './essay'
 // Export planning: one Export Document, one Layout Plan.
 //
 // This is the single module that decides what an exam arrangement *says* and how it
@@ -282,12 +283,12 @@ export type PlannedPart = {
   type: PartType
   stem: ProseMirrorJSON[]
   /** The answers in this arrangement's order, lettered `A`, `B`, …; empty for
-   *  a Short Answer Part. */
+   *  a Short Answer or written Part. */
   choices: PlannedChoice[]
   grid: ChoiceGrid | null
   /** The room a Short Answer Part leaves for work, resolved as a question's is
    *  — zero-height when it leaves none, so the sheet can offer a handle to
-   *  drag some open. `null` for a Multiple Choice Part. */
+   *  drag some open. `null` for a Multiple Choice or written Essay Part. */
   workSpace: PlannedWorkSpace | null
   /** A Short Answer Part's Suggested Answer, for the Answer Key only. */
   suggestedAnswer?: ProseMirrorJSON[]
@@ -966,7 +967,7 @@ function deriveParts(
   arrangement: Arrangement,
   number: number,
 ): PlannedPart[] {
-  return partsOf(question).map((part, index) => {
+  return partsOf(question).map((part, index, parts) => {
     const choices: PlannedChoice[] = orderedPartChoices(part, arrangement).map(
       (choice, choiceIndex) => {
         const letter = sequenceFor('answers', choiceIndex, exam.labelStyles)
@@ -988,14 +989,14 @@ function deriveParts(
     return {
       id: part.id,
       letter: sequenceFor('parts', index, exam.labelStyles),
-      number: number + index,
-      displayLabel: partDisplayLabel,
+      ...(!isEssayType(question.type) ? { number: number + index } : {}),
+      displayLabel: isEssayType(question.type) ? essayPartLabel(question.type, index, parts.length) : partDisplayLabel,
       type: part.type,
       ...(part.answerReason ? { answerReason: part.answerReason } : {}),
-      stem: part.stem,
+      stem: essayStem(part.stem, question.type),
       choices,
       grid: multipleChoice ? layOutGrid(choices, part.columns) : null,
-      workSpace: multipleChoice ? null : plannedWorkSpace(workSpaceOf(exam, part.id), workSpaceRowsOf(exam.questionStyle)),
+      workSpace: part.type !== 'open' ? null : plannedWorkSpace(workSpaceOf(exam, part.id), workSpaceRowsOf(exam.questionStyle)),
       ...(!multipleChoice && suggestedBlocks.length > 0 && !blankBlocks(suggestedBlocks)
         ? { suggestedAnswer: structuredClone(suggestedBlocks) }
         : {}),
@@ -1012,7 +1013,7 @@ function deriveQuestion(
   const rules = questionStyleRules(exam.questionStyle)
   const trueFalse = question.type === 'true-false'
   const matching = question.type === 'matching'
-  const multipart = question.type === 'multipart'
+  const multipart = hasParts(question.type)
   const ordered = matching || multipart ? [] : question.type === 'multiple-choice' ? shownChoices(question, arrangement) : orderedChoices(question, arrangement)
   const answerStyle = labelStyleOf(exam.labelStyles, 'answers')
   const choices: PlannedChoice[] = ordered.map((choice, index) => {
@@ -1033,7 +1034,7 @@ function deriveQuestion(
   })
   const matchingSet = matching ? deriveMatching(exam, question, arrangement, number, rules, wordBankLayoutOf(exam, question)) : null
   const parts = multipart ? deriveParts(exam, question, arrangement, number) : null
-  const questionSpan = matchingSet?.prompts.length ?? (parts ? Math.max(1, parts.length) : 1)
+  const questionSpan = matchingSet?.prompts.length ?? (parts && !isEssayType(question.type) ? Math.max(1, parts.length) : 1)
   const displayNumber = displayQuestionNumber(number, questionSpan, exam.labelStyles)
   const answerVisibility = question.type === 'multiple-choice' ? answerVisibilityOf(question, arrangement) : undefined
   return {

@@ -23,6 +23,8 @@ export const SECTION_TITLE: Record<QuestionType, string> = {
   matching: 'Matching',
   open: 'Short Answer',
   multipart: 'Multipart',
+  'structured-essay': 'Structured Essay',
+  essay: 'Essay',
 }
 
 export const SECTION_INSTRUCTIONS: Record<QuestionType, string> = {
@@ -34,6 +36,8 @@ export const SECTION_INSTRUCTIONS: Record<QuestionType, string> = {
     'Match each item with the correct answer from the word bank. Write its letter in the blank.',
   open: 'Answer the following questions in the space provided. Show all work.',
   multipart: 'Answer every part of each question.',
+  'structured-essay': 'Answer every part in the space provided.',
+  essay: 'Answer the questions on a separate answer sheet.',
 }
 
 /** An Exam's own wording for one section. An absent key is the default; an

@@ -1,3 +1,4 @@
+import { type EssayType } from './essay'
 import type { Ctx, MilkdownPlugin } from '@milkdown/kit/ctx'
 import { createSlice } from '@milkdown/kit/ctx'
 import { $nodeSchema, $prose, $view } from '@milkdown/kit/utils'
@@ -24,10 +25,13 @@ import { multipleChoiceEditableCtx, newMultipleChoiceNode } from './multiple-cho
 // deletes it, since there is no other way to put one back.
 export const multipartModeCtx = createSlice(false, 'multipartMode')
 
-export const multipartMode = (enabled: boolean): MilkdownPlugin => (ctx) => {
+export const essayModeCtx = createSlice<EssayType | null>(null, 'essayMode')
+export const multipartMode = (enabled: boolean, essayType?: EssayType): MilkdownPlugin => (ctx) => {
   ctx.inject(multipartModeCtx, enabled)
+  ctx.inject(essayModeCtx, essayType ?? null)
   return () => () => {
     ctx.remove(multipartModeCtx)
+    ctx.remove(essayModeCtx)
   }
 }
 
@@ -59,8 +63,8 @@ function partJSON(kind: PartKind) {
 }
 
 /** The Parts box a new Multipart question opens with: one blank Multiple Choice Part. */
-export function newMultipartPartsNode() {
-  return { type: 'multipartParts', content: [partJSON('multiple-choice')] }
+export function newMultipartPartsNode(kind: PartKind = 'multiple-choice') {
+  return { type: 'multipartParts', content: [partJSON(kind)] }
 }
 
 // A Part's stem: the question this Part asks, as any blocks.
@@ -380,20 +384,31 @@ export const multipartPartsView = $view(
         if (!editable()) return
         const pos = getPos()
         if (pos == null) return
-        addPart(view, pos, kind)
+        addPart(view, pos, ctx.get(essayModeCtx) ? 'open' : kind)
         view.focus()
       }
 
       const dom = document.createElement('div')
       dom.className = 'multipart-parts'
       dom.dataset.type = 'multipart-parts'
+      if (ctx.get(essayModeCtx)) dom.dataset.essayType = ctx.get(essayModeCtx)!
+      const essay = ctx.get(essayModeCtx)
 
       const head = document.createElement('div')
       head.className = 'multipart-parts-head'
       head.contentEditable = 'false'
       const title = document.createElement('span')
       title.textContent = 'Parts'
-      const headAdd = kindMenu(addPartButton(), 'multipart-menu--below multipart-menu--end', add)
+      // Written Parts are added directly, without a Short Answer type menu.
+      const writtenAdd = () => {
+        const button = addPartButton()
+        button.addEventListener('mousedown', (event) => {
+          event.preventDefault()
+          add('open')
+        })
+        return { wrap: button, close: () => {} }
+      }
+      const headAdd = essay ? writtenAdd() : kindMenu(addPartButton(), 'multipart-menu--below multipart-menu--end', add)
       head.append(title, headAdd.wrap)
 
       const contentDOM = document.createElement('div')
@@ -407,7 +422,7 @@ export const multipartPartsView = $view(
       const actions = document.createElement('div')
       actions.className = 'multipart-parts-actions'
       actions.contentEditable = 'false'
-      const footAdd = kindMenu(addPartButton(), 'multipart-menu--above', add)
+      const footAdd = essay ? writtenAdd() : kindMenu(addPartButton(), 'multipart-menu--above', add)
       actions.append(footAdd.wrap)
 
       dom.append(head, contentDOM, empty, actions)
@@ -471,7 +486,7 @@ export const multipartPartView = $view(
 
       const label = document.createElement('span')
       label.className = 'multipart-part-label'
-      label.append(icon('type'), 'Type')
+      label.append(icon('type'), ctx.get(essayModeCtx) ? 'Part' : 'Type')
 
       const kindButton = document.createElement('button')
       kindButton.type = 'button'
@@ -508,6 +523,26 @@ export const multipartPartView = $view(
       control('down', 'Move part down', (pos) => movePartTo(view, pos, indexAt(pos) + 2))
       control('x', 'Delete part', (pos) => deletePart(view, pos))
 
+      if (ctx.get(essayModeCtx)) {
+        const subquestions = document.createElement('button')
+        subquestions.type = 'button'
+        subquestions.className = 'multipart-part-control essay-add-subquestions'
+        subquestions.textContent = 'Add subquestions'
+        subquestions.addEventListener('mousedown', (event) => {
+          event.preventDefault()
+          const pos = getPos()
+          if (!editable() || pos == null) return
+          const stem = view.state.doc.nodeAt(pos)?.firstChild
+          if (!stem) return
+          const insertAt = pos + stem.nodeSize
+          const list = view.state.schema.nodeFromJSON({ type: 'ordered_list', attrs: { order: 1 }, content: [{ type: 'list_item', content: [{ type: 'paragraph' }] }] })
+          const tr = view.state.tr.insert(insertAt, list)
+          tr.setSelection(TextSelection.near(tr.doc.resolve(insertAt + 3)))
+          view.dispatch(tr.scrollIntoView())
+          view.focus()
+        })
+        controls.prepend(subquestions)
+      }
       header.append(label, kind.wrap, controls)
 
       const contentDOM = document.createElement('div')
@@ -523,6 +558,7 @@ export const multipartPartView = $view(
         kind.mark(current)
         const on = editable()
         kindButton.disabled = !on
+        kind.wrap.hidden = ctx.get(essayModeCtx) !== null
         if (!on) kind.close()
         controls.style.display = on ? '' : 'none'
       }

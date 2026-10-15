@@ -1,3 +1,4 @@
+import { essayPartLabel, essayStem, hasParts, isEssayType } from './essay'
 // What `QuestionReading` draws: a Question's full content, already in editor
 // nodes, whichever Question shape it came from. See `question-reading.tsx`.
 
@@ -33,6 +34,7 @@ export type QuestionReadingContent = {
   parts?: {
     id: string
     letter: string
+    displayLabel?: string
     typeLabel: string
     stem: ProseMirrorJSON[]
     choices?: { id: string; content: ProseMirrorJSON[]; correct: boolean; locked?: boolean }[]
@@ -61,14 +63,15 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
         : {}),
     }
   }
-  if (question.type === 'multipart') {
+  if (hasParts(question.type)) {
     return {
       ...base,
-      parts: partsOf(question).map((part, index) => ({
+      parts: partsOf(question).map((part, index, parts) => ({
         id: part.id,
         letter: bankLetter(index).toLowerCase(),
-        typeLabel: SECTION_LABELS[part.type],
-        stem: part.stem,
+        ...(isEssayType(question.type) ? { displayLabel: essayPartLabel(question.type, index, parts.length) } : {}),
+        typeLabel: part.type === 'written' ? 'Written response' : SECTION_LABELS[part.type],
+        stem: essayStem(part.stem, question.type),
         ...(part.type === 'multiple-choice'
           ? {
               choices: part.choices.map((choice) => ({

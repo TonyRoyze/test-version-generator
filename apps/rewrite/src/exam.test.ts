@@ -224,6 +224,8 @@ describe('question ordering', () => {
       'matching',
       'open',
       'multipart',
+      'structured-essay',
+      'essay',
     ])
     const exam = examOf([open('o1'), matching('x1', [''], ['a', 'b']), multipleChoice('q1', ['a'])])
     expect(ids(orderedQuestions(exam, arrangementOf(['o1', 'x1', 'q1'])))).toEqual(['q1', 'x1', 'o1'])

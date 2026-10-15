@@ -1,3 +1,4 @@
+import { essayPartLabel, essayStem, isEssayType } from './essay'
 import { Modal } from '@/components/modal'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -277,11 +278,12 @@ function readingOfRecordQuestion(
     ...(question.suggestedAnswer ? { suggestedAnswer: previewDocument(question.suggestedAnswer) } : {}),
     ...(question.answerReason ? { answerReason: question.answerReason } : {}),
     ...(question.parts ? {
-      parts: question.parts.map((part, index) => ({
+      parts: question.parts.map((part, index, parts) => ({
         id: part.id,
         letter: String.fromCharCode(97 + index),
-        typeLabel: RECORD_PART_TYPE_LABELS[part.type],
-        stem: previewDocument(part.stem),
+        ...(isEssayType(question.type) ? { displayLabel: essayPartLabel(question.type, index, parts.length) } : {}),
+        typeLabel: isEssayType(question.type) ? 'Written response' : RECORD_PART_TYPE_LABELS[part.type],
+        stem: essayStem(previewDocument(part.stem), question.type),
         ...(part.choices ? {
           choices: part.choices.map((choice) => choiceOf(choice, true)),
         } : {}),
