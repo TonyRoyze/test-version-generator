@@ -1,3 +1,4 @@
+import type { ExamQuestionSort } from './exam-question-order'
 import { useBlurCommitText } from './use-blur-commit-text'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -343,6 +344,7 @@ function questionMenuItems({
   onLabelStyleChange,
   onEdit,
   onDuplicate,
+  onSortQuestions,
   onShuffleSelected,
   onShuffleSelectedAnswers,
   shownIncorrect,
@@ -378,6 +380,7 @@ function questionMenuItems({
   onSetWorkSpace: SetWorkSpace
   onEdit: (questionId: string) => void
   onDuplicate: (questionId: string) => void
+  onSortQuestions?: (questionIds: readonly string[], sort: ExamQuestionSort) => void
   onShuffleSelected: (questionIds: readonly string[]) => void
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   onRemove: (questionIds: readonly string[]) => void
@@ -553,6 +556,7 @@ function questionMenuItems({
     {
       kind: 'action',
       label: 'Shuffle question order',
+      description: actedOnIds.length === 1 ? 'This section' : 'Selected questions',
       icon: <Shuffle />,
       onSelect: () => onShuffleSelected(actedOnIds),
     },
@@ -563,6 +567,16 @@ function questionMenuItems({
       onSelect: () => onShuffleSelectedAnswers(actedOnIds),
     },
   )
+  if (onSortQuestions) items.push({
+    kind: 'submenu',
+    label: 'Sort question order',
+    icon: <ListOrdered />,
+    description: actedOnIds.length === 1 ? 'This section' : 'Selected questions',
+    items: ([
+      ['text-asc', 'Question A–Z'], ['text-desc', 'Question Z–A'],
+      ['bank-asc', 'Question Bank A–Z'], ['bank-desc', 'Question Bank Z–A'],
+    ] as const).map(([sort, label]) => ({ kind: 'action', label, onSelect: () => onSortQuestions(actedOnIds, sort) })),
+  })
   // Remove, never Delete: this takes the question off the Working Copy and leaves
   // its Question Bank record alone, so it is neither destructive nor worth a
   // confirmation. Permanent deletion is not offered in this workspace at all.
@@ -1665,6 +1679,7 @@ export function ExamPage({
   onEdit,
   onRandomReplace,
   onDuplicate,
+  onSortQuestions,
   onShuffleSelected,
   onShuffleSelectedAnswers,
   onSetShownIncorrect,
@@ -1702,6 +1717,7 @@ export function ExamPage({
   onRandomReplace?: (questionId: string) => void
   onEdit: (questionId: string) => void
   onDuplicate: (questionId: string) => void
+  onSortQuestions?: (questionIds: readonly string[], sort: ExamQuestionSort) => void
   onShuffleSelected: (questionIds: readonly string[]) => void
   onShuffleSelectedAnswers: (questionIds: readonly string[]) => void
   /** Has Multiple Choice questions show this many incorrect answers;
@@ -2291,6 +2307,7 @@ export function ExamPage({
             onLabelStyleChange: titleDisabled ? undefined : onLabelStyleChange,
             onEdit,
             onDuplicate,
+            onSortQuestions,
             onShuffleSelected,
             onShuffleSelectedAnswers,
             shownIncorrect: (() => {

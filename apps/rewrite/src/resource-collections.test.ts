@@ -3,6 +3,8 @@ import {
   filterExamCollection,
   filterQuestionBankCollection,
   homePreview,
+  sortExams,
+  sortBanks,
   questionBankCollection,
 } from './resource-collections'
 import type { RecentExam } from './exam-workspaces'
@@ -73,4 +75,27 @@ test('Home previews only the leading resources while full collections retain all
   )
   expect(homePreview(resources)).toEqual(resources.slice(0, 6))
   expect(resources).toHaveLength(9)
+})
+
+test('collection sorting orders names naturally, dates and counts without changing saved order', () => {
+  const exams = [
+    { ...exam('a', 'Exam 10'), createdAt: '2026-03-01', lastOpenedAt: '2026-03-01', questionCount: 2 },
+    { ...exam('b', 'exam 2'), createdAt: '2026-01-01', lastOpenedAt: '2026-05-01', questionCount: 10 },
+    { ...exam('c', 'Biology'), createdAt: '2026-02-01', lastOpenedAt: '2026-04-01', questionCount: 5 },
+  ]
+  const ids = (items: { id: string }[]) => items.map(({ id }) => id)
+  expect(ids(sortExams(exams, 'name-asc'))).toEqual(['c', 'b', 'a'])
+  expect(ids(sortExams(exams, 'name-desc'))).toEqual(['a', 'b', 'c'])
+  expect(ids(sortExams(exams, 'newest'))).toEqual(['a', 'c', 'b'])
+  expect(ids(sortExams(exams, 'oldest'))).toEqual(['b', 'c', 'a'])
+  expect(ids(sortExams(exams, 'recent'))).toEqual(['b', 'c', 'a'])
+  expect(ids(sortExams(exams, 'most-questions'))).toEqual(['b', 'c', 'a'])
+  expect(ids(sortExams(exams, 'fewest-questions'))).toEqual(['a', 'c', 'b'])
+  expect(ids(exams)).toEqual(['a', 'b', 'c'])
+  const banks = [
+    { ...bank('a', 'Zoology', []), lastUpdatedAt: '2026-02-01' },
+    { ...bank('b', 'Algebra', []), lastUpdatedAt: '2026-03-01' },
+  ]
+  expect(ids(sortBanks(banks, 'name-asc'))).toEqual(['b', 'a'])
+  expect(ids(sortBanks(banks, 'recent'))).toEqual(['b', 'a'])
 })

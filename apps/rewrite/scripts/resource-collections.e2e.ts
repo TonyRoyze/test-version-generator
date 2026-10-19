@@ -135,7 +135,7 @@ test('Home provides keyboard-operable horizontal previews and full collections',
   const search = page.getByRole('searchbox', { name: 'Search Exams' })
   await search.fill('special algebra')
   await expect(page.getByRole('status')).toHaveText('1 Exam')
-  await search.press('Tab')
+  await page.getByRole('button', { name: /^Open Special Algebra Exam\./ }).focus()
   await page.keyboard.press('Enter')
   await expect(page.getByRole('textbox', { name: 'Exam name' })).toHaveValue(
     'Special Algebra Exam',
@@ -276,4 +276,55 @@ test('Home reports a remembered persistent-storage denial', async ({
   await expect(page.getByRole('region', { name: 'Where your work is stored' })).toContainText(
     'Persistent storage was denied',
   )
+})
+
+test('collection sorting persists across reload and Home and combines with search', async ({ page }) => {
+  await seedResources(page, 6)
+  await page.goto('/exams')
+  await page.getByRole('combobox', { name: 'Sort Exams' }).click()
+  await page.getByRole('option', { name: 'Name A–Z', exact: true }).click()
+  const exams = page.getByRole('region', { name: 'Exams search results' }).getByRole('button', { name: /^Open / })
+  await expect(exams.first()).toHaveAccessibleName(/^Open Exam 1\./)
+  await expect(exams.last()).toHaveAccessibleName(/^Open Special Algebra Exam\./)
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Sort Exams' })).toHaveText('Name A–Z')
+  await expect(exams.first()).toHaveAccessibleName(/^Open Exam 1\./)
+  await page.goto('/')
+  await expect(page.getByRole('combobox', { name: 'Sort Exams' })).toHaveText('Name A–Z')
+  await expect(page.getByRole('list', { name: 'Recent Exams' }).getByRole('button', { name: /^Open / }).first()).toHaveAccessibleName(/^Open Exam 1\./)
+  await page.goto('/question-banks')
+  await page.getByRole('combobox', { name: 'Sort Question Banks' }).click()
+  await page.getByRole('option', { name: 'Name Z–A', exact: true }).click()
+  const banks = page.getByRole('region', { name: 'Question Banks search results' }).getByRole('button', { name: /^Open / })
+  await expect(banks.first()).toHaveAccessibleName(/^Open Special Biology Bank\./)
+  await page.getByRole('searchbox', { name: 'Search Question Banks' }).fill('Question Bank')
+  await expect(banks.first()).toHaveAccessibleName(/^Open Question Bank 6\./)
+  await page.reload()
+  await expect(page.getByRole('combobox', { name: 'Sort Question Banks' })).toHaveText('Name Z–A')
+})
+
+test('MCQ sorting changes the visible question order', async ({ page }) => {
+  const ids = await seedResources(page, 1)
+  await page.evaluate(async (id) => {
+    const { createQuestionBankWorkspaceService } = await import(/* @vite-ignore */ '/src/question-bank-workspaces.ts') as typeof import('../src/question-bank-workspaces')
+    const { createQuestion } = await import(/* @vite-ignore */ '/src/exam.ts') as typeof import('../src/exam')
+    const banks = createQuestionBankWorkspaceService()
+    for (const stem of ['Zebra question', 'Apple question']) {
+      const question = createQuestion('multiple-choice')
+      question.doc = { type: 'doc', content: [
+        { type: 'paragraph', content: [{ type: 'text', text: stem }] },
+        ...question.doc.content ?? [],
+      ] }
+      await banks.commit(id, { kind: 'create-question', question })
+    }
+  }, ids.banks[0])
+  await page.goto(`/question-bank?id=${ids.banks[0]}`)
+  const rows = page.getByRole('list', { name: 'Questions', exact: true }).getByRole('listitem')
+  await page.getByRole('button', { name: 'Sort', exact: true }).click()
+  await page.getByRole('radio', { name: 'Question Z–A', exact: true }).click()
+  await expect(rows.first()).toContainText('Zebra question')
+  await page.getByRole('button', { name: 'Sort', exact: true }).click()
+  await page.getByRole('radio', { name: 'Question A–Z', exact: true }).click()
+  await expect(rows.first()).toContainText('Apple question')
+  await expect(page.getByRole('button', { name: 'Sort', exact: true })).toContainText('Question A–Z')
 })

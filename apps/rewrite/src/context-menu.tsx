@@ -31,6 +31,7 @@ export type MenuItem =
   | {
       kind: "action";
       label: string;
+      description?: string;
       onSelect: () => void;
       icon?: ReactNode;
       destructive?: boolean;
@@ -176,7 +177,7 @@ function MenuRows({ items }: { items: readonly MenuItem[] }) {
           onSelect={item.onSelect}
         >
           {item.icon}
-          {item.label}
+          <ItemLabel label={item.label} description={item.description} />
         </DropdownMenuItem>,
       );
     }

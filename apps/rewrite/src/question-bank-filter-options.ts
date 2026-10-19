@@ -27,6 +27,8 @@ export const DIFFICULTY_OPTIONS: FilterOption<DifficultyFilter>[] = [
 export const SORT_OPTIONS: readonly FilterOption<QuestionBankSort>[] = [
   { value: 'newest', label: 'Newest' },
   { value: 'oldest', label: 'Oldest' },
+  { value: 'text-asc', label: 'Question A–Z' },
+  { value: 'text-desc', label: 'Question Z–A' },
   { value: 'type', label: 'Question Type' },
   { value: 'difficulty', label: 'Difficulty' },
   { value: 'topic', label: 'Topic' },

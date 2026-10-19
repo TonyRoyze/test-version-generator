@@ -1,3 +1,4 @@
+import { questionOrderScope, type ExamQuestionSort } from './exam-question-order'
 import { hasParts, isEssayType } from './essay'
 import { FrontMatterSelect } from '@/components/front-matter-select'
 import { Modal } from '@/components/modal'
@@ -1828,8 +1829,22 @@ function ExamEditor({
     selectAndReveal(questions.at(-1)!.id)
   }
   const shuffleSelectedQuestions = (questionIds: readonly string[]) => {
-    store.shuffleSelectedQuestions(questionIds)
-    setVarySummary('Shuffled question order.')
+    const { exam, arrangement } = store.selectedExam()
+    const before = store.getState()
+    store.shuffleSelectedQuestions(questionOrderScope(exam, arrangement, questionIds))
+    setVarySummary(store.getState() === before ? 'This section needs at least two questions to shuffle.' : 'Shuffled question order.')
+  }
+
+  const sortQuestions = async (questionIds: readonly string[], sort: ExamQuestionSort) => {
+    try {
+      const { exam, arrangement } = store.selectedExam()
+      const scope = questionOrderScope(exam, arrangement, questionIds)
+      const names = sort.startsWith('bank') ? await Promise.all(scope.map(async (id) =>
+        [id, (await bankWorkspaces.ownerOfQuestion(id))?.name] as const,
+      )) : []
+      store.sortSelectedQuestions(scope, sort, Object.fromEntries(names.filter((entry): entry is readonly [string, string] => entry[1] !== undefined)))
+      setVarySummary('Sorted question order.')
+    } catch { setVarySummary('Could not load Question Bank names. Try again.') }
   }
 
   const shuffleSelectedAnswers = (questionIds: readonly string[]) => {
@@ -2673,6 +2688,7 @@ function ExamEditor({
                 setVarySummary(`Replaced question with another from ${owner.name}.`)
               })().catch(() => setVarySummary('Could not replace this question. Try again.'))
             }}
+            onSortQuestions={(ids, sort) => { void sortQuestions(ids, sort) }}
             onShuffleSelected={shuffleSelectedQuestions}
             onShuffleSelectedAnswers={shuffleSelectedAnswers}
             onSetShownIncorrect={(questionIds, count) => {

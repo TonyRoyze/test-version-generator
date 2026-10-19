@@ -1,3 +1,6 @@
+import { CollectionSortControl } from './collection-sort'
+import { useCollectionSort } from './use-collection-sort'
+import { sortExams, sortBanks } from './resource-collections'
 import { Dices } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { AppShell } from './app-shell'
@@ -52,9 +55,12 @@ export function HomePage({
   onDeleteExam: (exam: RecentExam) => void
   onImport: () => void
 }) {
-  const recentExams = homePreview(exams)
+  const [examSort, setExamSort] = useCollectionSort('exams')
+  const [bankSort, setBankSort] = useCollectionSort('question-banks')
+  const recentExams = homePreview(sortExams(exams, examSort))
   const shelfActions = (
     <div className="collection-actions">
+      <CollectionSortControl label="Sort Exams" value={examSort} onChange={setExamSort} />
       {onGenerateExam && <Button variant="outline" onClick={onGenerateExam}><Dices />Generate exam</Button>}
       <Button variant="default" type="button" className="primary-button" onClick={onImport}>Import</Button>
     </div>
@@ -105,12 +111,13 @@ export function HomePage({
           <h2 id="question-banks-heading" className="shelf-label">
             Question Banks
           </h2>
+          <CollectionSortControl label="Sort Question Banks" value={bankSort} onChange={setBankSort} />
         </div>
         {banks.length === 0 ? (
           <CreateFirstCard label="New Question Bank" onClick={onNewBank} />
         ) : (
           <div className="collection-grid">
-            {banks.map((bank) => (
+            {sortBanks(banks, bankSort).map((bank) => (
               <QuestionBankCard
                 key={bank.id}
                 bank={bank}
