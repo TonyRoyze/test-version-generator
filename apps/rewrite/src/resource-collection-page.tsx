@@ -1,3 +1,6 @@
+import { CollectionSortControl } from './collection-sort'
+import { useCollectionSort } from './use-collection-sort'
+import { sortExams, sortBanks } from './resource-collections'
 import { Dices } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,14 +44,16 @@ export function ResourceCollectionPage({
   onDeleteExam?: (exam: RecentExam) => void
   onImportBank?: () => void
 }) {
+  const [examSort, setExamSort] = useCollectionSort('exams')
+  const [bankSort, setBankSort] = useCollectionSort('question-banks')
   const [query, setQuery] = useState('')
   const shownExams = useMemo(
-    () => filterExamCollection(exams, query),
-    [exams, query],
+    () => sortExams(filterExamCollection(exams, query), examSort),
+    [exams, query, examSort],
   )
   const shownBanks = useMemo(
-    () => filterQuestionBankCollection(banks, query),
-    [banks, query],
+    () => sortBanks(filterQuestionBankCollection(banks, query), bankSort),
+    [banks, query, bankSort],
   )
   const isExams = kind === 'exams'
   const resources = isExams ? shownExams : shownBanks
@@ -90,6 +95,7 @@ export function ResourceCollectionPage({
             onChange={(event) => setQuery(event.target.value)}
           />
         </label>
+        <CollectionSortControl label={`Sort ${resourceName}`} value={isExams ? examSort : bankSort} onChange={isExams ? setExamSort : setBankSort} />
         <p className="collection-count" role="status" aria-live="polite">
           {resources.length}{' '}
           {resources.length === 1 ? resourceName.replace(/s$/, '') : resourceName}

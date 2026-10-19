@@ -2531,8 +2531,8 @@ html:has(.bank-page), body:has(.bank-page) {
 .carousel-arrow svg { width: 16px; height: 16px; }
 .collection-heading { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .collection-heading h1 { margin: 0; font-size: 28px; }
-.collection-actions { display: flex; align-items: center; gap: 9px; }
-.collection-filter { display: flex; align-items: center; gap: 14px; margin: 16px 0 16px; }
+.collection-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.collection-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin: 16px 0 16px; }
 .collection-search input { width: min(320px, 42vw); padding: 9px 12px; border: 1px solid #cdb9a6; border-radius: 8px; background: #fffdf8; }
 .collection-count { margin: 0; color: #6e5b4d; font-size: 14px; }
 .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, 245px); gap: 12px; align-content: start; }

@@ -268,3 +268,13 @@ describe('the Topic dropdown', () => {
     expect(options).toContain('algebra')
   })
 })
+
+test('MCQ text sorting works within filters and preserves the authored bank', () => {
+  const z = question('Zebra', { type: 'multiple-choice' })
+  const a = question('apple', { type: 'multiple-choice' })
+  const other = question('Another question')
+  const bank = banked(z, a, other)
+  expect(idsOf(browseQuestionBank(bank, filter({ types: ['multiple-choice'], sort: 'text-asc' })))).toEqual([a.id, z.id])
+  expect(idsOf(browseQuestionBank(bank, filter({ types: ['multiple-choice'], sort: 'text-desc' })))).toEqual([z.id, a.id])
+  expect(idsOf(bank.questions)).toEqual([z.id, a.id, other.id])
+})

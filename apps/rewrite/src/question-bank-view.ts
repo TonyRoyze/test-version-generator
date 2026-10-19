@@ -21,7 +21,7 @@ import { searchableText } from './stem-preview'
 export type DifficultyFilter = Difficulty | 'unspecified'
 
 /** The ordering applied after search and filters have chosen the visible rows. */
-export type QuestionBankSort = 'newest' | 'oldest' | 'type' | 'difficulty' | 'topic'
+export type QuestionBankSort = 'newest' | 'oldest' | 'type' | 'difficulty' | 'topic' | 'text-asc' | 'text-desc'
 
 /**
  * What the teacher has narrowed the Question Bank to.
@@ -147,6 +147,11 @@ export function browseQuestionBank(
   }
 
   switch (filter.sort ?? 'newest') {
+    case 'text-asc':
+    case 'text-desc': {
+      const direction = filter.sort === 'text-asc' ? 1 : -1
+      return shown.sort((left, right) => direction * searchableText(left).localeCompare(searchableText(right), undefined, { numeric: true, sensitivity: 'base' }))
+    }
     case 'type':
       return shown.sort((left, right) => TYPE_RANK[left.type] - TYPE_RANK[right.type])
     case 'difficulty':

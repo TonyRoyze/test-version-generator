@@ -57,3 +57,30 @@ export function filterQuestionBankCollection(
 export function homePreview<T>(resources: readonly T[]): T[] {
   return resources.slice(0, HOME_PREVIEW_LIMIT)
 }
+
+export type CollectionSort = 'recent' | 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'most-questions' | 'fewest-questions'
+
+export function sortResources<T extends { createdAt: string; questionCount: number }>(
+  resources: readonly T[],
+  sort: CollectionSort,
+  name: (resource: T) => string,
+  recent: (resource: T) => string,
+): T[] {
+  return [...resources].sort((left, right) => {
+    switch (sort) {
+      case 'recent': return recent(right).localeCompare(recent(left))
+      case 'newest': return right.createdAt.localeCompare(left.createdAt)
+      case 'oldest': return left.createdAt.localeCompare(right.createdAt)
+      case 'name-asc': return name(left).localeCompare(name(right), undefined, { numeric: true, sensitivity: 'base' })
+      case 'name-desc': return name(right).localeCompare(name(left), undefined, { numeric: true, sensitivity: 'base' })
+      case 'most-questions': return right.questionCount - left.questionCount
+      case 'fewest-questions': return left.questionCount - right.questionCount
+    }
+  })
+}
+
+export const sortExams = (exams: readonly RecentExam[], sort: CollectionSort) =>
+  sortResources(exams, sort, (exam) => exam.title || 'Untitled Exam', (exam) => exam.lastOpenedAt)
+
+export const sortBanks = (banks: readonly QuestionBankCollectionItem[], sort: CollectionSort) =>
+  sortResources(banks, sort, (bank) => bank.name || 'Untitled Question Bank', (bank) => bank.lastUpdatedAt)

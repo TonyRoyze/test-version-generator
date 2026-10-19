@@ -1,3 +1,4 @@
+import { sortExamQuestions, type ExamQuestionSort } from './exam-question-order'
 // The authoring state and the store that owns it.
 //
 // The authoring state — the Question Bank, the Working Copy, and the dirty
@@ -432,6 +433,9 @@ export type ExamStore = {
    *  Questions of any type, so every requested question moves. A Section a
    *  move empties stays. */
   moveInWorkingCopy(questionIds: readonly string[], target: SectionTarget): void
+  /** Sorts selected positions within each Section as one undoable edit.
+   * Bank names are keyed by Question id and supplied from the bank registry. */
+  sortSelectedQuestions(questionIds: readonly string[], sort: ExamQuestionSort, bankNames?: Readonly<Record<string, string>>): void
   /** Shuffles selected references only among their current positions, within
    *  each Question Section. Every eligible section changes order in this one
    *  authoring action. */
@@ -1307,6 +1311,13 @@ export function createExamStore(options: {
         return layout
           ? withExamWorkingCopy(current, withSectionLayout(current.workingCopy, layout))
           : current
+      }),
+
+    sortSelectedQuestions: (questionIds, sort, bankNames = {}) =>
+      change((current) => {
+        const { exam, arrangement } = selectedExam(current.questionBank, current.workingCopy)
+        const sorted = sortExamQuestions(exam, arrangement, questionIds, sort, bankNames)
+        return sorted === arrangement ? current : withExamWorkingCopy(current, withReferenceOrder(current.workingCopy, sorted.questionOrder))
       }),
 
     shuffleSelectedQuestions: (questionIds) =>
