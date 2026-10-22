@@ -361,6 +361,7 @@ function inlineChildren(
 /** What a block inherits from the item it sits in: the run of text that must
  *  open it, how far it is indented, and which list it belongs to. */
 type BlockContext = {
+  answerKey?: boolean
   /** Prepended to the first paragraph produced — the question's number line. */
   prefix?: ParagraphChild[]
   /** A hanging indent applied with that prefix, so the body aligns under itself. */
@@ -568,7 +569,7 @@ function blockOf(
           new Paragraph(
             paragraphOptions(context, {
               children: [...(context.prefix ?? []), mathRun(source)],
-              alignment: AlignmentType.CENTER,
+              alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
             }),
           ),
         ]
@@ -598,7 +599,7 @@ function blockOf(
       return [
         new Paragraph(
           paragraphOptions(context, {
-            alignment: context.centred ? AlignmentType.CENTER : undefined,
+            alignment: !context.answerKey && context.centred ? AlignmentType.CENTER : undefined,
             children: [
               ...(context.prefix ?? []),
               image
@@ -618,7 +619,7 @@ function blockOf(
       const image = build.images.get(pictureKey(attrs))
       const figure = new Paragraph(
         paragraphOptions(context, {
-          alignment: AlignmentType.CENTER,
+          alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
           children: [
             ...(context.prefix ?? []),
             image
@@ -637,7 +638,7 @@ function blockOf(
           paragraphOptions(
             { ...context, prefix: undefined, hanging: undefined },
             {
-              alignment: AlignmentType.CENTER,
+              alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
               children: [new TextRun({ text: caption, italics: true, size: halfPointsOf('small') })],
             },
           ),
@@ -709,7 +710,7 @@ function boxTable(
   const width = Math.max(1, build.contentWidth - indent)
   const content = blocks(
     childrenOf(node),
-    { indent: 0, keepNext: context.keepNext, centred: context.centred },
+    { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, centred: context.centred },
     { ...build, contentWidth: width - BOX_PADDING_X * 2 },
   )
   return new Table({
@@ -764,7 +765,7 @@ function sideBySideTable(
         children: panels.map((panel, index) => {
           const content = blocks(
             childrenOf(panel),
-            { indent: 0, keepNext: context.keepNext, centred: true },
+            { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, centred: true },
             { ...build, contentWidth: panelWidth - PANEL_GAP },
           )
           return new TableCell({
@@ -806,7 +807,7 @@ function documentTable(
   )
   const cellWidth = build.contentWidth / columns
   return new Table({
-    alignment: context.centred ? AlignmentType.CENTER : undefined,
+    alignment: !context.answerKey && context.centred ? AlignmentType.CENTER : undefined,
     width: { size: twips(build.contentWidth), type: WidthType.DXA },
     columnWidths: gridOf(Array.from({ length: columns }, () => cellWidth)),
     indent: context.indent
@@ -823,7 +824,7 @@ function documentTable(
             const content = cell
               ? blocks(
                   childrenOf(cell),
-                  { indent: 0, keepNext: context.keepNext, tight: true, paragraphAfter: 0 },
+                  { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, tight: true, paragraphAfter: 0 },
                   { ...build, contentWidth: cellWidth - TABLE_CELL_PADDING_X * 2 },
                 )
               : []
@@ -1150,7 +1151,7 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
   })
   // A Suggested Answer starts under the blank, on the lines below the entry.
   const suggested = item.suggestedAnswer
-    ? blocks(item.suggestedAnswer, { indent: ANSWER_KEY_ANSWER_INDENT }, build)
+    ? blocks(item.suggestedAnswer, { indent: ANSWER_KEY_ANSWER_INDENT, answerKey: true }, build)
     : []
   // A Multipart question's Parts each take a line under its number: the Part's letter,
   // then its answer in bold, then any Suggested Answer beneath.
@@ -1167,7 +1168,7 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
         ],
       })] : []),
       ...(part.suggestedAnswer
-        ? blocks(part.suggestedAnswer, { indent, ...(tree ? { treeListBase: indent } : {}) }, build)
+        ? blocks(part.suggestedAnswer, { indent, answerKey: true, ...(tree ? { treeListBase: indent } : {}) }, build)
         : []),
     ]
   })

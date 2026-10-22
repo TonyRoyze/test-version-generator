@@ -630,7 +630,8 @@ for (const type of ['open', 'essay', 'structured-essay'] as const) {
     const { multipartPartNodesOf } = await import('./question-doc')
     const question = createQuestion(type)
     const src = `/local-images/${'a'.repeat(64)}`
-    const answer = { type: 'doc', content: [{ type: 'paragraph' }, { type: 'image-block', attrs: { src, size: 0.1, caption: 'Answer diagram', crop: { left: 0, top: 0, right: 0.5, bottom: 1, width: 400, height: 200 } } }] }
+    const answer = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Answer anchor' }] }, { type: 'image-block', attrs: { src, size: 0.1, caption: 'Answer diagram', crop: { left: 0, top: 0, right: 0.5, bottom: 1, width: 400, height: 200 } } }] }
+    answer.content.push({ type: 'code_block', attrs: { language: 'latex' }, content: [{ type: 'text', text: 'm = CVM' }] } as typeof answer.content[number])
     if (type === 'open') question.suggestedAnswer = answer
     else (multipartPartNodesOf(question.doc)[0]!.content as Record<string, unknown>[])[1]!.content = answer.content
     const plan = planExport({ exam: { title: 'Answer image', questions: [question] }, arrangement: { id: 'working', letter: '', questionOrder: [question.id], choiceOrder: {} }, measure: { itemHeight: () => 0 }, selection: { test: false, answerKey: true } })
@@ -640,6 +641,19 @@ for (const type of ['open', 'essay', 'structured-essay'] as const) {
     const document = await getDocument({ data: bytes, disableWorker: true }).promise
     const operators = await (await document.getPage(1)).getOperatorList()
     expect(operators.fnArray.filter(op => op === OPS.paintImageXObject)).toHaveLength(1)
+    const content = await (await document.getPage(1)).getTextContent()
+    const anchor = content.items.find(item => 'str' in item && item.str === 'Answer anchor')!
+    if (!('str' in anchor)) throw new Error('Missing answer text')
+    let imageLeft = 0
+    for (const [index, op] of operators.fnArray.entries()) {
+      const args = operators.argsArray[index] as number[]
+      if (op === OPS.transform && args[0] === 1 && args[3] === 1 && args[4] !== 0) imageLeft = args[4]!
+      if (op === OPS.paintImageXObject) break
+    }
+    expect(imageLeft).toBeCloseTo(anchor.transform[4]!, 2)
+    const equation = content.items.find(item => 'str' in item && item.str.replace(/\s/g, '') === 'm=CVM')!
+    if (!equation || !('str' in equation)) throw new Error('Missing answer equation')
+    expect(equation.transform[4]).toBeCloseTo(anchor.transform[4]!, 2)
   })
 }
 

@@ -15,7 +15,7 @@ test('answer-only diagrams export to PDF and DOCX and are retained in export his
   const questions = (['open', 'essay', 'structured-essay'] as const).map(type => {
     const question = createQuestion(type)
     const picture = { type: 'image-block', attrs: { src, size: 0.15, caption: 'Marking diagram', ...(type === 'open' ? {} : { crop: { left: 0, top: 0, right: 0.5, bottom: 1, width: 200, height: 100 } }) } }
-    const content = [{ type: 'paragraph', content: [{ type: 'text', text: `Answer for ${type}` }] }, picture]
+    const content = [{ type: 'paragraph', content: [{ type: 'text', text: `Answer for ${type}` }] }, picture, { type: 'code_block', attrs: { language: 'latex' }, content: [{ type: 'text', text: 'm = CVM' }] }]
     if (type === 'open') question.suggestedAnswer = { type: 'doc', content }
     else (multipartPartNodesOf(question.doc)[0]!.content as ProseMirrorJSON[])[1]!.content = [
       { type: 'paragraph' }, { type: 'ordered_list', content: [{ type: 'list_item', content }] },
@@ -29,6 +29,17 @@ test('answer-only diagrams export to PDF and DOCX and are retained in export his
     await dialog.getByRole('checkbox', { name: 'Student test' }).uncheck()
     await dialog.getByRole('radio', { name: format, exact: true }).check()
     await expect(dialog.getByLabel('Export Preview').locator('.doc-figure img')).toHaveCount(3)
+    const answers = dialog.getByLabel('Export Preview').locator('.answer-key-suggested')
+    for (const answer of await answers.all()) {
+      const paragraph = answer.locator('p').filter({ hasText: 'Answer for' })
+      const image = answer.locator('.doc-figure img')
+      await expect(image).toBeVisible()
+      const textBox = (await paragraph.boundingBox())!
+      const imageBox = (await image.boundingBox())!
+      expect(Math.abs(imageBox.x - textBox.x)).toBeLessThan(2)
+      await expect(answer.locator('.katex-display')).toHaveCSS('text-align', 'left')
+      await expect(answer.locator('.katex')).toContainText('CVM')
+    }
     const pending = page.waitForEvent('download')
     await dialog.getByRole('button', { name: `Download ${format}`, exact: true }).click()
     const file = await pending
@@ -52,6 +63,10 @@ test('answer-only diagrams export to PDF and DOCX and are retained in export his
       const xml = await zip.file('word/document.xml')!.async('string')
       expect(xml.match(/<w:drawing>/g)).toHaveLength(3)
       expect(xml).not.toContain('[Image:')
+      const paragraphs = xml.match(/<w:p[ >][\s\S]*?<\/w:p>/g) ?? []
+      const media = paragraphs.filter(paragraph => paragraph.includes('<w:drawing>') || paragraph.includes('<m:oMath'))
+      expect(media).toHaveLength(6)
+      for (const paragraph of media) expect(paragraph).toContain('<w:jc w:val="left"')
     }
   }
   const hashes = await page.evaluate(async () => {

@@ -179,6 +179,7 @@ type EmbeddedFonts = {
 }
 
 type DrawContext = {
+  answerKey?: boolean
   document: PDFDocument
   page: PDFPage
   fonts: EmbeddedFonts
@@ -350,7 +351,7 @@ function drawMath(
 function drawDisplayMath(context: DrawContext, source: string, x: number, width: number): void {
   const typeset = context.typeset(source, true)
   if (!typeset) {
-    drawInline(context, writtenMathPieces(source, BODY_SIZE), { x: x + 24, width: width - 48 })
+    drawInline(context, writtenMathPieces(source, BODY_SIZE), { x: context.answerKey ? x : x + 24, width: context.answerKey ? width : width - 48 })
     context.y -= 4
     return
   }
@@ -359,7 +360,7 @@ function drawDisplayMath(context: DrawContext, source: string, x: number, width:
   const height = gap + (typeset.ascent + typeset.descent) * size + gap
   ensureRoom(context, height)
   const drawn = typeset.width * size
-  const left = x + Math.max(0, (width - drawn) / 2)
+  const left = x + (context.answerKey ? 0 : Math.max(0, (width - drawn) / 2))
   drawMath(context, typeset, source, left, context.y - gap - typeset.ascent * size, BODY_SIZE)
   context.y -= height
 }
@@ -591,7 +592,13 @@ function drawBlocks(
           const marker = node.type === 'ordered_list' ? essayListLabel(attrs.essaySequence, orderedIndex - 1) ?? `${orderedIndex}.` : '•'
           orderedIndex++
           const listIndent = attrs.essaySequence ? pt(32) : 18
-          drawTextLine(context, marker, { x, width: listIndent })
+          // Roman labels such as (xxviii) can be wider than the gutter.
+          // Keep them on one line so they cannot shift the answer's baseline.
+          const markerWidth = context.fonts.regular.widthOfTextAtSize(marker, BODY_SIZE)
+          drawTextLine(context, marker, {
+            x: x + Math.min(0, listIndent - markerWidth - pt(4)),
+            width: Math.max(listIndent, markerWidth + 1),
+          })
           context.y += BODY_LINE
           // An item's own paragraphs sit together, as `li > p` does in print.
           drawBlocks(context, childrenOf(child), { x: x + listIndent, width: width - listIndent, tight: true, answerTree: options.answerTree, paragraphAfter: options.answerTree ? 0 : undefined })
@@ -613,14 +620,14 @@ function drawBlocks(
       }
       case 'image':
         // An inline picture has no size of its own: it fits its column.
-        drawImage(context, { src: attrs.src }, x, width, options.centred)
+        drawImage(context, { src: attrs.src }, x, width, !context.answerKey && options.centred)
         break
       case 'image-block': {
-        drawImage(context, attrs, x, width, true)
+        drawImage(context, attrs, x, width, !context.answerKey)
         const caption = stringOf(attrs.caption)
         if (caption) {
           const captionWidth = context.fonts.regular.widthOfTextAtSize(caption, SMALL_SIZE)
-          const inset = Math.max(0, (width - captionWidth) / 2)
+          const inset = context.answerKey ? 0 : Math.max(0, (width - captionWidth) / 2)
           drawTextLine(context, caption, { size: SMALL_SIZE, x: x + inset, width: width - inset })
         }
         break
@@ -1483,6 +1490,7 @@ async function createPdf(
         const headerHeight = planned.furniture.headerHidden ? 0 : pt(headerHeightOf(planned.header, planned.furniture))
         const footerHeight = pt(36)
         const context: DrawContext = {
+          answerKey: planned.stream === 'answer-key',
           document,
           page,
           fonts,

@@ -1317,9 +1317,10 @@ type PackedPage = Pick<PlannedPage, 'number' | 'header' | 'stream' | 'items'>
 
 /** Split answer material without asking an adapter to invent pages. Atomic
  * media, tables and side-by-side panels retain their existing overflow checks. */
-function splitAnswerBlock(node: ProseMirrorJSON): ProseMirrorJSON[] {
+function splitAnswerBlock(node: ProseMirrorJSON, splitText = true): ProseMirrorJSON[] {
   const children = Array.isArray(node.content) ? node.content as ProseMirrorJSON[] : []
   if (node.type === 'paragraph' || node.type === 'heading') {
+    if (!splitText) return [node]
     const length = children.reduce((sum, child) => sum + (typeof child.text === 'string' ? child.text.length : 1), 0)
     if (length < 2) return [node]
     const text = children.map(child => typeof child.text === 'string' ? child.text : '\ufffc').join('')
@@ -1346,6 +1347,11 @@ function splitAnswerBlock(node: ProseMirrorJSON): ProseMirrorJSON[] {
     return [{ ...node, content: left }, { ...node, content: right }]
   }
   if (!['ordered_list', 'bullet_list', 'list_item', 'blockquote'].includes(String(node.type))) return [node]
+  // A leaf list item is one subquestion's complete answer, including all of
+  // its paragraphs, equations and media. Move it whole unless it is oversized.
+  const hasSubquestions = (value: ProseMirrorJSON): boolean => value.type === 'ordered_list'
+    || (Array.isArray(value.content) && (value.content as ProseMirrorJSON[]).some(hasSubquestions))
+  if (!splitText && node.type === 'list_item' && !children.some(hasSubquestions)) return [node]
   if (children.length > 1) {
     const cut = Math.ceil(children.length / 2)
     const attrs = node.attrs as Record<string, unknown> | undefined
@@ -1355,26 +1361,75 @@ function splitAnswerBlock(node: ProseMirrorJSON): ProseMirrorJSON[] {
     ]
   }
   if (children.length === 1) {
-    const pieces = splitAnswerBlock(children[0]!)
+    const pieces = splitAnswerBlock(children[0]!, splitText)
     if (pieces.length > 1) return pieces.map(child => ({ ...node, content: [child] }))
   }
   return [node]
 }
 
-function splitKeyEntry(item: AnswerKeyEntryItem): AnswerKeyEntryItem[] {
+function splitKeyEntry(item: AnswerKeyEntryItem, fits: (piece: AnswerKeyEntryItem) => boolean, splitText: boolean): AnswerKeyEntryItem[] {
+  // Keep as many complete parts or blocks together as the available room allows.
+  const prefixCount = (length: number, prefix: (count: number) => AnswerKeyEntryItem) => {
+    let low = 1, high = length - 1, best = 1
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2)
+      if (fits(prefix(middle))) { best = middle; low = middle + 1 }
+      else high = middle - 1
+    }
+    return best
+  }
   if ((item.parts?.length ?? 0) > 1) {
-    const cut = Math.ceil(item.parts!.length / 2)
+    const cut = prefixCount(item.parts!.length, count => ({ ...item, parts: item.parts!.slice(0, count) }))
     return [{ ...item, parts: item.parts!.slice(0, cut) }, { ...item, suggestedAnswer: undefined, parts: item.parts!.slice(cut) }]
   }
   const answer = item.parts?.[0]?.suggestedAnswer ?? item.suggestedAnswer
   if (!answer?.length) return [item]
-  const pieces = answer.length > 1
-    ? [answer.slice(0, Math.ceil(answer.length / 2)), answer.slice(Math.ceil(answer.length / 2))]
-    : splitAnswerBlock(answer[0]!).map(block => [block])
-  if (pieces.length < 2) return [item]
-  return pieces.map(suggestedAnswer => item.parts?.length
+  if (!splitText && answer.length > 1 && !answer.some(node => node.type === 'ordered_list')) return [item]
+  const withAnswer = (suggestedAnswer: ProseMirrorJSON[]): AnswerKeyEntryItem => item.parts?.length
     ? { ...item, parts: [{ ...item.parts[0]!, suggestedAnswer }] }
-    : { ...item, suggestedAnswer })
+    : { ...item, suggestedAnswer }
+  const cut = answer.length > 1 ? prefixCount(answer.length, count => withAnswer(answer.slice(0, count))) : 1
+  const pieces = answer.length > 1
+    ? [answer.slice(0, cut), answer.slice(cut)]
+    : splitAnswerBlock(answer[0]!, splitText).map(block => [block])
+  if (pieces.length < 2) return [item]
+  return pieces.map(withAnswer)
+}
+
+/** Rejoin adjacent fragments when packing puts them on the same page. The
+ * question and part labels belong to the hierarchy, not to each packing step. */
+function joinAnswerBlocks(left: readonly ProseMirrorJSON[] = [], right: readonly ProseMirrorJSON[] = []): ProseMirrorJSON[] {
+  const before = left.at(-1), after = right[0]
+  if (!before || !after || before.type !== 'ordered_list' || after.type !== 'ordered_list') return [...left, ...right]
+  const beforeAttrs = before.attrs as Record<string, unknown> | undefined
+  const afterAttrs = after.attrs as Record<string, unknown> | undefined
+  if (beforeAttrs?.essaySequence !== afterAttrs?.essaySequence) return [...left, ...right]
+  const first = Array.isArray(before.content) ? before.content as ProseMirrorJSON[] : []
+  const second = Array.isArray(after.content) ? after.content as ProseMirrorJSON[] : []
+  const nextOrder = (Number(beforeAttrs?.order) || 1) + first.length
+  const order = Number(afterAttrs?.order) || 1
+  let content: ProseMirrorJSON[]
+  if (order === nextOrder) content = [...first, ...second]
+  else if (order === nextOrder - 1 && first.at(-1)?.type === 'list_item' && second[0]?.type === 'list_item') {
+    const tail = first.at(-1)!, head = second[0]!
+    content = [...first.slice(0, -1), { ...tail, content: joinAnswerBlocks(tail.content as ProseMirrorJSON[], head.content as ProseMirrorJSON[]) }, ...second.slice(1)]
+  } else return [...left, ...right]
+  return [...left.slice(0, -1), { ...before, content }, ...right.slice(1)]
+}
+
+function joinKeyEntries(left: AnswerKeyEntryItem, right: AnswerKeyEntryItem): AnswerKeyEntryItem {
+  const parts = [...(left.parts ?? [])]
+  for (const part of right.parts ?? []) {
+    const previous = parts.at(-1)
+    if (previous?.letter === part.letter) {
+      parts[parts.length - 1] = { ...previous, suggestedAnswer: joinAnswerBlocks(previous.suggestedAnswer, part.suggestedAnswer) }
+    } else parts.push(part)
+  }
+  return {
+    ...left,
+    ...(left.suggestedAnswer || right.suggestedAnswer ? { suggestedAnswer: joinAnswerBlocks(left.suggestedAnswer, right.suggestedAnswer) } : {}),
+    parts,
+  }
 }
 
 function paginate(
@@ -1412,6 +1467,18 @@ function paginate(
   // the page. The growth is recorded on the item itself, so adapters draw the
   // grown height rather than rediscovering it.
   const place = (item: PageItem, height: number) => {
+    const previous = current.at(-1)
+    if (item.kind === 'answer-key-entry' && item.answerLayout === 'tree'
+      && previous?.kind === 'answer-key-entry' && previous.answerLayout === 'tree' && previous.number === item.number) {
+      const joined = joinKeyEntries(previous, item)
+      const previousHeight = measure.itemHeight(previous)
+      const joinedHeight = measure.itemHeight(joined)
+      if (joinedHeight <= box - used + previousHeight) {
+        current[current.length - 1] = joined
+        used += joinedHeight - previousHeight
+        return
+      }
+    }
     let placed = item
     let placedHeight = height
     const space = item.kind === 'question' ? fillingSpaceOf(item) : null
@@ -1525,11 +1592,14 @@ function paginate(
         // The first piece must leave room for its section title. On a page
         // with only the key's opening furniture, split within that page's
         // actual room rather than producing a page of headings alone.
-        const limit = heading
-          ? earlierAnswers ? fullPage - headingHeight : box - used
-          : fullPage
+        const remaining = box - used
+        // Use the current page when it has useful space for an answer. Avoid
+        // leaving a tiny fragment beneath a heading or at the page's foot.
+        const limit = remaining >= 100 || (heading && !earlierAnswers)
+          ? remaining
+          : fullPage - headingHeight
         if (pieceHeight > limit) {
-          const smaller = splitKeyEntry(piece)
+          const smaller = splitKeyEntry(piece, candidate => measure.itemHeight(candidate) <= limit, pieceHeight > fullPage - headingHeight || (!!heading && !earlierAnswers))
           if (smaller.length > 1) {
             pending.unshift(...smaller)
             continue

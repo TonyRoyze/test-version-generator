@@ -4086,3 +4086,10 @@ ol[data-essay-sequence='lower-alpha'] > li::marker { content: '(' counter(list-i
 .answer-key-grid-row { display: grid; column-gap: 16px; margin-bottom: 8px; }
 .answer-key-grid-row > .answer-key-entry { grid-template-columns: max-content 32px minmax(0, 1fr); gap: 6px; margin: 0; align-items: start; }
 .answer-key-grid-row .answer-key-metadata { align-self: center; }
+
+/* Answer diagrams and working align with the answer text at each tree level. */
+.answer-key-suggested .doc-figure,
+.answer-key-suggested .doc-math--block,
+.answer-key-suggested .katex-display {
+  text-align: left;
+}

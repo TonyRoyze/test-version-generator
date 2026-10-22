@@ -71,3 +71,44 @@ for (const type of ['essay', 'structured-essay'] as const) {
     })
   }
 }
+
+test('essay answers fill the remaining page with whole parts before continuing', async () => {
+  const { createQuestion } = await import('./exam')
+  const { pageSizeOf } = await import('./export-plan')
+  const question = createQuestion('essay')
+  const template = multipartPartNodesOf(question.doc)[0]!
+  const parts = Array.from({ length: 6 }, (_, index) => {
+    const part = structuredClone(template)
+    ;(part.content as ProseMirrorJSON[])[1]!.content = [{ type: 'paragraph', content: [{ type: 'text', text: `Part ${index + 1}` }] }]
+    return part
+  })
+  const replaceParts = (node: ProseMirrorJSON): void => {
+    if (node.type === 'multipartParts') node.content = parts
+    else if (Array.isArray(node.content)) (node.content as ProseMirrorJSON[]).forEach(replaceParts)
+  }
+  replaceParts(question.doc)
+  expect(multipartPartNodesOf(question.doc)).toHaveLength(6)
+  const room = pageContentHeight('answer-key', pageSizeOf(undefined))
+  const partHeight = (room - 60) / 4
+  const measure: Measure = { itemHeight: item => item.kind === 'answer-key-entry' ? 20 + (item.parts?.length ?? 0) * partHeight : 20 }
+  const plan = planExport({ exam: { title: 'Packed answers', questions: [question] }, arrangement: { id: 'working', letter: '', questionOrder: [question.id], choiceOrder: {} }, selection: { test: false, answerKey: true }, measure })
+  expect(plan.pages).toHaveLength(2)
+  const first = plan.pages[0]!.items.find(item => item.kind === 'answer-key-entry')!
+  expect(first.kind === 'answer-key-entry' && first.parts?.length).toBe(4)
+  expect(plan.pages.flatMap(page => page.items).flatMap(item => item.kind === 'answer-key-entry' ? item.parts ?? [] : [])).toHaveLength(6)
+})
+
+test('a subquestion answer keeps its explanation and equation together when they fit a page', async () => {
+  const { createQuestion } = await import('./exam')
+  const question = createQuestion('essay')
+  const units = Array.from({ length: 8 }, (_, index) => ({ type: 'list_item', content: [
+    { type: 'paragraph', content: [{ type: 'text', text: `Explain ${index}` }] },
+    { type: 'code_block', attrs: { language: 'latex' }, content: [{ type: 'text', text: `x=${index}` }] },
+  ] }))
+  ;(multipartPartNodesOf(question.doc)[0]!.content as ProseMirrorJSON[])[1]!.content = [{ type: 'paragraph' }, { type: 'ordered_list', content: units }]
+  const size = (node: ProseMirrorJSON): number => node.type === 'paragraph' || node.type === 'code_block' ? 130 : (Array.isArray(node.content) ? (node.content as ProseMirrorJSON[]).reduce((sum, child) => sum + size(child), 0) : 0)
+  const measure: Measure = { itemHeight: item => item.kind === 'answer-key-entry' ? 40 + (item.parts ?? []).flatMap(part => part.suggestedAnswer ?? []).reduce((sum, node) => sum + size(node), 0) : 20 }
+  const plan = planExport({ exam: { title: 'Whole subquestions', questions: [question] }, arrangement: { id: 'working', letter: '', questionOrder: [question.id], choiceOrder: {} }, selection: { test: false, answerKey: true }, measure })
+  const actual = plan.pages.flatMap(page => page.items).flatMap(item => item.kind === 'answer-key-entry' ? (item.parts ?? []).flatMap(part => part.suggestedAnswer ?? []).flatMap(list => list.content as ProseMirrorJSON[]) : [])
+  expect(actual).toEqual(units)
+})
