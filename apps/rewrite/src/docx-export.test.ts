@@ -226,6 +226,8 @@ describe('links and pictures', () => {
       },
     ))
     expect(asked).toEqual([undefined, crop])
+    const pictureParagraphs = descendants(parseXml(await part(zip, 'word/document.xml')), 'w:p').filter(node => descendants(node, 'w:drawing').length > 0)
+    expect(pictureParagraphs.map(node => path(node, 'w:pPr', 'w:jc')?.attrs['w:val'])).toEqual(['center', 'center'])
     const extents = [...(await part(zip, 'word/document.xml')).matchAll(/<wp:extent cx="(\d+)" cy="(\d+)"/g)]
       .map((match) => ({ cx: Number(match[1]), cy: Number(match[2]) }))
     expect(extents).toHaveLength(2)

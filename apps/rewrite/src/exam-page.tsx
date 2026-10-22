@@ -131,6 +131,7 @@ import { pageGeometry } from './page-geometry'
 import { headerLineOf, type HeaderLine } from './page-header'
 import {
   AnswerKeyEntry,
+  AnswerKeyGridRow,
   AnswerKeyHeading,
   AnswerKeySection,
   PageHeaderContent,
@@ -1439,6 +1440,8 @@ function PageItemView({
       return <AnswerKeyHeading />
     case 'answer-key-section':
       return <AnswerKeySection item={item} />
+    case 'answer-key-grid-row':
+      return <AnswerKeyGridRow item={item} />
     case 'answer-key-entry':
       return <AnswerKeyEntry item={item} />
     default: {
@@ -1460,6 +1463,8 @@ function keyOf(item: PageItem): string {
       return 'answer-key-heading'
     case 'answer-key-section':
       return `answer-key-section-${item.sectionId}`
+    case 'answer-key-grid-row':
+      return `answer-key-row-${item.entries[0]?.number}`
     case 'answer-key-entry':
       return `answer-key-entry-${item.number}`
     default: {

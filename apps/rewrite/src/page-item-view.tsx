@@ -27,6 +27,7 @@ import {
   printsNumberLine,
   rowsOfPlanned,
   type AnswerKeyEntryItem,
+  type AnswerKeyGridRowItem,
   type AnswerKeySectionItem,
   type ChoiceGrid,
   type MatchingSet,
@@ -347,13 +348,19 @@ export function AnswerKeySection({ item }: { item: AnswerKeySectionItem }) {
   return <h3 className="answer-key-section">{item.title}</h3>
 }
 
+export function AnswerKeyGridRow({ item }: { item: AnswerKeyGridRowItem }) {
+  return <div className="answer-key-grid-row" style={{ gridTemplateColumns: `repeat(${item.columns}, minmax(0, 1fr))` }}>
+    {item.entries.map(entry => <AnswerKeyEntry key={entry.number} item={entry} />)}
+  </div>
+}
+
 export function AnswerKeyEntry({ item }: { item: AnswerKeyEntryItem }) {
   return (
-    <div className="answer-key-entry">
+    <div className="answer-key-entry" data-answer-layout={item.answerLayout}>
       <span>{item.displayNumber ?? `${item.number}.`}</span>
-      <span className="answer-key-answer" aria-label={item.displayAnswer ?? item.letter ?? 'Blank answer'}>
+      {item.answerLayout !== 'tree' && <span className="answer-key-answer" aria-label={item.displayAnswer ?? item.letter ?? 'Blank answer'}>
         {item.displayAnswer ?? item.letter}
-      </span>
+      </span>}
       {(item.difficulty || (item.topics?.length ?? 0) > 0) && (
         <span className="answer-key-metadata" aria-label="Question Metadata">
           {item.difficulty && <DifficultyBadge difficulty={item.difficulty} />}
@@ -366,14 +373,14 @@ export function AnswerKeyEntry({ item }: { item: AnswerKeyEntryItem }) {
       {item.parts && (
         <div className="answer-key-parts">
           {item.parts.map((part) => (
-            <div className="answer-key-part" key={part.letter}>
-              <span className="answer-key-part-letter">{part.displayLabel ?? `${part.letter}.`}</span>
-              <span
+            <div className="answer-key-part" key={part.letter} data-unlabelled={part.displayLabel === '' || undefined}>
+              {(item.answerLayout !== 'tree' || part.displayLabel !== '') && <span className="answer-key-part-letter">{part.displayLabel ?? `${part.letter}.`}</span>}
+              {item.answerLayout !== 'tree' && <span
                 className="answer-key-answer"
                 aria-label={part.displayAnswer ?? part.answer ?? 'Blank answer'}
               >
                 {part.displayAnswer ?? part.answer}
-              </span>
+              </span>}
               {part.suggestedAnswer && (
                 <DocView className="answer-key-suggested" content={part.suggestedAnswer} />
               )}
@@ -568,6 +575,8 @@ export function PageItemMeasureView({ item }: { item: PageItem }) {
       return <AnswerKeyHeading />
     case 'answer-key-section':
       return <AnswerKeySection item={item} />
+    case 'answer-key-grid-row':
+      return <AnswerKeyGridRow item={item} />
     case 'answer-key-entry':
       return <AnswerKeyEntry item={item} />
     default: {

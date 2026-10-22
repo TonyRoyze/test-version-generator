@@ -1,5 +1,5 @@
 import { coverLogoSource } from './page-cover'
-import type { LayoutPlan } from './export-plan'
+import type { AnswerKeyEntryItem, LayoutPlan } from './export-plan'
 import { keptPixels, pictureCropOf, pictureKey, type CropBox } from './picture-geometry'
 import type { ProseMirrorJSON } from './question-doc'
 
@@ -142,6 +142,13 @@ function childrenOf(node: ProseMirrorJSON): ProseMirrorJSON[] {
 /** A picture the plans draw: the pixels an adapter looks up by `key`. */
 export type ExportPicture = { key: string; src: string; crop?: CropBox }
 
+function answerBlocks(entry: AnswerKeyEntryItem): ProseMirrorJSON[] {
+  return [
+    ...(entry.suggestedAnswer ?? []),
+    ...(entry.parts ?? []).flatMap(part => part.suggestedAnswer ?? []),
+  ]
+}
+
 /** Every picture the plans draw — each crop of a Media Asset its own — in
  *  first-appearance order. */
 export function picturesOf(plans: readonly LayoutPlan[]): ExportPicture[] {
@@ -166,6 +173,14 @@ export function picturesOf(plans: readonly LayoutPlan[]): ExportPicture[] {
       add(page.furniture?.footerLayout?.logo ?? '')
       if (page.furniture?.coverPage) add(coverLogoSource(page.furniture.coverPage))
       for (const item of page.items) {
+        if (item.kind === 'answer-key-entry') {
+          for (const block of answerBlocks(item)) visit(block)
+          continue
+        }
+        if (item.kind === 'answer-key-grid-row') {
+          for (const entry of item.entries) for (const block of answerBlocks(entry)) visit(block)
+          continue
+        }
         if (item.kind !== 'question') continue
         for (const block of item.stem) visit(block)
         for (const row of item.grid?.cells ?? []) {
@@ -227,6 +242,11 @@ export function questionNumberForMedia(
   for (const plan of plans) {
     for (const page of plan.pages) {
       for (const item of page.items) {
+        const answers = item.kind === 'answer-key-entry' ? [item]
+          : item.kind === 'answer-key-grid-row' ? item.entries : []
+        for (const entry of answers) {
+          if (answerBlocks(entry).some(node => nodeContainsSource(node, source))) return entry.number
+        }
         if (
           item.kind === 'question'
           && (

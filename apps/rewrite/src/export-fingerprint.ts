@@ -602,6 +602,8 @@ export function planItemLines(
       return ['heading:1 Answer Section']
     case 'answer-key-section':
       return [`heading:2 ${item.title}`]
+    case 'answer-key-grid-row':
+      return item.entries.flatMap(entry => planItemLines(entry, images))
     case 'answer-key-entry': {
       const metadata = [
         ...(item.difficulty
@@ -624,7 +626,7 @@ export function planItemLines(
         ),
         ...(item.suggestedAnswer ? planBlocks(item.suggestedAnswer, {}, images) : []),
         ...(item.parts ?? []).flatMap((part) => [
-          line(
+          ...(item.answerLayout === 'tree' && part.displayLabel === '' ? [] : [line(
             'para',
             renderInline([
               { kind: 'text', text: `${part.displayLabel ?? `${part.letter}.`} `, marks: [] },
@@ -632,7 +634,7 @@ export function planItemLines(
                 ? [{ kind: 'text' as const, text: part.displayAnswer ?? part.answer!, marks: ['strong'] }]
                 : []),
             ]),
-          ),
+          )]),
           ...(part.suggestedAnswer ? planBlocks(part.suggestedAnswer, {}, images) : []),
         ]),
       ]

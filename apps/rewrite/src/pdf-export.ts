@@ -434,7 +434,6 @@ function drawInline(
     x += pieceWidth
   }
 
-  const top = context.y
   for (const placed of lines) {
     // Text sits `size` below the top of its line, with the rest of the line
     // below its baseline; an equation that reaches past either pushes the
@@ -446,7 +445,8 @@ function drawInline(
       ? piece.typeset.descent * piece.size * MATH_SIZE - (line - piece.size)
       : 0))
     const height = above + line + below
-    if (placed.length > 0) ensureRoom(context, top - context.y + height)
+    // context.y already includes every earlier line in this paragraph.
+    if (placed.length > 0) ensureRoom(context, height)
     const lineTop = context.y - above
     for (const { piece, x, width: pieceWidth } of placed) drawPiece(context, piece, x, pieceWidth, lineTop, line)
     context.y -= height
@@ -549,7 +549,7 @@ const GAP_BLOCKS = new Set(['paragraph', 'bullet_list', 'ordered_list'])
 function drawBlocks(
   context: DrawContext,
   nodes: readonly ProseMirrorJSON[],
-  options: { x?: number; width?: number; listLevel?: number; centred?: boolean; tight?: boolean; paragraphAfter?: number } = {},
+  options: { x?: number; width?: number; listLevel?: number; centred?: boolean; tight?: boolean; paragraphAfter?: number; answerTree?: boolean } = {},
 ): void {
   const x = options.x ?? context.x
   const width = options.width ?? context.width
@@ -594,12 +594,12 @@ function drawBlocks(
           drawTextLine(context, marker, { x, width: listIndent })
           context.y += BODY_LINE
           // An item's own paragraphs sit together, as `li > p` does in print.
-          drawBlocks(context, childrenOf(child), { x: x + listIndent, width: width - listIndent, tight: true })
+          drawBlocks(context, childrenOf(child), { x: x + listIndent, width: width - listIndent, tight: true, answerTree: options.answerTree, paragraphAfter: options.answerTree ? 0 : undefined })
         }
         break
       }
       case 'list_item':
-        drawBlocks(context, childrenOf(node), { x, width })
+        drawBlocks(context, childrenOf(node), { x, width, answerTree: options.answerTree })
         break
       case 'code_block': {
         const source = childrenOf(node).map((child) => stringOf(child.text)).join('')
@@ -616,11 +616,11 @@ function drawBlocks(
         drawImage(context, { src: attrs.src }, x, width, options.centred)
         break
       case 'image-block': {
-        drawImage(context, attrs, x, width, options.centred)
+        drawImage(context, attrs, x, width, true)
         const caption = stringOf(attrs.caption)
         if (caption) {
           const captionWidth = context.fonts.regular.widthOfTextAtSize(caption, SMALL_SIZE)
-          const inset = options.centred ? Math.max(0, (width - captionWidth) / 2) : 0
+          const inset = Math.max(0, (width - captionWidth) / 2)
           drawTextLine(context, caption, { size: SMALL_SIZE, x: x + inset, width: width - inset })
         }
         break
@@ -643,7 +643,7 @@ function drawBlocks(
         drawTable(context, node, x, width)
         break
       default:
-        drawBlocks(context, childrenOf(node), { x, width })
+        drawBlocks(context, childrenOf(node), { x, width, answerTree: options.answerTree })
         break
     }
   }
@@ -986,19 +986,43 @@ function drawItem(context: DrawContext, item: PageItem): void {
       drawTextLine(context, item.title, { font: 'bold', size: HEADING_SIZE, line: HEADING_SIZE * HEADING_LINE_HEIGHT })
       context.y -= 4
       return
+    case 'answer-key-grid-row': {
+      const gap = pt(16)
+      const width = (context.width - gap * (item.columns - 1)) / item.columns
+      const top = context.y
+      let bottom = top
+      for (const [index, entry] of item.entries.entries()) {
+        const cell = { ...context, x: context.x + index * (width + gap), width, y: top }
+        drawAnswerKeyEntry(cell, entry, true)
+        bottom = Math.min(bottom, cell.y)
+      }
+      context.y = bottom // Each row shares its tallest cell's bottom.
+      return
+    }
     case 'answer-key-entry':
       drawAnswerKeyEntry(context, item)
       return
   }
 }
 
-function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): void {
+/** Distance below a row's top that clears even closing brackets and other
+ * descenders. The line's stroke must sit below the glyphs, not on the baseline. */
+function answerKeyUnderlineDepth(context: DrawContext): number {
+  const font = context.fonts.bold
+  const descent = font.heightAtSize(BODY_SIZE, { descender: true })
+    - font.heightAtSize(BODY_SIZE, { descender: false })
+  return BODY_SIZE + Math.max(0, descent) + 1
+}
+
+function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem, compact = false): void {
   const metadata = [
     ...(item.difficulty ? [DIFFICULTY_LABELS[item.difficulty]] : []),
     ...(item.topics ?? []),
   ]
-  const tagStart = context.x + 88
-  const tagWidth = context.width - 88
+  const tagOffset = compact ? pt(72) : 88
+  const answerX = compact ? pt(28) : ANSWER_KEY_ANSWER_X
+  const tagStart = context.x + tagOffset
+  const tagWidth = context.width - tagOffset
   const gap = 5
   const padding = 5
   let tagX = tagStart
@@ -1018,16 +1042,18 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
     return tag
   })
   const lines = Math.max(1, tagLine + 1)
-  ensureRoom(context, lines * BODY_LINE + 2)
+  const underlineDepth = answerKeyUnderlineDepth(context)
+  const rowHeight = Math.max(lines * BODY_LINE + 2, item.answerLayout === 'tree' ? 0 : underlineDepth + 1)
+  ensureRoom(context, rowHeight)
   const rowY = context.y
 
   drawTextLine(context, item.displayNumber ?? `${item.number}.`, { width: 48 })
   context.y = rowY
-  if (item.displayAnswer ?? item.letter) drawTextLine(context, item.displayAnswer ?? item.letter!, { font: 'bold', x: context.x + ANSWER_KEY_ANSWER_X, width: 48 })
+  if (item.displayAnswer ?? item.letter) drawTextLine(context, item.displayAnswer ?? item.letter!, { font: 'bold', x: context.x + answerX, width: compact ? pt(32) : 48 })
   else context.y -= BODY_LINE
-  context.page.drawLine({
-    start: { x: context.x + 36, y: rowY - BODY_LINE + 3 },
-    end: { x: context.x + 78, y: rowY - BODY_LINE + 3 },
+  if (item.answerLayout !== 'tree') context.page.drawLine({
+    start: { x: context.x + (compact ? pt(24) : 36), y: rowY - underlineDepth },
+    end: { x: context.x + (compact ? pt(60) : 78), y: rowY - underlineDepth },
     thickness: 0.6,
     color: INK,
   })
@@ -1051,7 +1077,7 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
       color: INK,
     })
   }
-  context.y = rowY - lines * BODY_LINE - 2
+  context.y = rowY - rowHeight
   // A Suggested Answer starts under the blank, below the whole row.
   if (item.suggestedAnswer) {
     drawBlocks(context, item.suggestedAnswer, {
@@ -1063,24 +1089,32 @@ function drawAnswerKeyEntry(context: DrawContext, item: AnswerKeyEntryItem): voi
   // A Multipart question's Parts each take a line under its number, the Part's letter
   // where a question's number goes and its answer on the blank beside it.
   for (const part of item.parts ?? []) {
-    ensureRoom(context, BODY_LINE + 2)
+    const partHeight = Math.max(BODY_LINE + 2, item.answerLayout === 'tree' ? 0 : underlineDepth + 1)
+    ensureRoom(context, partHeight)
     const partY = context.y
-    const partX = context.x + ANSWER_KEY_ANSWER_X
+    const tree = item.answerLayout === 'tree'
+    const labelled = !tree || part.displayLabel !== ''
+    const partX = context.x + (tree ? pt(32) : ANSWER_KEY_ANSWER_X)
+    if (!labelled) {
+      if (part.suggestedAnswer) drawBlocks(context, part.suggestedAnswer, { x: partX, width: context.width - pt(32), answerTree: true })
+      continue
+    }
     drawTextLine(context, part.displayLabel ?? `${part.letter}.`, { x: partX, width: 48 })
     context.y = partY
     if (part.displayAnswer ?? part.answer) drawTextLine(context, part.displayAnswer ?? part.answer!, { font: 'bold', x: partX + 54, width: 48 })
     else context.y -= BODY_LINE
-    context.page.drawLine({
-      start: { x: partX + 22, y: partY - BODY_LINE + 3 },
-      end: { x: partX + 64, y: partY - BODY_LINE + 3 },
+    if (!tree) context.page.drawLine({
+      start: { x: partX + 22, y: partY - underlineDepth },
+      end: { x: partX + 64, y: partY - underlineDepth },
       thickness: 0.6,
       color: INK,
     })
-    context.y = partY - BODY_LINE - 2
+    context.y = partY - partHeight
     if (part.suggestedAnswer) {
       drawBlocks(context, part.suggestedAnswer, {
-        x: partX + 24,
-        width: context.width - ANSWER_KEY_ANSWER_X - 24,
+        answerTree: tree,
+        x: partX + (tree ? pt(32) : 24),
+        width: context.width - (tree ? pt(64) : ANSWER_KEY_ANSWER_X + 24),
       })
       context.y -= 4
     }
