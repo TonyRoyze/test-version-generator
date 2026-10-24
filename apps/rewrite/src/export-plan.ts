@@ -1,4 +1,4 @@
-import { hasParts, isEssayType, essayPartLabel, essayStem } from './essay'
+import { hasParts, isEssayType, essayPartLabel, essayStem, essayAnswer } from './essay'
 // Export planning: one Export Document, one Layout Plan.
 //
 // This is the single module that decides what an exam arrangement *says* and how it
@@ -453,6 +453,8 @@ export type AnswerKeySectionItem = {
 // with a Suggested Answer prints that answer on the lines below its blank.
 export type AnswerKeyEntryItem = {
   kind: 'answer-key-entry'
+  /** Written hierarchies print vertically. Absent on historical plans. */
+  answerLayout?: 'tree'
   number: number
   displayNumber?: string
   letter: string | null
@@ -475,6 +477,13 @@ export type AnswerKeyPartLine = {
   suggestedAnswer?: ProseMirrorJSON[]
 }
 
+/** One measured row of compact multiple-choice answers, read left to right. */
+export type AnswerKeyGridRowItem = {
+  kind: 'answer-key-grid-row'
+  columns: number
+  entries: AnswerKeyEntryItem[]
+}
+
 // One thing that occupies vertical space on a page, in print order.
 export type PageItem =
   | SectionHeadingItem
@@ -482,6 +491,7 @@ export type PageItem =
   | AnswerKeyHeadingItem
   | AnswerKeySectionItem
   | AnswerKeyEntryItem
+  | AnswerKeyGridRowItem
 
 /** The printed number, including the Exam’s chosen punctuation. */
 export function printedNumberLabelOf(question: PlannedQuestion): string {
@@ -998,7 +1008,7 @@ function deriveParts(
       grid: multipleChoice ? layOutGrid(choices, part.columns) : null,
       workSpace: part.type !== 'open' ? null : plannedWorkSpace(workSpaceOf(exam, part.id), workSpaceRowsOf(exam.questionStyle)),
       ...(!multipleChoice && suggestedBlocks.length > 0 && !blankBlocks(suggestedBlocks)
-        ? { suggestedAnswer: structuredClone(suggestedBlocks) }
+        ? { suggestedAnswer: essayAnswer(structuredClone(suggestedBlocks), question.type) }
         : {}),
     }
   })
@@ -1305,6 +1315,123 @@ function withFillHeight(item: QuestionItem, height: number): QuestionItem {
 // `PlannedPage`s.
 type PackedPage = Pick<PlannedPage, 'number' | 'header' | 'stream' | 'items'>
 
+/** Split answer material without asking an adapter to invent pages. Atomic
+ * media, tables and side-by-side panels retain their existing overflow checks. */
+function splitAnswerBlock(node: ProseMirrorJSON, splitText = true): ProseMirrorJSON[] {
+  const children = Array.isArray(node.content) ? node.content as ProseMirrorJSON[] : []
+  if (node.type === 'paragraph' || node.type === 'heading') {
+    if (!splitText) return [node]
+    const length = children.reduce((sum, child) => sum + (typeof child.text === 'string' ? child.text.length : 1), 0)
+    if (length < 2) return [node]
+    const text = children.map(child => typeof child.text === 'string' ? child.text : '\ufffc').join('')
+    let cut = Math.floor(length / 2)
+    // Prefer a word boundary and never cut between a UTF-16 surrogate pair.
+    const before = text.lastIndexOf(' ', cut)
+    const after = text.indexOf(' ', cut)
+    if (before > 0) cut = before + 1
+    else if (after >= 0 && after < length - 1) cut = after + 1
+    if (cut > 0 && /[\uDC00-\uDFFF]/.test(text[cut]!)) cut -= 1
+    if (cut === 0 || cut === length) return [node]
+    const left: ProseMirrorJSON[] = [], right: ProseMirrorJSON[] = []
+    let offset = 0
+    for (const child of children) {
+      const size = typeof child.text === 'string' ? child.text.length : 1
+      if (offset + size <= cut) left.push(child)
+      else if (offset >= cut) right.push(child)
+      else if (typeof child.text === 'string') {
+        left.push({ ...child, text: child.text.slice(0, cut - offset) })
+        right.push({ ...child, text: child.text.slice(cut - offset) })
+      }
+      offset += size
+    }
+    return [{ ...node, content: left }, { ...node, content: right }]
+  }
+  if (!['ordered_list', 'bullet_list', 'list_item', 'blockquote'].includes(String(node.type))) return [node]
+  // A leaf list item is one subquestion's complete answer, including all of
+  // its paragraphs, equations and media. Move it whole unless it is oversized.
+  const hasSubquestions = (value: ProseMirrorJSON): boolean => value.type === 'ordered_list'
+    || (Array.isArray(value.content) && (value.content as ProseMirrorJSON[]).some(hasSubquestions))
+  if (!splitText && node.type === 'list_item' && !children.some(hasSubquestions)) return [node]
+  if (children.length > 1) {
+    const cut = Math.ceil(children.length / 2)
+    const attrs = node.attrs as Record<string, unknown> | undefined
+    return [
+      { ...node, content: children.slice(0, cut) },
+      { ...node, ...(node.type === 'ordered_list' ? { attrs: { ...attrs, order: (Number(attrs?.order) || 1) + cut } } : {}), content: children.slice(cut) },
+    ]
+  }
+  if (children.length === 1) {
+    const pieces = splitAnswerBlock(children[0]!, splitText)
+    if (pieces.length > 1) return pieces.map(child => ({ ...node, content: [child] }))
+  }
+  return [node]
+}
+
+function splitKeyEntry(item: AnswerKeyEntryItem, fits: (piece: AnswerKeyEntryItem) => boolean, splitText: boolean): AnswerKeyEntryItem[] {
+  // Keep as many complete parts or blocks together as the available room allows.
+  const prefixCount = (length: number, prefix: (count: number) => AnswerKeyEntryItem) => {
+    let low = 1, high = length - 1, best = 1
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2)
+      if (fits(prefix(middle))) { best = middle; low = middle + 1 }
+      else high = middle - 1
+    }
+    return best
+  }
+  if ((item.parts?.length ?? 0) > 1) {
+    const cut = prefixCount(item.parts!.length, count => ({ ...item, parts: item.parts!.slice(0, count) }))
+    return [{ ...item, parts: item.parts!.slice(0, cut) }, { ...item, suggestedAnswer: undefined, parts: item.parts!.slice(cut) }]
+  }
+  const answer = item.parts?.[0]?.suggestedAnswer ?? item.suggestedAnswer
+  if (!answer?.length) return [item]
+  if (!splitText && answer.length > 1 && !answer.some(node => node.type === 'ordered_list')) return [item]
+  const withAnswer = (suggestedAnswer: ProseMirrorJSON[]): AnswerKeyEntryItem => item.parts?.length
+    ? { ...item, parts: [{ ...item.parts[0]!, suggestedAnswer }] }
+    : { ...item, suggestedAnswer }
+  const cut = answer.length > 1 ? prefixCount(answer.length, count => withAnswer(answer.slice(0, count))) : 1
+  const pieces = answer.length > 1
+    ? [answer.slice(0, cut), answer.slice(cut)]
+    : splitAnswerBlock(answer[0]!, splitText).map(block => [block])
+  if (pieces.length < 2) return [item]
+  return pieces.map(withAnswer)
+}
+
+/** Rejoin adjacent fragments when packing puts them on the same page. The
+ * question and part labels belong to the hierarchy, not to each packing step. */
+function joinAnswerBlocks(left: readonly ProseMirrorJSON[] = [], right: readonly ProseMirrorJSON[] = []): ProseMirrorJSON[] {
+  const before = left.at(-1), after = right[0]
+  if (!before || !after || before.type !== 'ordered_list' || after.type !== 'ordered_list') return [...left, ...right]
+  const beforeAttrs = before.attrs as Record<string, unknown> | undefined
+  const afterAttrs = after.attrs as Record<string, unknown> | undefined
+  if (beforeAttrs?.essaySequence !== afterAttrs?.essaySequence) return [...left, ...right]
+  const first = Array.isArray(before.content) ? before.content as ProseMirrorJSON[] : []
+  const second = Array.isArray(after.content) ? after.content as ProseMirrorJSON[] : []
+  const nextOrder = (Number(beforeAttrs?.order) || 1) + first.length
+  const order = Number(afterAttrs?.order) || 1
+  let content: ProseMirrorJSON[]
+  if (order === nextOrder) content = [...first, ...second]
+  else if (order === nextOrder - 1 && first.at(-1)?.type === 'list_item' && second[0]?.type === 'list_item') {
+    const tail = first.at(-1)!, head = second[0]!
+    content = [...first.slice(0, -1), { ...tail, content: joinAnswerBlocks(tail.content as ProseMirrorJSON[], head.content as ProseMirrorJSON[]) }, ...second.slice(1)]
+  } else return [...left, ...right]
+  return [...left.slice(0, -1), { ...before, content }, ...right.slice(1)]
+}
+
+function joinKeyEntries(left: AnswerKeyEntryItem, right: AnswerKeyEntryItem): AnswerKeyEntryItem {
+  const parts = [...(left.parts ?? [])]
+  for (const part of right.parts ?? []) {
+    const previous = parts.at(-1)
+    if (previous?.letter === part.letter) {
+      parts[parts.length - 1] = { ...previous, suggestedAnswer: joinAnswerBlocks(previous.suggestedAnswer, part.suggestedAnswer) }
+    } else parts.push(part)
+  }
+  return {
+    ...left,
+    ...(left.suggestedAnswer || right.suggestedAnswer ? { suggestedAnswer: joinAnswerBlocks(left.suggestedAnswer, right.suggestedAnswer) } : {}),
+    parts,
+  }
+}
+
 function paginate(
   items: PageItem[],
   measure: Measure,
@@ -1340,6 +1467,18 @@ function paginate(
   // the page. The growth is recorded on the item itself, so adapters draw the
   // grown height rather than rediscovering it.
   const place = (item: PageItem, height: number) => {
+    const previous = current.at(-1)
+    if (item.kind === 'answer-key-entry' && item.answerLayout === 'tree'
+      && previous?.kind === 'answer-key-entry' && previous.answerLayout === 'tree' && previous.number === item.number) {
+      const joined = joinKeyEntries(previous, item)
+      const previousHeight = measure.itemHeight(previous)
+      const joinedHeight = measure.itemHeight(joined)
+      if (joinedHeight <= box - used + previousHeight) {
+        current[current.length - 1] = joined
+        used += joinedHeight - previousHeight
+        return
+      }
+    }
     let placed = item
     let placedHeight = height
     const space = item.kind === 'question' ? fillingSpaceOf(item) : null
@@ -1441,6 +1580,51 @@ function paginate(
       place(item, height)
       continue
     }
+    if (item.kind === 'answer-key-entry') {
+      const pending = [item]
+      while (pending.length) {
+        const piece = pending.shift()!
+        const pieceHeight = measure.itemHeight(piece)
+        const last = current.at(-1)
+        const heading = last?.kind === 'answer-key-section' ? last : undefined
+        const headingHeight = heading ? measure.itemHeight(heading) : 0
+        const earlierAnswers = current.some(placed => placed.kind === 'answer-key-entry' || placed.kind === 'answer-key-grid-row')
+        // The first piece must leave room for its section title. On a page
+        // with only the key's opening furniture, split within that page's
+        // actual room rather than producing a page of headings alone.
+        const remaining = box - used
+        // Use the current page when it has useful space for an answer. Avoid
+        // leaving a tiny fragment beneath a heading or at the page's foot.
+        const limit = remaining >= 100 || (heading && !earlierAnswers)
+          ? remaining
+          : fullPage - headingHeight
+        if (pieceHeight > limit) {
+          const smaller = splitKeyEntry(piece, candidate => measure.itemHeight(candidate) <= limit, pieceHeight > fullPage - headingHeight || (!!heading && !earlierAnswers))
+          if (smaller.length > 1) {
+            pending.unshift(...smaller)
+            continue
+          }
+        }
+        if (pieceHeight > box - used && current.length > 0) {
+          if (heading && earlierAnswers) {
+            current.pop()
+            flush()
+            place(heading, headingHeight)
+          } else if (!heading) {
+            flush()
+          }
+        }
+        place(piece, pieceHeight)
+      }
+      continue
+    }
+    if (item.kind === 'answer-key-grid-row' && current.at(-1)?.kind === 'answer-key-section') {
+      const heading = current.pop()!
+      if (current.length > 0) flush()
+      place(heading, measure.itemHeight(heading))
+      place(item, height)
+      continue
+    }
     if (item.kind !== 'question') {
       if (current.length > 0) flush()
       place(item, height)
@@ -1498,7 +1682,7 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
     }
     const metadata = {
       ...(item.question.difficulty ? { difficulty: item.question.difficulty } : {}),
-      ...(item.question.topics?.length ? { topics: [...item.question.topics] } : {}),
+      ...(item.question.type !== 'multiple-choice' && item.question.topics?.length ? { topics: [...item.question.topics] } : {}),
     }
     if (hasNumberedParts(item.question)) {
       for (const part of item.question.parts!) {
@@ -1522,6 +1706,7 @@ function deriveAnswerKey(testItems: readonly PageItem[]): PageItem[] {
         ...(item.question.displayNumber !== undefined ? { displayNumber: item.question.displayNumber } : {}),
         letter: null,
         ...metadata,
+        ...(isEssayType(item.question.type) ? { answerLayout: 'tree' as const } : {}),
         parts: item.question.parts.map((part) => ({
           letter: part.letter,
           ...(part.displayLabel !== undefined ? { displayLabel: part.displayLabel } : {}),
@@ -1913,6 +2098,40 @@ export function wordBankLayoutOf(
   return isWordBankLayout(stored) ? stored : wordBankLayoutFor(question, exam)
 }
 
+/** Group only consecutive standalone MCQ answers. Written answers and section
+ * titles retain their own full-width items and page-breaking rules. */
+function gridAnswerKey(document: ExportDocument, width: number): PageItem[] {
+  const multipleChoice = new Map<string, Set<number>>()
+  let testSection = ''
+  for (const item of document.test) {
+    if (item.kind === 'section-heading') testSection = item.sectionId
+    if (item.kind !== 'question' || item.question.type !== 'multiple-choice') continue
+    const numbers = multipleChoice.get(testSection) ?? new Set<number>()
+    numbers.add(item.question.number)
+    multipleChoice.set(testSection, numbers)
+  }
+  let keySection = ''
+  const result: PageItem[] = []
+  let run: AnswerKeyEntryItem[] = []
+  const flush = () => {
+    if (run.length < 2) result.push(...run)
+    else {
+      const columns = Math.min(4, run.length, Math.max(1, Math.floor((width + 16) / 156)))
+      for (let index = 0; index < run.length; index += columns) {
+        result.push({ kind: 'answer-key-grid-row', columns, entries: run.slice(index, index + columns) })
+      }
+    }
+    run = []
+  }
+  for (const item of document.answerKey) {
+    if (item.kind === 'answer-key-section') keySection = item.sectionId
+    if (item.kind === 'answer-key-entry' && !item.parts && multipleChoice.get(keySection)?.has(item.number)) run.push(item)
+    else { flush(); result.push(item) }
+  }
+  flush()
+  return result
+}
+
 /** Layout resolution, on its own: an Export Document onto sheets. Keeping the
  *  two `paginate` calls independent is what restarts the answer key's footer. */
 function resolveLayout(
@@ -1966,7 +2185,7 @@ function resolveLayout(
   if (document.selection.answerKey) {
     pages.push(
       ...paginate(
-        document.answerKey,
+        gridAnswerKey(document, pageSize.contentWidth),
         sized,
         pageSize,
         'answer-key',

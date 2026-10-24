@@ -35,6 +35,14 @@ for (const [type, label, firstLabel] of [['structured-essay', 'Structured essay'
     await items.last().locator('p').first().click()
     await page.keyboard.insertText('Calculate the power. <3lines>')
     await expect(part.getByRole('listitem')).toHaveCount(2)
+    await part.getByRole('button', { name: 'Answer subquestions', exact: true }).click()
+    const answerSlots = part.locator('.sa-body').getByRole('listitem')
+    await expect(answerSlots).toHaveCount(2)
+    await answerSlots.nth(0).locator('p').first().click()
+    await page.keyboard.insertText('Chemical energy from fuel.')
+    await answerSlots.nth(1).locator('p').first().click()
+    await page.keyboard.insertText('Power is energy divided by time.')
+    await expect(part.getByRole('button', { name: 'Answer subquestions', exact: true })).toBeDisabled()
     await page.keyboard.press('Control+Enter')
     await expect(editor).toBeHidden()
     await expect(page.locator('.question-reading-parts')).toContainText('Name the input energy.')
@@ -50,6 +58,8 @@ for (const [type, label, firstLabel] of [['structured-essay', 'Structured essay'
     await page.locator('.question-bank-reading-edit').first().click()
     await expect(editor).toBeVisible()
     await expect(editor.locator('.multipart-part-stem').getByRole('listitem')).toHaveCount(2)
+    await expect(editor.locator('.sa-body').getByRole('listitem').nth(0)).toContainText('Chemical energy from fuel.')
+    await expect(editor.locator('.sa-body').getByRole('listitem').nth(1)).toContainText('Power is energy divided by time.')
     await expect(editor.locator('.multipart-part-stem')).toContainText('<2lines>')
     await expect(editor.locator('.multipart-part-stem')).toContainText('<3lines>')
     await editor.getByRole('button', { name: 'Add Part', exact: true }).last().click()
@@ -72,6 +82,16 @@ for (const [type, label, firstLabel] of [['structured-essay', 'Structured essay'
     await expect(page.locator('.draft-document .question-count')).toHaveText('1.')
     await expect(page.locator('.draft-document .part-count').first()).toHaveText(firstLabel)
     await expect(page.locator('.draft-document')).toContainText('Calculate the power.')
+    await expect(page.locator('.draft-document .multipart-part-print').first()).not.toContainText('Chemical energy from fuel.')
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const exportDialog = page.getByRole('dialog', { name: 'Export', exact: true })
+    await exportDialog.getByRole('checkbox', { name: 'Student test' }).uncheck()
+    await expect(exportDialog.getByLabel('Export Preview')).toContainText('Chemical energy from fuel.')
+    await expect(exportDialog.getByLabel('Export Preview')).toContainText('Power is energy divided by time.')
+    const download = page.waitForEvent('download')
+    await exportDialog.getByRole('button', { name: 'Download PDF', exact: true }).click()
+    expect(await (await download).failure()).toBeNull()
+    await expect(exportDialog).toBeHidden()
     const printedPart = page.locator('.draft-document .multipart-part-print').first()
     await expect(printedPart).not.toContainText('<2lines>')
     await expect(printedPart).not.toContainText('<3lines>')
@@ -82,5 +102,56 @@ for (const [type, label, firstLabel] of [['structured-essay', 'Structured essay'
     await expect(subquestions.last().locator('.work-space-line')).toHaveCount(3)
     await expect(page.locator('.draft-document .work-space-line')).toHaveCount(5)
     await expect(page.locator('.draft-document').getByRole('separator', { name: /Work space for question/ })).toHaveCount(0)
+  })
+}
+
+for (const type of ['essay', 'structured-essay'] as const) {
+  test(`${type} exports a multi-page answer key with a long nested subquestion answer`, async ({ page }) => {
+    const { seedAuthoringState } = await import('./seed-authoring')
+    const { createQuestion } = await import('../src/exam')
+    const { multipartPartNodesOf } = await import('../src/question-doc')
+    const question = createQuestion(type)
+    const part = multipartPartNodesOf(question.doc)[0]!
+    const answer = (part.content as Record<string, unknown>[])[1]!
+    answer.content = [{ type: 'paragraph' }, { type: 'ordered_list', attrs: { order: 1 }, content: [
+      { type: 'list_item', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First subquestion answer.' }] }] },
+      { type: 'list_item', content: [{ type: 'paragraph' }, { type: 'ordered_list', attrs: { order: 1 }, content: [
+        { type: 'list_item', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Long nested answer. ' + 'Energy is conserved throughout the transformation. '.repeat(500) + 'End of nested answer.' }] }] },
+      ] }] },
+    ] }]
+    await seedAuthoringState(page, { questionBank: { questions: [question] }, workingCopy: { title: 'Long essay key', questionIds: [question.id] }, dirty: false })
+    await page.getByRole('button', { name: 'Export', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Export', exact: true })
+    await dialog.getByRole('checkbox', { name: 'Student test' }).uncheck()
+    const preview = dialog.getByLabel('Export Preview')
+    await expect(preview).toContainText('First subquestion answer.')
+    await expect(preview).toContainText('End of nested answer.')
+    expect(await preview.locator('.exam-page').count()).toBeGreaterThan(1)
+    const download = page.waitForEvent('download')
+    await dialog.getByRole('button', { name: 'Download PDF', exact: true }).click()
+    const file = await download
+    expect(await file.failure()).toBeNull()
+    const { PDFDocument } = await import('pdf-lib')
+    const { readFile } = await import('node:fs/promises')
+    const bytes = await readFile((await file.path())!)
+    const pdf = await PDFDocument.load(bytes)
+    expect(pdf.getPageCount()).toBeGreaterThan(1)
+    const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs')
+    const loading = getDocument({ data: new Uint8Array(bytes) })
+    const readable = await loading.promise
+    const texts: string[] = []
+    for (let number = 1; number <= readable.numPages; number++) {
+      const content = await (await readable.getPage(number)).getTextContent()
+      texts.push(content.items.map(item => 'str' in item ? item.str : '').join(' '))
+    }
+    const text = texts.join(' ').replace(/\s+/g, ' ')
+    expect(text).toContain('First subquestion answer.')
+    expect(text).toContain('End of nested answer.')
+    // Page furniture can interrupt a sentence in extracted PDF text.
+    // Count each distinctive word to detect truncated or duplicated answers.
+    for (const word of ['Energy', 'conserved', 'throughout', 'transformation']) {
+      expect(text.match(new RegExp(`\\b${word}\\b`, 'g'))).toHaveLength(500)
+    }
+    await loading.destroy()
   })
 }

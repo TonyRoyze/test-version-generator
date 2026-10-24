@@ -34,3 +34,33 @@ export function essayListLabel(sequence: unknown, index: number): string | null 
     ? `(${sequenceTokenAt(sequence as LabelSequence, index)})`
     : null
 }
+
+/** An answer slot for every authored subquestion, including nested prompts.
+ * Ordinary rich-text lists keep answers portable through existing bank formats. */
+export function subquestionAnswerSlots(stem: readonly ProseMirrorJSON[]): ProseMirrorJSON[] {
+  const lists: ProseMirrorJSON[] = []
+  for (const node of stem) {
+    if (node.type !== 'ordered_list') continue
+    const items = Array.isArray(node.content) ? node.content as ProseMirrorJSON[] : []
+    lists.push({
+      type: 'ordered_list',
+      attrs: { order: Number((node.attrs as Record<string, unknown> | undefined)?.order) || 1 },
+      content: items.map(item => ({
+        type: 'list_item',
+        content: [{ type: 'paragraph' }, ...subquestionAnswerSlots(Array.isArray(item.content) ? item.content as ProseMirrorJSON[] : [])],
+      })),
+    })
+  }
+  return lists
+}
+
+/** The editor requires a leading paragraph before rich answer blocks. An
+ * empty one is an insertion point, not a blank row in the answer hierarchy. */
+export function essayAnswer(nodes: readonly ProseMirrorJSON[], type: string): ProseMirrorJSON[] {
+  const first = nodes[0]
+  const placeholder = isEssayType(type) && nodes.length > 1
+    && first?.type === 'paragraph'
+    && (!Array.isArray(first.content) || first.content.length === 0)
+    && nodes[1]?.type !== 'paragraph'
+  return essayStem(placeholder ? nodes.slice(1) : nodes, type)
+}

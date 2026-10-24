@@ -206,16 +206,18 @@ type MutableNumberingConfig = NumberingConfig[number][]
 
 // Levels are indented like the print view's own nesting: each step in by half an
 // inch, with the marker hanging back out of the text block.
-function levelsOf(ordered: boolean, start: number, essaySequence?: unknown) {
+function levelsOf(ordered: boolean, start: number, essaySequence?: unknown, treeBase?: number) {
   return Array.from({ length: LIST_LEVELS }, (_unused, level) => ({
     level,
     format: essaySequence === 'lower-roman' ? LevelFormat.LOWER_ROMAN : essaySequence === 'lower-alpha' ? LevelFormat.LOWER_LETTER : ordered ? ORDERED_FORMATS[level]! : LevelFormat.BULLET,
     text: essaySequence ? `(%${level + 1})` : ordered ? `%${level + 1}.` : BULLET_GLYPHS[level]!,
     alignment: AlignmentType.LEFT,
-    start: level === 0 ? start : 1,
+    start: treeBase !== undefined || level === 0 ? start : 1,
     style: {
       paragraph: {
-        indent: { left: 720 * (level + 1), hanging: 360 },
+        indent: treeBase === undefined
+          ? { left: 720 * (level + 1), hanging: 360 }
+          : { left: treeBase + twips(32) * (level + 1), hanging: twips(32) },
       },
     },
   }))
@@ -227,9 +229,9 @@ function levelsOf(ordered: boolean, start: number, essaySequence?: unknown) {
 class Numbering {
   readonly config: MutableNumberingConfig = []
 
-  reference(ordered: boolean, start: number, essaySequence?: unknown): string {
+  reference(ordered: boolean, start: number, essaySequence?: unknown, treeBase?: number): string {
     const reference = `exam-list-${this.config.length}`
-    this.config.push({ reference, levels: levelsOf(ordered, start, essaySequence) })
+    this.config.push({ reference, levels: levelsOf(ordered, start, essaySequence, treeBase) })
     return reference
   }
 }
@@ -359,12 +361,15 @@ function inlineChildren(
 /** What a block inherits from the item it sits in: the run of text that must
  *  open it, how far it is indented, and which list it belongs to. */
 type BlockContext = {
+  answerKey?: boolean
   /** Prepended to the first paragraph produced — the question's number line. */
   prefix?: ParagraphChild[]
   /** A hanging indent applied with that prefix, so the body aligns under itself. */
   hanging?: number
   indent: number
   list?: { reference: string; level: number }
+  /** Base indent for lists in a written answer hierarchy. */
+  treeListBase?: number
   keepNext?: boolean
   /** Inside a Panel: pictures and tables are centred across it. */
   centred?: boolean
@@ -476,7 +481,8 @@ function blocks(
         : BLOCK_AFTER
       before = Math.max(0, BODY_SPACING.paragraphGap - left)
     }
-    const produced = blockOf(node, { ...context, prefix, hanging, before }, build)
+    const continuation = context.treeListBase !== undefined && previous !== undefined && node.type !== 'ordered_list' && node.type !== 'bullet_list'
+    const produced = blockOf(node, { ...context, ...(continuation ? { list: undefined } : {}), prefix, hanging, before }, build)
     result.push(...produced)
     if (produced.length > 0) {
       prefix = undefined
@@ -525,6 +531,7 @@ function blockOf(
         ordered,
         ordered ? Number(attrs.order) || 1 : 1,
         attrs.essaySequence,
+        context.treeListBase,
       )
       const level = context.list ? context.list.level + 1 : 0
       // The opening prefix belongs to the first item that prints, not to every
@@ -535,7 +542,7 @@ function blockOf(
       return childrenOf(node).flatMap((child) => {
         const produced = blockOf(
           child,
-          { ...context, prefix, hanging, before, list: { reference, level } },
+          { ...context, ...(context.treeListBase !== undefined ? { indent: context.treeListBase + twips(32) * (level + 1) } : {}), prefix, hanging, before, list: { reference, level } },
           build,
         )
         if (produced.length > 0) {
@@ -562,7 +569,7 @@ function blockOf(
           new Paragraph(
             paragraphOptions(context, {
               children: [...(context.prefix ?? []), mathRun(source)],
-              alignment: AlignmentType.CENTER,
+              alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
             }),
           ),
         ]
@@ -592,7 +599,7 @@ function blockOf(
       return [
         new Paragraph(
           paragraphOptions(context, {
-            alignment: context.centred ? AlignmentType.CENTER : undefined,
+            alignment: !context.answerKey && context.centred ? AlignmentType.CENTER : undefined,
             children: [
               ...(context.prefix ?? []),
               image
@@ -612,7 +619,7 @@ function blockOf(
       const image = build.images.get(pictureKey(attrs))
       const figure = new Paragraph(
         paragraphOptions(context, {
-          alignment: context.centred ? AlignmentType.CENTER : undefined,
+          alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
           children: [
             ...(context.prefix ?? []),
             image
@@ -631,7 +638,7 @@ function blockOf(
           paragraphOptions(
             { ...context, prefix: undefined, hanging: undefined },
             {
-              alignment: context.centred ? AlignmentType.CENTER : undefined,
+              alignment: context.answerKey ? AlignmentType.LEFT : AlignmentType.CENTER,
               children: [new TextRun({ text: caption, italics: true, size: halfPointsOf('small') })],
             },
           ),
@@ -685,6 +692,7 @@ function prefixLine(context: BlockContext): Paragraph[] {
  *  row of Panels from a table the teacher wrote. */
 export const BLOCKQUOTE_TABLE_STYLE = 'Blockquote'
 export const SIDE_BY_SIDE_TABLE_STYLE = 'SideBySide'
+export const ANSWER_KEY_GRID_STYLE = 'AnswerKeyGrid'
 export const PAPER_BOOK_TABLE_STYLE = 'PaperBookLayout'
 export const PAPER_BOOK_TITLE_STYLE = 'PaperBookTitle'
 
@@ -702,7 +710,7 @@ function boxTable(
   const width = Math.max(1, build.contentWidth - indent)
   const content = blocks(
     childrenOf(node),
-    { indent: 0, keepNext: context.keepNext, centred: context.centred },
+    { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, centred: context.centred },
     { ...build, contentWidth: width - BOX_PADDING_X * 2 },
   )
   return new Table({
@@ -757,7 +765,7 @@ function sideBySideTable(
         children: panels.map((panel, index) => {
           const content = blocks(
             childrenOf(panel),
-            { indent: 0, keepNext: context.keepNext, centred: true },
+            { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, centred: true },
             { ...build, contentWidth: panelWidth - PANEL_GAP },
           )
           return new TableCell({
@@ -799,7 +807,7 @@ function documentTable(
   )
   const cellWidth = build.contentWidth / columns
   return new Table({
-    alignment: context.centred ? AlignmentType.CENTER : undefined,
+    alignment: !context.answerKey && context.centred ? AlignmentType.CENTER : undefined,
     width: { size: twips(build.contentWidth), type: WidthType.DXA },
     columnWidths: gridOf(Array.from({ length: columns }, () => cellWidth)),
     indent: context.indent
@@ -816,7 +824,7 @@ function documentTable(
             const content = cell
               ? blocks(
                   childrenOf(cell),
-                  { indent: 0, keepNext: context.keepNext, tight: true, paragraphAfter: 0 },
+                  { indent: 0, answerKey: context.answerKey, keepNext: context.keepNext, tight: true, paragraphAfter: 0 },
                   { ...build, contentWidth: cellWidth - TABLE_CELL_PADDING_X * 2 },
                 )
               : []
@@ -1128,7 +1136,9 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
     ...(item.difficulty ? [{ label: DIFFICULTY_LABELS[item.difficulty], fill: 'E6F0E3' }] : []),
     ...(item.topics ?? []).map((topic) => ({ label: topic, fill: 'F2E6D8' })),
   ]
+  const tree = item.answerLayout === 'tree'
   const entry = new Paragraph({
+    ...(tree ? { keepNext: true } : {}),
     children: [
       new TextRun({ text: `${item.displayNumber ?? `${item.number}.`} ` }),
       // A free-response question still takes a line, so the key's numbering
@@ -1141,22 +1151,27 @@ function answerKeyEntry(item: AnswerKeyEntryItem, build: BuildContext): (Paragra
   })
   // A Suggested Answer starts under the blank, on the lines below the entry.
   const suggested = item.suggestedAnswer
-    ? blocks(item.suggestedAnswer, { indent: ANSWER_KEY_ANSWER_INDENT }, build)
+    ? blocks(item.suggestedAnswer, { indent: ANSWER_KEY_ANSWER_INDENT, answerKey: true }, build)
     : []
   // A Multipart question's Parts each take a line under its number: the Part's letter,
   // then its answer in bold, then any Suggested Answer beneath.
-  const parts = (item.parts ?? []).flatMap((part) => [
-    new Paragraph({
-      indent: { left: ANSWER_KEY_ANSWER_INDENT },
-      children: [
-        new TextRun({ text: `${part.displayLabel ?? `${part.letter}.`} ` }),
-        ...(part.displayAnswer ?? part.answer ? [new TextRun({ text: part.displayAnswer ?? part.answer!, bold: true })] : []),
-      ],
-    }),
-    ...(part.suggestedAnswer
-      ? blocks(part.suggestedAnswer, { indent: ANSWER_KEY_ANSWER_INDENT + twips(32) }, build)
-      : []),
-  ])
+  const parts = (item.parts ?? []).flatMap((part) => {
+    const labelled = !tree || part.displayLabel !== ''
+    const indent = tree ? twips(labelled ? 64 : 32) : ANSWER_KEY_ANSWER_INDENT + twips(32)
+    return [
+      ...(labelled ? [new Paragraph({
+        indent: { left: tree ? twips(32) : ANSWER_KEY_ANSWER_INDENT },
+        ...(tree ? { keepNext: true } : {}),
+        children: [
+          new TextRun({ text: `${part.displayLabel ?? `${part.letter}.`} ` }),
+          ...(part.displayAnswer ?? part.answer ? [new TextRun({ text: part.displayAnswer ?? part.answer!, bold: true })] : []),
+        ],
+      })] : []),
+      ...(part.suggestedAnswer
+        ? blocks(part.suggestedAnswer, { indent, answerKey: true, ...(tree ? { treeListBase: indent } : {}) }, build)
+        : []),
+    ]
+  })
   return [entry, ...suggested, ...parts]
 }
 
@@ -1218,6 +1233,21 @@ function itemContent(
       ]
     case 'answer-key-section':
       return [answerKeySection(item)]
+    case 'answer-key-grid-row': {
+      const width = build.contentWidth / item.columns
+      return [new Table({
+        style: ANSWER_KEY_GRID_STYLE,
+        width: { size: twips(build.contentWidth), type: WidthType.DXA },
+        columnWidths: gridOf(Array.from({ length: item.columns }, () => width)),
+        borders: NO_BORDERS,
+        rows: [new TableRow({ cantSplit: true, children: Array.from({ length: item.columns }, (_, index) => new TableCell({
+          width: { size: twips(width), type: WidthType.DXA },
+          margins: { top: 0, bottom: 0, left: 0, right: twips(16) },
+          borders: NO_BORDERS,
+          children: item.entries[index] ? answerKeyEntry(item.entries[index]!, build) : [new Paragraph({})],
+        })) })],
+      })]
+    }
     case 'answer-key-entry':
       return answerKeyEntry(item, build)
     default: {

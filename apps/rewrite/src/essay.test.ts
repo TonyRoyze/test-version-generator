@@ -90,3 +90,62 @@ test('a single Essay Part omits its letter while Structured Essay retains roman 
   expect(xml).toContain('Explain the transformation.')
   expect(xml).not.toContain('(A)')
 })
+
+test('subquestion answers get independent slots at every nested level without copying prompts', async () => {
+  const { subquestionAnswerSlots } = await import('./essay')
+  const stem = [{ type: 'ordered_list', content: [
+    { type: 'list_item', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'First prompt' }] }, { type: 'ordered_list', content: [{ type: 'list_item', content: [{ type: 'paragraph' }] }] }] },
+    { type: 'list_item', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Second prompt' }] }] },
+  ] }]
+  const original = structuredClone(stem)
+  const slots = subquestionAnswerSlots(stem)
+  expect(slots).toEqual([{ type: 'ordered_list', attrs: { order: 1 }, content: [
+    { type: 'list_item', content: [{ type: 'paragraph' }, { type: 'ordered_list', attrs: { order: 1 }, content: [{ type: 'list_item', content: [{ type: 'paragraph' }] }] }] },
+    { type: 'list_item', content: [{ type: 'paragraph' }] },
+  ] }])
+  expect(stem).toEqual(original)
+})
+
+for (const type of ['essay', 'structured-essay'] as const) {
+  test(`${type} DOCX indents question, part and nested answer levels progressively`, async () => {
+    const { multipartPartNodesOf } = await import('./question-doc')
+    const { parseXml } = await import('./xml')
+    const fixture = FIXTURES.find(f => f.name === `${type} with shared material and written parts`)!
+    const exam = structuredClone(fixture.exam)
+    const part = multipartPartNodesOf(exam.questions[0]!.doc)[0]!
+    const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+    ;(part.content as Record<string, unknown>[])[1]!.content = [paragraph('TreePartAnswer'), {
+      type: 'ordered_list', content: [{ type: 'list_item', content: [paragraph('TreeSubAnswer'), {
+        type: 'ordered_list', content: [{ type: 'list_item', content: [paragraph('TreeNestedAnswer')] }],
+      }] }],
+    }]
+    const plan = planExport({ ...fixture, exam, measure: unmeasured, selection: { test: false, answerKey: true } })
+    const zip = await JSZip.loadAsync(await (await createExamDocx([plan], async () => null)).arrayBuffer())
+    type Node = import('./xml').XmlNode
+    const all = (node: Node): Node[] => [node, ...node.children.flatMap(all)]
+    const text = (node: Node): string => node.text + node.children.map(text).join('')
+    const paragraphs = all(parseXml(await zip.file('word/document.xml')!.async('string'))).filter(n => n.name === 'w:p')
+    const numbering = all(parseXml(await zip.file('word/numbering.xml')!.async('string')))
+    const indentOf = (paragraph: Node) => {
+      const nodes = all(paragraph)
+      const num = nodes.find(n => n.name === 'w:numId')
+      if (!num) return Number(nodes.find(n => n.name === 'w:ind')?.attrs['w:left'] ?? 0)
+      const id = num.attrs['w:val']
+      const abstractId = all(numbering.find(n => n.name === 'w:num' && n.attrs['w:numId'] === id)!).find(n => n.name === 'w:abstractNumId')!.attrs['w:val']
+      const abstract = numbering.find(n => n.name === 'w:abstractNum' && n.attrs['w:abstractNumId'] === abstractId)!
+      const level = nodes.find(n => n.name === 'w:ilvl')!.attrs['w:val']
+      return Number(all(abstract.children.find(n => n.name === 'w:lvl' && n.attrs['w:ilvl'] === level)!).find(n => n.name === 'w:ind')!.attrs['w:left'])
+    }
+    const labels = [type === 'essay' ? '(A)' : '(i)', 'TreePartAnswer', 'TreeSubAnswer', 'TreeNestedAnswer']
+    expect(labels.map(label => indentOf(paragraphs.find(p => text(p).trim() === label)!))).toEqual([480, 960, 1440, 1920])
+  })
+}
+
+test('written answer hierarchies omit editor insertion paragraphs before rich blocks', async () => {
+  const { essayAnswer } = await import('./essay')
+  const list = { type: 'ordered_list', content: [{ type: 'list_item', content: [{ type: 'paragraph' }] }] }
+  expect(essayAnswer([{ type: 'paragraph' }, list], 'essay')).toHaveLength(1)
+  // Authored blank lines between paragraphs remain content.
+  expect(essayAnswer([{ type: 'paragraph' }, { type: 'paragraph' }], 'essay')).toHaveLength(2)
+  expect(essayAnswer([{ type: 'paragraph' }, list], 'multipart')).toHaveLength(2)
+})

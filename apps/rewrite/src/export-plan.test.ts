@@ -652,7 +652,7 @@ describe('answer key', () => {
       .flatMap((page) => page.items)
   }
 
-  test('correct letters follow the current arrangement and carry Question Metadata', () => {
+  test('correct letters follow the current arrangement and carry difficulty without topic tags', () => {
     const question = {
       ...multipleChoice('m1', ['a', 'b', 'c'], 'a'),
       difficulty: 'hard' as const,
@@ -665,7 +665,6 @@ describe('answer key', () => {
       number: 1,
       letter: 'B',
       difficulty: 'hard',
-      topics: ['Cells', 'Division'],
     })
   })
 

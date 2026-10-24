@@ -131,6 +131,7 @@ import { pageGeometry } from './page-geometry'
 import { headerLineOf, type HeaderLine } from './page-header'
 import {
   AnswerKeyEntry,
+  AnswerKeyGridRow,
   AnswerKeyHeading,
   AnswerKeySection,
   PageHeaderContent,
@@ -1439,6 +1440,8 @@ function PageItemView({
       return <AnswerKeyHeading />
     case 'answer-key-section':
       return <AnswerKeySection item={item} />
+    case 'answer-key-grid-row':
+      return <AnswerKeyGridRow item={item} />
     case 'answer-key-entry':
       return <AnswerKeyEntry item={item} />
     default: {
@@ -1448,7 +1451,7 @@ function PageItemView({
   }
 }
 
-function keyOf(item: PageItem): string {
+function keyOf(item: PageItem, pageIndex: number): string {
   switch (item.kind) {
     case 'section-heading':
       return `heading-${item.sectionId}`
@@ -1460,8 +1463,12 @@ function keyOf(item: PageItem): string {
       return 'answer-key-heading'
     case 'answer-key-section':
       return `answer-key-section-${item.sectionId}`
+    case 'answer-key-grid-row':
+      return `answer-key-row-${item.entries[0]?.number}-${pageIndex}`
     case 'answer-key-entry':
-      return `answer-key-entry-${item.number}`
+      // Several continuations of one answer can now share a page. A printed
+      // question number alone is not a unique React identity for those pieces.
+      return `answer-key-entry-${item.number}-${pageIndex}`
     default: {
       const unreachable: never = item
       return unreachable
@@ -1648,8 +1655,8 @@ export function ExportPreview({ plan }: { plan: LayoutPlan }) {
           {!page.furniture.headerHidden && <PageHeaderContent header={page.header} furniture={page.furniture} layout={page.furniture.headerLayout} />}
           {page.furniture.pageNumberInHeader && <span className="page-number-header">{page.furniture.pageNumber}</span>}
           <div className="page-content" style={pageContentStyle(plan.textSize)} data-question-style={plan.questionStyle}>
-            {page.items.map((item) => (
-              <PageItemMeasureView key={keyOf(item)} item={item} />
+            {page.items.map((item, index) => (
+              <PageItemMeasureView key={keyOf(item, index)} item={item} />
             ))}
           </div>
           <footer className="page-footer" style={{
@@ -2225,9 +2232,9 @@ export function ExamPage({
                 Drag or add a Question from an open Question Bank
               </div>
             )}
-            {page.items.map((item) => (
+            {page.items.map((item, index) => (
               <PageItemView
-                key={keyOf(item)}
+                key={keyOf(item, index)}
                 item={editableItem(item)}
                 onSectionHeadingChange={onSectionHeadingChange}
                 revealTitleOf={revealTitleOf}

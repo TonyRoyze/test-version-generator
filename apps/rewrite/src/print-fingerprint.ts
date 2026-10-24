@@ -195,7 +195,7 @@ function blockLines(
           const suggested = find(part, 'answer-key-suggested')
           const text = answer ? normalizeSpace(textOf(answer)).trim() : ''
           return [
-            line(
+            ...(node.attrs['data-answer-layout'] === 'tree' && !letter ? [] : [line(
               'para',
               renderInline([
                 {
@@ -205,7 +205,7 @@ function blockLines(
                 },
                 ...(text ? [{ kind: 'text' as const, text, marks: ['strong'] }] : []),
               ]),
-            ),
+            )]),
             ...(suggested ? childBlocks(suggested, reader) : []),
           ]
         }),

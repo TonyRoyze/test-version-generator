@@ -78,7 +78,7 @@ describe('PDF Export Adapter', () => {
     expect(document.getCreator()).toBe('Test Parrot')
   })
 
-  test('prints Difficulty and Topic tags beside Answer Key entries', async () => {
+  test('retains difficulty while omitting multiple-choice topic tags', async () => {
     const { plans } = plansOf('both sections with the answer key')
     const bytes = await createPublicationPdf(plans, noImages, fonts)
     const document = await getDocument({ data: bytes, disableWorker: true }).promise
@@ -91,7 +91,7 @@ describe('PDF Export Adapter', () => {
     )).join(' ')
 
     expect(text).toContain('Easy')
-    expect(text).toContain('Acids')
+    expect(text).not.toContain('Acids')
     expect(text).toContain('Hard')
     expect(text).toContain('Titration')
   })
@@ -137,6 +137,8 @@ describe('PDF Export Adapter', () => {
     const body = margin + questionIndentOf({ type: 'multiple-choice' }) * 0.75
     // The stem's block picture, its inline one, and the first choice's.
     expect(lefts).toHaveLength(3)
+    const laneWidth = (plans[0]!.pageSize.contentWidth - questionIndentOf({ type: 'multiple-choice' })) * 0.75
+    expect(lefts[0]).toBeCloseTo(body + (laneWidth - PIXEL_PNG.width * 0.75) / 2, 1)
     for (const left of lefts) expect(left).toBeGreaterThanOrEqual(body - 0.5)
     // The choice's picture sits past its letter, not on it.
     expect(Math.max(...lefts)).toBeGreaterThanOrEqual(body + 17)
@@ -578,3 +580,104 @@ test('PDF omits the letter of a single Essay Part in both the paper and key', as
   expect(texts.join(' ')).toContain('Energy is conserved.')
   expect(texts.join(' ')).not.toContain('(A)')
 })
+
+for (const type of ['essay', 'structured-essay'] as const) {
+  test(`${type} key puts each hierarchy level below and inside its parent`, async () => {
+    const { multipartPartNodesOf } = await import('./question-doc')
+    const source = FIXTURES.find(f => f.name === `${type} with shared material and written parts`)!
+    const exam = structuredClone(source.exam)
+    const part = multipartPartNodesOf(exam.questions[0]!.doc)[0]!
+    const paragraph = (text: string) => ({ type: 'paragraph', content: [{ type: 'text', text }] })
+    ;(part.content as Record<string, unknown>[])[1]!.content = [paragraph('TreePartAnswer'), {
+      type: 'ordered_list', content: [{ type: 'list_item', content: [paragraph('TreeSubAnswer'), {
+        type: 'ordered_list', content: [{ type: 'list_item', content: [paragraph('TreeNestedAnswer')] }],
+      }] }],
+    }]
+    const plan = planExport({ ...source, exam, selection: { test: false, answerKey: true } })
+    const bytes = await createPublicationPdf([plan], noImages, fonts)
+    const document = await getDocument({ data: bytes, disableWorker: true }).promise
+    const items = (await (await document.getPage(1)).getTextContent()).items.filter(item => 'str' in item)
+    const labels = ['1.', type === 'essay' ? '(A)' : '(i)', 'TreePartAnswer', 'TreeSubAnswer', 'TreeNestedAnswer']
+    const rows = labels.map(label => {
+      const item = items.find(item => item.str === label)
+      expect(item).toBeDefined()
+      return item!
+    })
+    for (let index = 1; index < rows.length; index++) {
+      expect(rows[index]!.transform[4]).toBeGreaterThan(rows[index - 1]!.transform[4])
+      expect(rows[index]!.transform[5]).toBeLessThan(rows[index - 1]!.transform[5])
+    }
+  })
+}
+
+test('a long answer paragraph that fits the page is not rejected by counting earlier lines twice', async () => {
+  const source = FIXTURES.find(f => f.name === 'a Short Answer question with its Suggested Answer in the key')!
+  const exam = structuredClone(source.exam)
+  exam.questions[0]!.suggestedAnswer = { type: 'doc', content: [{ type: 'paragraph', content: Array.from({ length: 30 }, (_, index) => [
+    ...(index ? [{ type: 'hardbreak' }] : []), { type: 'text', text: `Answer line ${index + 1}` },
+  ]).flat() }] }
+  const plan = planExport({ ...source, exam, measure: { itemHeight: () => 0 }, selection: { test: false, answerKey: true } })
+  const bytes = await createPublicationPdf([plan], noImages, fonts)
+  const document = await getDocument({ data: bytes, disableWorker: true }).promise
+  expect(document.numPages).toBe(1)
+  const text = (await (await document.getPage(1)).getTextContent()).items.map(item => 'str' in item ? item.str : '').join(' ')
+  expect(text).toContain('Answer line 30')
+})
+
+for (const type of ['open', 'essay', 'structured-essay'] as const) {
+  test(`PDF loads images used only by a ${type} answer key`, async () => {
+    const { createQuestion } = await import('./exam')
+    const { multipartPartNodesOf } = await import('./question-doc')
+    const question = createQuestion(type)
+    const src = `/local-images/${'a'.repeat(64)}`
+    const answer = { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Answer anchor' }] }, { type: 'image-block', attrs: { src, size: 0.1, caption: 'Answer diagram', crop: { left: 0, top: 0, right: 0.5, bottom: 1, width: 400, height: 200 } } }] }
+    answer.content.push({ type: 'code_block', attrs: { language: 'latex' }, content: [{ type: 'text', text: 'm = CVM' }] } as typeof answer.content[number])
+    if (type === 'open') question.suggestedAnswer = answer
+    else (multipartPartNodesOf(question.doc)[0]!.content as Record<string, unknown>[])[1]!.content = answer.content
+    const plan = planExport({ exam: { title: 'Answer image', questions: [question] }, arrangement: { id: 'working', letter: '', questionOrder: [question.id], choiceOrder: {} }, measure: { itemHeight: () => 0 }, selection: { test: false, answerKey: true } })
+    const asked: string[] = []
+    const bytes = await createPublicationPdf([plan], async source => { asked.push(source); return PIXEL_PNG }, fonts)
+    expect(asked).toContain(src)
+    const document = await getDocument({ data: bytes, disableWorker: true }).promise
+    const operators = await (await document.getPage(1)).getOperatorList()
+    expect(operators.fnArray.filter(op => op === OPS.paintImageXObject)).toHaveLength(1)
+    const content = await (await document.getPage(1)).getTextContent()
+    const anchor = content.items.find(item => 'str' in item && item.str === 'Answer anchor')!
+    if (!('str' in anchor)) throw new Error('Missing answer text')
+    let imageLeft = 0
+    for (const [index, op] of operators.fnArray.entries()) {
+      const args = operators.argsArray[index] as number[]
+      if (op === OPS.transform && args[0] === 1 && args[3] === 1 && args[4] !== 0) imageLeft = args[4]!
+      if (op === OPS.paintImageXObject) break
+    }
+    expect(imageLeft).toBeCloseTo(anchor.transform[4]!, 2)
+    const equation = content.items.find(item => 'str' in item && item.str.replace(/\s/g, '') === 'm=CVM')!
+    if (!equation || !('str' in equation)) throw new Error('Missing answer equation')
+    expect(equation.transform[4]).toBeCloseTo(anchor.transform[4]!, 2)
+  })
+}
+
+for (const count of [1, 8]) {
+  test(`answer-key underlines clear numeric answers and brackets with ${count} answers`, async () => {
+    const fixture = FIXTURES.find(f => f.name === 'both sections with the answer key')!
+    const source = fixture.exam.questions.find(question => question.type === 'multiple-choice')!
+    const questions = Array.from({ length: count }, (_, index) => ({ ...source, id: `q${index}`, difficulty: undefined, topics: undefined }))
+    const plan = planExport({ ...fixture, exam: { ...fixture.exam, questions, labelStyles: { answers: { sequence: 'decimal', brackets: 'close' } } }, arrangement: { ...fixture.arrangement, questionOrder: questions.map(q => q.id), choiceOrder: {} }, selection: { test: false, answerKey: true } })
+    const bytes = await createPublicationPdf([plan], noImages, fonts)
+    const page = await (await getDocument({ data: bytes, disableWorker: true }).promise).getPage(1)
+    const content = await page.getTextContent()
+    const answers = content.items.filter(item => 'str' in item && item.str === '2)')
+    expect(answers).toHaveLength(count)
+    const operators = await page.getOperatorList()
+    const rules = operators.argsArray.flatMap((args, index) => operators.fnArray[index] === OPS.constructPath ? [args[2] as Float32Array] : []).filter(bounds => bounds[1] === bounds[3])
+    for (const answer of answers) {
+      if (!('str' in answer)) throw new Error('Missing numeric answer')
+      const x = answer.transform[4]!
+      const rule = rules.find(bounds => bounds[0]! <= x && bounds[2]! >= x + answer.width && Math.abs(bounds[1]! - answer.transform[5]!) < answer.height)
+      expect(rule).toBeDefined()
+      const bottom = answer.transform[5]! + content.styles[answer.fontName]!.descent * answer.height
+      // Include half the stroke thickness and a visible gap below descenders.
+      expect(rule![1]! + 0.3).toBeLessThan(bottom - 0.5)
+    }
+  })
+}

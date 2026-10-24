@@ -166,6 +166,7 @@ import {
 } from './multiple-choice'
 import { DEFAULT_EXAM_COVER } from './page-cover'
 import { configurePastedImages, settlePendingMedia } from './pasted-images'
+import { configureAnswerLatex } from './answer-latex'
 import {
   RESOLVE_IMAGE_EVENT,
   configurePendingImages,
@@ -478,6 +479,7 @@ function CrepeQuestion({
     // dragged within a cell or out of it.
     crepe.editor.config((ctx) => {
       configurePastedImages(ctx)
+      configureAnswerLatex(ctx)
       configurePendingImages(ctx)
       configurePictures(ctx)
       ctx.update(uploadConfig.key, (prev) => ({

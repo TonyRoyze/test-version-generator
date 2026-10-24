@@ -1,4 +1,4 @@
-import { type EssayType } from './essay'
+import { subquestionAnswerSlots, type EssayType } from './essay'
 import type { Ctx, MilkdownPlugin } from '@milkdown/kit/ctx'
 import { createSlice } from '@milkdown/kit/ctx'
 import { $nodeSchema, $prose, $view } from '@milkdown/kit/utils'
@@ -541,7 +541,31 @@ export const multipartPartView = $view(
           view.dispatch(tr.scrollIntoView())
           view.focus()
         })
-        controls.prepend(subquestions)
+        const answers = document.createElement('button')
+        answers.type = 'button'
+        answers.className = 'multipart-part-control essay-answer-subquestions'
+        answers.textContent = 'Answer subquestions'
+        answers.title = 'Add a labelled answer slot for each subquestion and nested prompt. Existing answers are kept.'
+        answers.addEventListener('mousedown', (event) => {
+          event.preventDefault()
+          const pos = getPos()
+          if (!editable() || pos == null) return
+          const part = view.state.doc.nodeAt(pos)
+          if (!part) return
+          const slots = subquestionAnswerSlots(part.firstChild!.toJSON().content ?? [])
+          if (!slots.length) return
+          const answer = part.child(1)
+          // A scaffold is added once; later edits remain ordinary rich text,
+          // so changing a prompt never overwrites an authored answer.
+          if (Array.from({ length: answer.childCount }, (_, i) => answer.child(i)).some(n => n.type.name === 'ordered_list')) return
+          const insertAt = pos + part.nodeSize - 2
+          const nodes = slots.map(slot => view.state.schema.nodeFromJSON(slot))
+          const tr = view.state.tr.insert(insertAt, nodes)
+          tr.setSelection(TextSelection.near(tr.doc.resolve(insertAt + 3)))
+          view.dispatch(tr.scrollIntoView())
+          view.focus()
+        })
+        controls.prepend(subquestions, answers)
       }
       header.append(label, kind.wrap, controls)
 
@@ -551,6 +575,13 @@ export const multipartPartView = $view(
       dom.append(header, contentDOM)
 
       const render = () => {
+        const answerButton = controls.querySelector<HTMLButtonElement>('.essay-answer-subquestions')
+        if (answerButton) {
+          const hasQuestions = subquestionAnswerSlots(node.firstChild!.toJSON().content ?? []).length > 0
+          const hasSlots = Array.from({ length: node.child(1).childCount }, (_, i) => node.child(1).child(i)).some(n => n.type.name === 'ordered_list')
+          answerButton.disabled = !editable() || !hasQuestions || hasSlots
+          answerButton.title = hasSlots ? 'Answer slots already added. Edit the labelled answers below.' : !hasQuestions ? 'Add subquestions first.' : 'Add an answer slot for each subquestion and nested prompt.'
+        }
         const current = partKindOf(node)
         dom.dataset.kind = current
         kindButton.replaceChildren(kindBadge(current))

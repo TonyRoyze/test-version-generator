@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { jpegOrientation, loadExportImages, missingPicture, type MediaLoader } from './export-media'
+import { jpegOrientation, loadExportImages, missingPicture, imageSourcesOf, questionNumberForMedia, type MediaLoader } from './export-media'
 import type { LayoutPlan } from './export-plan'
 import { pictureKey } from './picture-geometry'
 
@@ -76,4 +76,25 @@ describe('jpegOrientation', () => {
     expect(jpegOrientation(cameraJpeg(6).subarray(0, 12))).toBe(1)
     expect(jpegOrientation(new Uint8Array())).toBe(1)
   })
+})
+
+
+test('answer-only media is loaded with its crop and mapped to its question number', async () => {
+  const src = `/local-images/${'b'.repeat(64)}`
+  const crop = { left: 0, top: 0, right: 0.5, bottom: 1, width: 200, height: 100 }
+  const plans = [{ pages: [{ items: [{ kind: 'answer-key-entry', number: 7, letter: null,
+    parts: [{ letter: 'A', answer: null, suggestedAnswer: [{ type: 'ordered_list', content: [{ type: 'list_item', content: [
+      { type: 'image-block', attrs: { src, crop } },
+    ] }] }] }],
+  }] }] }] as LayoutPlan[]
+  const asked: unknown[] = []
+  const loaded = await loadExportImages(plans, async (source, box) => {
+    asked.push([source, box])
+    return { data: new Uint8Array(), type: 'png', width: 100, height: 100 }
+  })
+  expect(asked).toEqual([[src, crop]])
+  expect(imageSourcesOf(plans)).toEqual([src])
+  expect(missingPicture(plans, loaded)).toBeUndefined()
+  expect(questionNumberForMedia(plans, src)).toBe(7)
+  expect(missingPicture(plans, new Map())?.src).toBe(src)
 })
