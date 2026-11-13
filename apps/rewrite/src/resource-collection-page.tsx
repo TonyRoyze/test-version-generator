@@ -1,3 +1,4 @@
+import { useDriveSync } from './drive/drive-sync-context'
 import { CollectionSortControl } from './collection-sort'
 import { useCollectionSort } from './use-collection-sort'
 import { sortExams, sortBanks } from './resource-collections'
@@ -44,6 +45,7 @@ export function ResourceCollectionPage({
   onDeleteExam?: (exam: RecentExam) => void
   onImportBank?: () => void
 }) {
+  const drive = useDriveSync()
   const [examSort, setExamSort] = useCollectionSort('exams')
   const [bankSort, setBankSort] = useCollectionSort('question-banks')
   const [query, setQuery] = useState('')
@@ -71,6 +73,7 @@ export function ResourceCollectionPage({
       <header className="collection-heading">
         <h1>{resourceName}</h1>
         <div className="collection-actions">
+          {drive?.configured && <Button variant="outline" disabled={drive.busy !== null} onClick={() => void drive.addFromDrive(null)}>Add from Google Drive…</Button>}
           {isExams && onGenerateExam && <Button variant="outline" onClick={onGenerateExam}><Dices />Generate exam</Button>}
           {!isExams && onImportBank && (
             <Button variant="outline" type="button" className="secondary-button" onClick={onImportBank}>

@@ -30,7 +30,7 @@ import {
 } from './picture-geometry'
 
 export const QUESTION_BANK_FORMAT = 'test-parrot/question-bank'
-export const QUESTION_BANK_FORMAT_VERSION = '0.11.0'
+export const QUESTION_BANK_FORMAT_VERSION = '0.12.0'
 export const QUESTION_BANK_ATTACHMENT_NAME = 'pdfcx.json'
 export const QUESTION_BANK_ATTACHMENT_DESCRIPTION = 'pdf-canonical-extraction'
 
@@ -218,6 +218,7 @@ export type QuestionBankRecordQuestion = {
   stem: SemanticDocument
   difficulty?: Difficulty
   topics?: string[]
+  source?: string
   choices?: QuestionBankRecordChoice[]
   prompts?: QuestionBankRecordPrompt[]
   wordBank?: { id: string; content: SemanticDocument }[]
@@ -538,6 +539,7 @@ function portableQuestion(
       ? { topics: [...topicsOf(question)] }
       : {}),
     ...(question.answerReason ? { answerReason: question.answerReason } : {}),
+    ...(question.source?.trim() ? { source: question.source.trim() } : {}),
   }
   if (question.type === 'open') {
     return {

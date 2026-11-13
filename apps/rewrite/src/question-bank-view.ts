@@ -76,11 +76,9 @@ export function topicOptions(bank: QuestionBank): string[] {
 function matchesSearch(question: Question, search: string): boolean {
   const wanted = search.trim().toLowerCase()
   if (wanted === '') return true
-  // The projection the row showed, so what can be found is what was on screen —
-  // and, for a Multipart question, the stems of the Parts the row counts: answer choices,
-  // correctness and everything else behind the popup are out of reach of search
-  // by construction rather than by a second rule.
-  return searchableText(question).toLowerCase().includes(wanted)
+  // Search the displayed stem and attribution, including Multipart Part stems.
+  // Answer choices and correctness remain outside bank search.
+  return `${searchableText(question)}\n${question.source ?? ''}`.toLowerCase().includes(wanted)
 }
 
 function matchesDifficulty(

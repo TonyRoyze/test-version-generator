@@ -1,5 +1,6 @@
 import { hasParts, isEssayType } from './essay'
 import questionBankSchema0110 from './question-bank-record-0.11.0.schema.json'
+import questionBankSchema0120 from './question-bank-record-0.12.0.schema.json'
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020'
 import { DEFAULT_COLUMNS, type Question, type QuestionType } from './exam'
 import type { ProseMirrorJSON } from './question-doc'
@@ -329,6 +330,7 @@ export function importedQuestionIdentities(
       },
       ...(question.difficulty ? { difficulty: question.difficulty } : {}),
       ...(question.topics ? { topics: [...question.topics] } : {}),
+      ...(question.source?.trim() ? { source: question.source.trim() } : {}),
       ...(question.answerReason ? { answerReason: question.answerReason } : {}),
       ...(question.suggestedAnswer
         ? {
@@ -366,6 +368,7 @@ const validate060 = ajv.compile(questionBankSchema060)
 const validate070 = ajv.compile(questionBankSchema070)
 const validate080 = ajv.compile(questionBankSchema080)
 const validate0110 = ajv.compile(questionBankSchema0110)
+const validate0120 = ajv.compile(questionBankSchema0120)
 const validate0100 = ajv.compile(questionBankSchema0100)
 const validate090 = ajv.compile(questionBankSchema090)
 
@@ -386,15 +389,16 @@ type CopyContext = {
   /** Whether the record's choices may say they are locked; an older record
    *  that carries `locked` carries an unknown optional field, ignored. */
   locks: boolean
+  sources: boolean
   media: ReadonlyMap<string, { width: number; height: number }>
 }
 
 /** The versions whose `authoredSize` is a share of the picture's container,
  *  and which know the Picture Crop — both added in 0.7.0. */
-const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
+const SHARE_SIZE_VERSIONS: ReadonlySet<string> = new Set(['0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0', '0.12.0'])
 
 /** The versions that know the Locked Answer, added in 0.9.0. */
-const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0', '0.10.0', '0.11.0'])
+const LOCKED_ANSWER_VERSIONS: ReadonlySet<string> = new Set(['0.9.0', '0.10.0', '0.11.0', '0.12.0'])
 
 function copyPicture(node: SemanticNode, context: CopyContext): Partial<SemanticNode> {
   const size =
@@ -461,6 +465,7 @@ function copyQuestion(question: QuestionBankRecordQuestion, context: CopyContext
     stem: copyDocument(question.stem),
     ...(question.difficulty !== undefined ? { difficulty: question.difficulty } : {}),
     ...(question.topics !== undefined ? { topics: [...question.topics] } : {}),
+    ...(context.sources && question.source?.trim() ? { source: question.source.trim() } : {}),
     ...(question.choices !== undefined
       ? { choices: question.choices.map(copyChoice) }
       : {}),
@@ -562,10 +567,10 @@ function misplacedContent(value: unknown): string | undefined {
 }
 
 /** The versions that know the Pending Image, added in 0.5.0. */
-const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
+const PENDING_IMAGE_VERSIONS: ReadonlySet<string> = new Set(['0.5.0', '0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0', '0.12.0'])
 
 /** The versions that know the Side-by-Side, added in 0.6.0. */
-const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0'])
+const SIDE_BY_SIDE_VERSIONS: ReadonlySet<string> = new Set(['0.6.0', '0.7.0', '0.8.0', '0.9.0', '0.10.0', '0.11.0', '0.12.0'])
 
 /** Where a Side-by-Side may stand: a top-level block of a Question's stem or
  *  of a Multipart Part's stem, and nowhere else. */
@@ -787,6 +792,7 @@ function parseWith(
           currentSize: SHARE_SIZE_VERSIONS.has(sourceVersion),
           crops: SHARE_SIZE_VERSIONS.has(sourceVersion),
           locks: LOCKED_ANSWER_VERSIONS.has(sourceVersion),
+          sources: sourceVersion === '0.12.0',
           media: new Map(record.media.map((asset) => [asset.id, asset])),
         }),
       ),
@@ -850,6 +856,7 @@ export const SUPPORTED_QUESTION_BANK_VERSIONS: Readonly<Record<string, Parser>> 
     '0.9.0': parser090,
     '0.10.0': parser0100,
     '0.11.0': (value) => parseWith(validate0110, '0.11.0', value),
+    '0.12.0': (value) => parseWith(validate0120, '0.12.0', value),
   })
 
 const utf8 = new TextDecoder('utf-8', { fatal: true })

@@ -428,7 +428,7 @@ describe('Question Bank exchange export seam', () => {
   test('writes a Multipart question as its material and lettered Parts, each under a package-local id', async () => {
     const { record } = await prepareQuestionBankExport(bank([multipart, emptyMultipart]))
 
-    expect(record.formatVersion).toBe('0.11.0')
+    expect(record.formatVersion).toBe(QUESTION_BANK_FORMAT_VERSION)
     expect(record.bank.questions[0]).toEqual({
       id: 'q1',
       type: 'multipart',
@@ -659,7 +659,7 @@ describe('Question Bank exchange export seam', () => {
 
   test('attaches its bank as a package zip, the sole canonical attachment, and renders a complete preview', async () => {
     const prepared = await prepareQuestionBankExport(
-      bank([shortAnswer, multipleChoice]),
+      bank([{ ...shortAnswer, source: 'GCE O/L 2024 2 (i) a)' }, multipleChoice]),
     )
     const bytes = await createQuestionBankPdf(prepared, fonts)
     const source = new TextDecoder('latin1').decode(bytes)
@@ -682,6 +682,7 @@ describe('Question Bank exchange export seam', () => {
     expect(preview).toContain('TEST PARROT')
     expect(preview).toContain('QUESTION BANK FILE')
     expect(preview).toContain('Chemistry / Review')
+    expect(preview).toContain('Source: GCE O/L 2024 2 (i) a)')
     expect(preview).toContain('2 Questions')
     expect(preview).toContain('A digital file for importing into Test Parrot')
     expect(preview).toContain('answers included')
@@ -895,7 +896,7 @@ describe('a Question Bank with Pending Images', () => {
     const prepared = await prepareQuestionBankExport(bank([pictured]), async () => {
       throw new Error('a Pending Image has no media to load')
     })
-    expect(prepared.record.formatVersion).toBe('0.11.0')
+    expect(prepared.record.formatVersion).toBe(QUESTION_BANK_FORMAT_VERSION)
     expect(prepared.record.media).toEqual([])
     expect(prepared.record.bank.questions[0]!.stem.content[1]).toEqual({
       type: 'block-image',

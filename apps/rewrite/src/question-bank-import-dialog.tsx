@@ -258,6 +258,7 @@ function readingOfRecordQuestion(
     typeLabel: RECORD_TYPE_LABELS[question.type],
     difficulty: question.difficulty,
     topics: question.topics ?? [],
+    source: question.source,
     stem: previewDocument(question.stem),
     ...(question.choices ? {
       choices: question.choices.map((choice) => choiceOf(choice, question.type === 'multiple-choice')),

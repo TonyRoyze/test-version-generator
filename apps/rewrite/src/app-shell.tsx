@@ -1,3 +1,5 @@
+import { useDriveSync } from './drive/drive-sync-context'
+import { SyncButton } from './drive/sync-button'
 import { Modal } from '@/components/modal'
 import {
   Breadcrumb,
@@ -106,6 +108,7 @@ export function AppShell({
   actions?: ReactNode
   children: ReactNode
 }) {
+  const drive = useDriveSync()
   const route = useRoute()
   return (
     <div className="app-shell">
@@ -158,6 +161,7 @@ export function AppShell({
           </Breadcrumb>
           <div className="app-topbar-actions">
             {actions}
+            {drive?.configured && <SyncButton drive={drive} />}
             <AccountBadge status={persistentStorage} />
           </div>
         </header>

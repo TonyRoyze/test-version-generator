@@ -1,3 +1,4 @@
+import { DriveSettings } from './drive/drive-settings'
 import { AccountSettings } from './account-settings'
 import { BackupSettings } from './account-menu'
 import { AppShell } from './app-shell'
@@ -14,6 +15,7 @@ export function SettingsPage({ persistentStorage }: { persistentStorage: Persist
         <h1>Settings</h1>
         <p className="site-lede">Your work is saved in this browser. Manage your account, cloud copy, and backups here.</p>
         <AccountSettings />
+        <DriveSettings />
         <BackupSettings status={persistentStorage} />
       </div>
     </AppShell>

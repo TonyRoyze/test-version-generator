@@ -17,7 +17,14 @@ import {
   STORAGE_VERSION,
 } from './storage-schema'
 
-export type ExamSummary = { id: string; createdAt: string; lastOpenedAt: string }
+export type ExamSummary = {
+  id: string
+  createdAt: string
+  lastOpenedAt: string
+  /** Derived content revision, retained in backups so restoring does not look
+   *  like a new edit to Drive. Opening an Exam leaves this unchanged. */
+  contentRevision?: { digest: string; modifiedAt: string }
+}
 type ActiveWorkspace = { key: 'active'; examId: string }
 export type RecentExam = ExamSummary & {
   title: string
@@ -406,6 +413,45 @@ export function createExamWorkspaceService(options: { now?: () => Date; createId
         ))
         throw error
       }
+    },
+    async contentModifiedAt(id: string, digest: string): Promise<string> {
+      return transact(EXAM_STORE, 'readwrite', async transaction => {
+        const store = transaction.objectStore(EXAM_STORE)
+        const exam = await requestOf(store.get(id)) as ExamSummary | undefined
+        if (!exam) throw new Error('That Exam is unavailable on this device.')
+        if (exam.contentRevision?.digest === digest) return exam.contentRevision.modifiedAt
+        const modifiedAt = now().toISOString()
+        store.put({ ...exam, contentRevision: { digest, modifiedAt } } satisfies ExamSummary)
+        return modifiedAt
+      })
+    },
+    /**
+     * Writes an Exam that came down from its Drive Copy (ADR-0052): its saved
+     * state and Working Copy both become `saved`, its Export History stays,
+     * and a new registry entry is created when needed. Drive change detection
+     * fingerprints the Working Copy separately from last-opened timestamps.
+     */
+    async applyDriveCopy(id: string, saved: Omit<AuthoringState, 'dirty'>): Promise<string> {
+      const timestamp = now().toISOString()
+      if (await service.exists(id)) {
+        const backend = createIndexedDBAuthoringBackend(examDatabaseName(id))
+        try {
+          await backend.commitCanonicalProjection({ working: { ...saved, dirty: false }, saved })
+        } finally {
+          await backend.close()
+        }
+        return timestamp
+      }
+      const backend = createIndexedDBAuthoringBackend(examDatabaseName(id))
+      try {
+        await backend.initialize(saved, { ...saved, dirty: false })
+      } finally {
+        await backend.close()
+      }
+      await transact(EXAM_STORE, 'readwrite', (transaction) => {
+        transaction.objectStore(EXAM_STORE).put({ id, createdAt: timestamp, lastOpenedAt: timestamp } satisfies ExamSummary)
+      })
+      return timestamp
     },
     async removePristine(id: string): Promise<boolean> {
       const backend = backendFor(id)

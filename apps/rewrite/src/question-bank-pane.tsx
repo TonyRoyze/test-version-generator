@@ -24,7 +24,7 @@ import {
 // Filter values and row selection are handed in rather than stored here. The
 // workspace may persist filters, but neither state enters authoring history.
 
-import { Check, ChevronDown, CircleMinus, Pencil, Plus, Search, SlidersHorizontal, Upload } from 'lucide-react'
+import { Check, Ellipsis, ChevronDown, CircleMinus, Pencil, Plus, Search, SlidersHorizontal, Upload } from 'lucide-react'
 import {
   useEffect,
   useRef,
@@ -33,7 +33,7 @@ import {
   type ReactNode,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
-import type { MenuPoint } from './context-menu'
+import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
 import {
   partsOf,
   type Question,
@@ -129,6 +129,7 @@ export function QuestionBankPane({
   bank,
   layout = 'rows',
   heading,
+  moreItems = [],
   extraActions,
   workingCopyIds,
   filter,
@@ -161,6 +162,7 @@ export function QuestionBankPane({
   /** Actions belonging to the surface the pane is mounted on rather than to
    *  the bank, laid out ahead of the bank's own. */
   extraActions?: ReactNode
+  moreItems?: readonly MenuItem[]
   /** Which bank records the Working Copy currently references. */
   workingCopyIds: ReadonlySet<string>
   filter: QuestionBankFilter
@@ -195,6 +197,8 @@ export function QuestionBankPane({
    *  a worse way to say so. */
   drag: WorkspaceDrag
 }) {
+  const moreButton = useRef<HTMLButtonElement>(null)
+  const [moreMenu, setMoreMenu] = useState<MenuPoint | null>(null)
   const [scrolled, setScrolled] = useState(false)
   const copying = useQuestionCopy()
   const questions = browseQuestionBank(bank, filter)
@@ -628,19 +632,6 @@ export function QuestionBankPane({
           {heading ?? <h2>Question Bank</h2>}
           <div className="question-bank-header-actions">
             {extraActions}
-            {onExport && <Button variant={layout === 'page' ? 'default' : 'plain'} size="content"
-              type="button"
-              className={layout === 'page' ? 'primary-button' : 'toolbar-icon-button'}
-              aria-label="Export Question Bank"
-              title="Export Question Bank"
-              aria-haspopup="dialog"
-              aria-describedby={bank.questions.length === 0 ? 'empty-bank-export-help' : exportBlocked ? 'editing-bank-export-help' : undefined}
-              disabled={bank.questions.length === 0 || exportBlocked}
-              onClick={onExport}
-            >
-              <Upload aria-hidden="true" />
-              {layout === 'page' && 'Export'}
-            </Button>}
             {onCreate && <Button variant={layout === 'page' ? 'outline' : 'plain'} size="content"
               type="button"
               className={layout === 'page' ? 'secondary-button' : 'toolbar-icon-button'}
@@ -657,6 +648,45 @@ export function QuestionBankPane({
               <Plus aria-hidden="true" />
               {layout === 'page' && 'New question'}
             </Button>}
+            {/* Everything but New question waits behind one More button after
+                it, so the header stays quiet beside the bank's name. */}
+            {(moreItems.length > 0 || onExport) && <Button variant="ghost" size="icon-sm"
+              type="button"
+              className="toolbar-icon-button question-bank-more-button"
+              ref={moreButton}
+              aria-label="More actions"
+              title="More actions"
+              aria-haspopup="menu"
+              aria-expanded={moreMenu !== null}
+              aria-describedby={onExport && bank.questions.length === 0 ? 'empty-bank-export-help' : onExport && exportBlocked ? 'editing-bank-export-help' : undefined}
+              onClick={(event) => {
+                const bounds = event.currentTarget.getBoundingClientRect()
+                setMoreMenu((current) => (current ? null : { x: bounds.right, y: bounds.bottom + 4 }))
+              }}
+            >
+              <Ellipsis aria-hidden="true" />
+            </Button>}
+            {moreMenu && <ContextMenu
+              point={moreMenu}
+              side="left"
+              ariaLabel="More actions"
+              items={[
+                ...moreItems,
+                ...(onExport ? [{
+                  kind: 'action' as const,
+                  label: 'Export',
+                  icon: <Upload />,
+                  disabled: bank.questions.length === 0 || exportBlocked,
+                  onSelect: () => {
+                    // The menu item unmounts; the export dialog returns focus
+                    // to the durable control that opened the menu.
+                    moreButton.current?.focus()
+                    onExport()
+                  },
+                }] : []),
+              ]}
+              onClose={() => setMoreMenu(null)}
+            />}
             {onExport && bank.questions.length === 0 && <span id="empty-bank-export-help" className="sr-only">At least one Question is required.</span>}
             {onExport && exportBlocked && <span id="editing-bank-export-help" className="sr-only">Save or cancel the open Question edit before exporting.</span>}
           </div>

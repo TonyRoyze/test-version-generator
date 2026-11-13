@@ -18,6 +18,7 @@ export type QuestionReadingContent = {
   typeLabel: string
   difficulty?: Difficulty
   topics: readonly string[]
+  source?: string
   stem: ProseMirrorJSON[]
   /** `locked` marks a Locked Answer, which keeps its letter when answers are
    *  shuffled. */
@@ -52,6 +53,7 @@ export function readingOfQuestion(question: Question): QuestionReadingContent {
     typeLabel: SECTION_LABELS[question.type],
     difficulty: question.difficulty,
     topics: topicsOf(question),
+    source: question.source,
     stem: stemNodesOf(question.doc),
     answerReason: question.answerReason,
   }

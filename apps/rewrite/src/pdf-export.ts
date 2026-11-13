@@ -10,6 +10,7 @@ import { paperBookAnswersOf, paperBookAnswerText, paperBookReasonParts } from '.
 // Assets as image XObjects. Any content that would escape its planned content
 // box stops publication instead of being clipped, shrunk, or repaginated.
 
+import './fontkit-runtime'
 import fontkit from '@pdf-lib/fontkit'
 import {
   AFRelationship,

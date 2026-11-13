@@ -1,3 +1,4 @@
+import { driveUrlOf, useDriveSync } from './drive/drive-sync-context'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -183,8 +184,11 @@ export function ExamCard({
   onDelete?: (exam: RecentExam) => void
 }) {
   const [menu, setMenu] = useState<MenuPoint | null>(null)
+  const drive = useDriveSync()
+  const driveUrl = drive?.connected ? driveUrlOf(drive.state, { kind: 'exam', id: exam.id }) : null
   const menuItems: MenuItem[] = [
     { kind: 'action', label: 'Open', icon: <FolderOpen />, onSelect: () => onOpen(exam.id) },
+    ...(driveUrl ? [{ kind: 'action' as const, label: 'View in Google Drive', onSelect: () => { window.open(driveUrl, '_blank', 'noopener') } }] : []),
     ...(onDelete ? [
       { kind: 'separator' } as const,
       { kind: 'action' as const, label: 'Delete', icon: <Trash2 />, destructive: true, onSelect: () => onDelete(exam) },
@@ -238,7 +242,10 @@ export function QuestionBankCard({
   // every tile in a grid says "delete" far louder than a grid should.
   const [menu, setMenu] = useState<MenuPoint | null>(null)
   const popOver = usePopOver()
+  const drive = useDriveSync()
+  const driveUrl = drive?.connected ? driveUrlOf(drive.state, { kind: 'bank', id: bank.id }) : null
   const items: MenuItem[] = [
+    ...(driveUrl ? [{ kind: 'action' as const, label: 'View in Google Drive', onSelect: () => { window.open(driveUrl, '_blank', 'noopener') } }] : []),
     { kind: 'action', label: 'Open', icon: <FolderOpen />, onSelect: () => onOpen(bank.id) },
     ...(popOver.supported
       ? [{ kind: 'action' as const, label: 'Pop-over', icon: <PictureInPicture2 />, onSelect: () => popOver.open(bank.id) }]

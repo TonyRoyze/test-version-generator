@@ -130,6 +130,8 @@ export type Question = {
   // record written before either existed still reads as a valid question.
   difficulty?: Difficulty
   topics?: string[]
+  /** Optional attribution, including the original exam and question reference. */
+  source?: string
 }
 
 export type Exam = {
