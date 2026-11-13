@@ -42,6 +42,7 @@ export function QuestionReading({
       {content.topics.map((topic) => <TopicBadge key={topic} topic={topic} />)}
       {aside}
     </div>
+    {content.source && <p className="question-source">Source: {content.source}</p>}
     <DocView className="question-reading-stem" content={content.stem} />
     {content.choices && (
       <ol type="A" className="question-reading-choices">

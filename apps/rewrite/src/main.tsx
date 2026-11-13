@@ -1,3 +1,6 @@
+import { afterRestore, browserSyncStateStore } from './drive/sync-state'
+import { DriveSyncProvider } from './drive/drive-sync'
+import { createDriveResourceLibrary, resetDriveResourceMetadata } from './drive/resource-library'
 import { Button } from '@/components/ui/button'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
@@ -24,7 +27,7 @@ import { initialAuthAction, supabase } from './supabase'
 const root = createRoot(document.getElementById('root')!)
 const startingPath = window.location.pathname
 
-function ExamStartupSkeleton() {
+export function ExamStartupSkeleton() {
   return <main className="exam-startup" aria-label="Loading Exam editor">
     <header className="exam-startup-toolbar" aria-hidden="true">
       <img className="app-logo" src="/logo.png" alt="" width={36} height={36} />
@@ -121,6 +124,12 @@ async function start() {
   }
   // A restore replaces the account before anything below opens it.
   const restored = await applyStagedRestore()
+  if (restored?.applied) {
+    // Both file restores and Drive restores replace the resource identities.
+    // Old mappings must not turn missing resources into deletion tombstones.
+    resetDriveResourceMetadata()
+    browserSyncStateStore.write(afterRestore(browserSyncStateStore.read()))
+  }
   const restoreError = restored && !restored.applied
     ? 'The backup could not be restored, so nothing in this browser was changed.'
     : ''
@@ -186,7 +195,8 @@ async function start() {
     persistentStorageStatus(),
   ])
   const collection = await questionBankCollection(banks, bankWorkspaces, workspaces)
-  root.render(<StrictMode><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></StrictMode>)
+  const driveServices = { workspaces, bankWorkspaces, library: createDriveResourceLibrary(workspaces, bankWorkspaces) }
+  root.render(<StrictMode><DriveSyncProvider services={driveServices}><PopOverProvider service={bankWorkspaces}><App store={store} bank={bank} workspaces={workspaces} bankWorkspaces={bankWorkspaces} initialExams={exams} initialBankCollection={collection} persistentStorage={storageStatus} initialEditorId={editorId} initialError={error} /></PopOverProvider></DriveSyncProvider></StrictMode>)
 }
 void start().catch(error => {
   root.render(<main className="site-prose login-page"><h1>Could not open your workspace</h1><p role="alert">{error instanceof Error ? error.message : 'Please try again.'}</p><Button variant="plain" size="content" onClick={() => window.location.reload()}>Retry</Button><Button variant="plain" size="content" onClick={() => void supabase?.auth.signOut({ scope: 'local' }).then(() => window.location.reload())}>Sign out</Button></main>)

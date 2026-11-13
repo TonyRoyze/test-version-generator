@@ -315,6 +315,7 @@ export function PopOverQuestionPreview({
     </div>
     {/* A Multipart question shows every Part whole, since each has its own
         layout; any other card cuts each half off at a few lines. */}
+    {question.source && <p className="question-source">Source: {question.source}</p>}
     {whole
       ? <div className="pop-over-stem-half">{stem}</div>
       : <Clipped className="pop-over-stem-half">{stem}</Clipped>}

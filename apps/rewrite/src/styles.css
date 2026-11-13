@@ -1798,6 +1798,14 @@ body.margins-scrubbing, body.margins-scrubbing * { cursor: ew-resize !important;
 .front-matter-stated:hover { background: transparent; }
 .front-matter-blank { color: #9c8b7c; font-size: 13px; }
 
+.question-source {
+  margin: 4px 0 8px;
+  color: var(--paper-ink-soft);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 /* The list of what can be chosen, with a box to narrow it. Typing filters and
    moves the highlight; it never rewrites a value, because the spelling is the
    teacher's. */

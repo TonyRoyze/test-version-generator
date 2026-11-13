@@ -1,9 +1,13 @@
+import { DriveDeletionNotice } from './drive/deletion-notice'
+import { driveUrlOf, LIBRARY_CHANGED_EVENT, useDriveSync } from './drive/drive-sync-context'
+import { OpenFromDrivePage } from './drive/open-page'
 import { questionOrderScope, type ExamQuestionSort } from './exam-question-order'
 import { hasParts, isEssayType } from './essay'
 import { FrontMatterSelect } from '@/components/front-matter-select'
 import { Modal } from '@/components/modal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Field, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { size } from '@floating-ui/dom'
 import { Crepe } from '@milkdown/crepe'
@@ -64,7 +68,7 @@ import { createPortal } from 'react-dom'
 import { AppShell } from './app-shell'
 import { DifficultyBadge, TopicBadge } from './badges'
 import { BankFileDropTarget } from './bank-file-drop'
-import { ContextMenu, type MenuPoint } from './context-menu'
+import { ContextMenu, type MenuItem, type MenuPoint } from './context-menu'
 import { ConvertPage } from './convert-page'
 import { CoverDesignPage } from './cover-page-view'
 import { CoverTemplatesPage } from './cover-templates-page'
@@ -581,6 +585,7 @@ function QuestionDialog({
   )
   const [difficulty, setDifficulty] = useState<Difficulty | ''>(question.difficulty ?? '')
   const [topics, setTopics] = useState<readonly string[]>(topicsOf(question))
+  const [source, setSource] = useState(question.source ?? '')
   const latestDoc = useRef(doc)
   const readEditorDocument = useRef<(() => ProseMirrorJSON) | null>(null)
   const [saving, setSaving] = useState(false)
@@ -623,6 +628,8 @@ function QuestionDialog({
       else delete saved.difficulty
       if (topics.length > 0) saved.topics = [...topics]
       else delete saved.topics
+      if (source.trim()) saved.source = source.trim()
+      else delete saved.source
       if (type === 'multiple-choice' || type === 'true-false') {
         const explanation = explanationTextOf(suggestedAnswerDocumentOf(edited))
         if (explanation) saved.answerReason = explanation
@@ -751,6 +758,18 @@ function QuestionDialog({
             onCreate={(value) => setTopics(withTopicAdded(topics, value))}
             renderValue={(value) => <TopicBadge topic={value} />}
           />
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="question-source" className="front-matter-label">
+              <BookOpenText />
+              Source
+            </FieldLabel>
+            <Input
+              id="question-source"
+              value={source}
+              onChange={(event) => setSource(event.target.value)}
+              placeholder={isEssayType(type) ? 'e.g. GCE O/L 2024 2 (i) a)' : 'e.g. GCE O/L 2024 34'}
+            />
+          </Field>
         </div>
         <div className="dialog-editor">
           <MilkdownProvider>
@@ -856,6 +875,7 @@ function BankDeletionConfirmation({ bank, impact, onCancel, onConfirm }: {
     onConfirm={onConfirm}
   >
     <p>This cannot be undone.</p>
+    <DriveDeletionNotice kind="bank" id={bank.id} />
     {bank.questionCount === 0 ? <p>This empty Question Bank will be permanently deleted.</p> : <>
       <p>{bank.questionCount} {bank.questionCount === 1 ? 'Question' : 'Questions'} will be permanently deleted.</p>
       <p>{impact.length} affected {impact.length === 1 ? 'Exam' : 'Exams'}:</p>
@@ -878,6 +898,7 @@ function ExamDeletionConfirmation({ exam, onCancel, onConfirm }: {
     onConfirm={onConfirm}
   >
     <p>This removes the paper, including its saved and unsaved questions and export history. This cannot be undone.</p>
+    <DriveDeletionNotice kind="exam" id={exam.id} />
     <p>Question Banks used by this paper will remain available.</p>
   </DestructiveConfirmation>
 }
@@ -940,6 +961,7 @@ function QuestionBankWorkspace({
   bank,
   layout,
   heading,
+  moreItems,
   extraActions,
   service,
   filter,
@@ -965,6 +987,7 @@ function QuestionBankWorkspace({
    *  the bank. See `QuestionBankPane`. */
   heading?: ReactNode
   extraActions?: ReactNode
+  moreItems?: readonly MenuItem[]
   service: QuestionBankWorkspaceService
   filter: QuestionBankFilter
   onFilterChange: (filter: QuestionBankFilter) => void
@@ -998,6 +1021,7 @@ function QuestionBankWorkspace({
       layout={layout}
       heading={heading}
       extraActions={extraActions}
+      moreItems={moreItems}
       workingCopyIds={workingCopyIds}
       filter={filter}
       onFilterChange={onFilterChange}
@@ -1475,6 +1499,8 @@ function QuestionBankPage({
   onImportInto: (bankId: string) => void
 }) {
   const [bank, setBank] = useState(initialBank)
+  const drive = useDriveSync()
+  const inDrive = drive?.connected ? driveUrlOf(drive.state, { kind: 'bank', id: bank.id }) : null
   const popOver = usePopOver()
   const [name, setName] = useState(initialBank.name)
   const [filter, setFilter] = useState<QuestionBankFilter>(NO_FILTER)
@@ -1573,21 +1599,11 @@ function QuestionBankPage({
           />
           {nameError && <p className="home-error bank-name-error" role="alert">{nameError}</p>}
         </div>}
-        extraActions={<>
-          {popOver.supported && <Button variant="outline"
-            type="button"
-            className="secondary-button"
-            title="Keep this Question Bank on top of other windows, to copy Questions from"
-            onClick={() => popOver.open(bank.id)}
-          >
-            <PictureInPicture2 aria-hidden="true" />
-            Pop-over
-          </Button>}
-          <Button variant="outline" type="button" className="secondary-button" aria-haspopup="dialog" onClick={() => onImportInto(bank.id)}>
-            <Import aria-hidden="true" />
-            Import
-          </Button>
-        </>}
+        moreItems={[
+          ...(popOver.supported ? [{ kind: 'action' as const, label: 'Pop-over', icon: <PictureInPicture2 />, onSelect: () => popOver.open(bank.id) }] : []),
+          { kind: 'action', label: 'Import', icon: <Import />, onSelect: () => onImportInto(bank.id) },
+          ...(inDrive ? [{ kind: 'action' as const, label: 'Open in Google Drive', onSelect: () => { window.open(inDrive, '_blank', 'noopener') } }] : []),
+        ]}
         service={bankWorkspaces}
         filter={filter}
         onFilterChange={setFilter}
@@ -2860,6 +2876,25 @@ export default function App({
   const [importWaitingId, setImportWaitingId] = useState<string | null>(null)
   /** Bumped whenever an import may have finished, for the Imports pages. */
   const [importRevision, setImportRevision] = useState(0)
+  useEffect(() => {
+    const changed = () => {
+      void Promise.all([workspaces.recent(), bankWorkspaces.recent()]).then(async ([recent, banks]) => {
+        setExams(recent)
+        setBankCollection(await questionBankCollection(banks, bankWorkspaces, workspaces))
+        setBankLibraryRevision(revision => revision + 1)
+        const bankId = new URLSearchParams(window.location.search).get('id')
+        if (window.location.pathname === '/question-bank' && bankId) {
+          const search = window.location.search
+          const bank = await bankWorkspaces.read(bankId)
+          if (bank) setPageBank({ bank, search })
+          else navigate('/question-banks')
+        }
+      }).catch(error => setHomeError(error instanceof Error ? error.message : 'Could not refresh synced work.'))
+    }
+    window.addEventListener(LIBRARY_CHANGED_EVENT, changed)
+    return () => window.removeEventListener(LIBRARY_CHANGED_EVENT, changed)
+  }, [bankWorkspaces, workspaces])
+
   const openImport = useCallback((file?: File | null, targetBankId?: string | null, waitingImportId?: string | null) => {
     setDroppedBankFile(file ?? null)
     setImportTargetBankId(targetBankId ?? null)
@@ -3163,6 +3198,7 @@ export default function App({
   }
   if (route === '/about') return <>{globalChrome}<AboutPage persistentStorage={storageStatus} /></>
   if (route === '/privacy') return <>{globalChrome}<PrivacyPage persistentStorage={storageStatus} /></>
+  if (route === '/open') return <>{globalChrome}<OpenFromDrivePage persistentStorage={storageStatus} /></>
   if (route === '/settings' || route === '/login') return <>{globalChrome}<SettingsPage persistentStorage={storageStatus} /></>
   if (route === '/exams/generate') return <>{globalChrome}<RandomExamPage
     bankWorkspaces={bankWorkspaces}
@@ -3229,7 +3265,7 @@ export default function App({
     onImport={() => openImport()}
   />{bankExportDialog}{bankDeletionConfirmation}{examDeletionConfirmation}</>
   if (route === '/question-bank') return pageBank && pageBankReady ? <>{globalChrome}<QuestionBankPage
-    key={pageBank.bank.id}
+    key={`${pageBank.bank.id}:${bankLibraryRevision}`}
     bank={pageBank.bank}
     bankWorkspaces={bankWorkspaces}
     workspaces={workspaces}

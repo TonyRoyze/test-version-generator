@@ -132,11 +132,12 @@ test('teacher exports the complete active Question Bank without Exam or history 
   await page
     .getByRole('searchbox', { name: 'Search question stems' })
     .fill('neutral')
-  await page.getByRole('button', { name: 'Export Question Bank' }).click()
+  await page.getByRole('button', { name: 'More actions', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click()
 
   const preview = page.getByRole('dialog', { name: 'Export Question Bank' })
   await expect(preview).toContainText(
-    'Teacher Question Bank containing answers',
+    'For teachers: this file contains correct answers and Suggested Answers.',
   )
   await expect(preview).toContainText('2 Questions')
   await expect(preview).toContainText('Explain conservation of mass.')
@@ -152,25 +153,25 @@ test('teacher exports the complete active Question Bank without Exam or history 
     'chemistry-review-1.question-bank.pdf',
   )
   expect(await counts(page, bankId)).toEqual(before)
-  await expect(
-    page.getByRole('tab', { name: 'Chemistry: Review / 1' }),
-  ).toHaveAttribute('aria-selected', 'true')
+  await expect(page.getByRole('textbox', { name: 'Question Bank name' })).toHaveValue('Chemistry: Review / 1')
 })
 
 test('export dialog traps focus and cancellation produces no download', async ({ page }) => {
   const bankId = await seed(page)
   await page.goto(`/question-bank?id=${bankId}`)
-  const trigger = page.getByRole('button', { name: 'Export Question Bank' })
+  const trigger = page.getByRole('button', { name: 'More actions', exact: true })
   await trigger.focus()
   await trigger.click()
+  await page.getByRole('menuitem', { name: 'Export', exact: true }).click()
   const dialog = page.getByRole('dialog', { name: 'Export Question Bank' })
   await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
   const downloads: string[] = []
   page.on('download', (download) => downloads.push(download.suggestedFilename()))
-  await page.keyboard.press('Shift+Tab')
-  await expect(dialog.getByRole('button', { name: 'Download PDF' })).toBeFocused()
-  await page.keyboard.press('Tab')
-  await expect(dialog.getByRole('button', { name: 'Cancel' })).toBeFocused()
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press(i % 2 ? 'Tab' : 'Shift+Tab')
+    await expect(dialog).toContainText('Download PDF')
+    expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true)
+  }
   await page.keyboard.press('Escape')
   await expect(dialog).toBeHidden()
   await expect(trigger).toBeFocused()
@@ -193,7 +194,8 @@ test('empty bank explains why export is unavailable and an open edit must be res
     ).id
   })
   await page.goto(`/question-bank?id=${emptyId}`)
-  await expect(page.getByRole('button', { name: 'Export Question Bank' })).toBeDisabled()
+  await page.getByRole('button', { name: 'More actions', exact: true }).click()
+  await expect(page.getByRole('menuitem', { name: 'Export', exact: true })).toBeDisabled()
   await expect(
     page.getByText('At least one Question is required.'),
   ).toBeVisible()
@@ -206,10 +208,11 @@ test('empty bank explains why export is unavailable and an open edit must be res
   await expect(
     page.getByRole('dialog', { name: 'Question editor' }),
   ).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Export Question Bank' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'More actions', exact: true, includeHidden: true })).toHaveAttribute('aria-describedby', 'editing-bank-export-help')
   await expect(
     page.getByText('Save or cancel the open Question edit before exporting.'),
   ).toBeVisible()
   await page.getByRole('button', { name: 'Cancel' }).click()
-  await expect(page.getByRole('button', { name: 'Export Question Bank' })).toBeVisible()
+  await page.getByRole('button', { name: 'More actions', exact: true }).click()
+  await expect(page.getByRole('menuitem', { name: 'Export', exact: true })).toBeEnabled()
 })

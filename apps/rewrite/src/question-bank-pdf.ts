@@ -1,4 +1,5 @@
 import { paperBookReasonParts } from './cover-templates/paper-book-answers'
+import './fontkit-runtime'
 import fontkit from '@pdf-lib/fontkit'
 import {
   AFRelationship,
@@ -974,6 +975,7 @@ function drawQuestion(context: Context, question: QuestionBankRecordQuestion, nu
     ],
     { line: 14 },
   )
+  if (question.source) drawText(context, `Source: ${question.source}`, { size: 9.5, line: 14, color: MUTED })
   context.y -= 4
   drawDocument(context, question.stem)
   if (question.choices) drawChoices(context, question.choices, 18)

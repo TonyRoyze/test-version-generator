@@ -20,6 +20,9 @@ _Avoid_: Question identity, export identity
 An independently reusable, named collection of canonical Questions whose confirmed changes save immediately. It may carry an optional description, author, and license; a new bank is named “Untitled Question Bank” by default. An Exam may reference Questions from any number of banks, and a bank may contribute Questions to any number of Exams.
 _Avoid_: Question library
 
+**Question Source**:
+An optional attribution identifying where a Question came from, such as “GCE O/L 2024 34” or “GCE O/L 2024 2 (i) a)”. It belongs to the whole Question and keeps its original reference independently of an Exam’s numbering.
+
 **Question Bank Pop-over**:
 A compact, read-only, always-on-top window of Question Banks, kept beside another document so a teacher can select Questions and drag or Copy them across. It opens from a bank, holds that bank as one of its own tabs with their own filters, and belongs to no Exam; nothing in it edits, adds to an Exam, or deletes. How each Question is laid out for copying — its answer columns, Word Bank placement, answer lines — is set there for that window only and forgotten when it closes.
 _Avoid_: Popup, mini mode, floating bank

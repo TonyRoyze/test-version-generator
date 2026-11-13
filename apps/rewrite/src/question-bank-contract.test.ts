@@ -1,3 +1,4 @@
+import currentSchema from '../public/formats/question-bank/0.12.0/schema.json'
 import { describe, expect, test } from 'bun:test'
 import Ajv2020 from 'ajv/dist/2020'
 import { readdir } from 'node:fs/promises'
@@ -46,7 +47,7 @@ function fixtureRootFor(version: string): string {
   return join(import.meta.dir, '..', 'public', 'formats', 'question-bank', version)
 }
 
-const fixtureRoot = fixtureRootFor(QUESTION_BANK_FORMAT_VERSION)
+const fixtureRoot = fixtureRootFor('0.11.0')
 const exampleRoot = join(fixtureRoot, 'examples')
 const invalidRoot = join(fixtureRoot, 'invalid')
 // The last version whose Media Assets carry base64: an older version's record
@@ -96,7 +97,7 @@ describe('public Question Bank Record 0.11.0 contract', () => {
     expect(publicSchema.$id).toBe(
       'https://testparrot.com/formats/question-bank/0.11.0/schema.json',
     )
-    expect(publicSchema.properties.formatVersion.const).toBe(QUESTION_BANK_FORMAT_VERSION)
+    expect(publicSchema.properties.formatVersion.const).toBe('0.11.0')
     expect(
       await Bun.file(
         join(
@@ -517,7 +518,7 @@ describe('public Question Bank Record 0.11.0 contract', () => {
   })
 
   test('Test Parrot generated records validate against the public schema', async () => {
-    const validate = new Ajv2020({ strict: true }).compile(publicSchema)
+    const validate = new Ajv2020({ strict: true }).compile(currentSchema)
     const bank: QuestionBankResource = {
       id: 'local-bank',
       name: 'Generated example',
